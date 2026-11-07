@@ -472,22 +472,21 @@ test_that("T6 pins : app.R source le module (manifeste) et le DÉSACTIVE (décis
   app_src <- paste(app_lines, collapse = "\n")
   expect_true(any(grepl('source\\("modules/bulk_de/mod_biostat_tree\\.R"\\)', app_lines, perl = TRUE)),
               info = "app.R doit sourcer modules/bulk_de/mod_biostat_tree.R (pin d'arbre, leçon frontière M2)")
-  # RE-BASAGE (2026-11-05, reprise du jalon étranger sur GO opérateur — agents
-  # stoppés) : l'assistant biostat est DÉSACTIVÉ dans app.R (décision opérateur
-  # 2026-11-06 — RÉACTIVATION P0-1 (décision opérateur « go » post-fix F2) :
-  # le site de crash BUG #1 est réglé (lecture initiale = isolate()-au-montage,
-  # pattern M4 testé vert 4/4 session réelle ; lectures récurrentes du module
-  # dans des observateurs consommateurs, gated !is.null(shared_rv)). Les pins
-  # reviennent au sens actif : marque présente (commentaire de réactivation)
-  # ET les montages ui/server sont des lignes actives.
-  # ancre ASCII volontaire : readLines hors UTF-8 (LC_CTYPE) fait échouer les
-  # motifs accentués (leçon frontière, échappements octaux QW-1).
-  expect_true(grepl("ASSISTANT BIOSTAT", app_src, fixed = TRUE),
-              info = "la marque biostat est absente de app.R (bloc de réactivation P0-1)")
-  expect_true(grepl("(?m)^\\s*mod_biostat_(tree|mirror)_(ui|server)\\(", app_src, perl = TRUE),
-              info = "app.R ne monte AUCUN module biostat en ligne active — réactivation P0-1 manquante")
-  expect_false(grepl("#\\s*mod_biostat_tree_server\\(", app_src, fixed = TRUE),
-               info = "l'appel serveur biostat est encore commenté — décommentage P0-1 incomplet")
+  # RE-BASAGE (2026-11-07, décision opérateur) : les DEUX montages biostat
+  # (arbre bulk + miroir SC) sont DÉMONTÉS dans app.R — BULK-9 au merge
+  # (chaîne fill rompue par les enfants multiples) puis le miroir SC sur
+  # signalement opérateur (« pas assez bon tel qu'imaginé — retour au
+  # long-terme roadmap avec meilleure visuelle/intégration »). Pin au sens
+  # DÉMONTÉ : marques BIOSTAT-BULK-DISMOUNT-SERVER / BIOSTAT-SC-DISMOUNT-UI
+  # présentes ET zéro montage biostat en ligne active (les modules restent
+  # sourcés et testés — réactivation = layout fill-safe falsifié live).
+  expect_true(grepl("BIOSTAT-BULK-DISMOUNT-SERVER", app_src, fixed = TRUE),
+              info = "la marque de démontage bulk est absente de app.R (arbitrage merge 2026-11-07)")
+  expect_true(grepl("BIOSTAT-SC-DISMOUNT-UI", app_src, fixed = TRUE),
+              info = "la marque de démontage SC est absente de app.R (décision opérateur 2026-11-07)")
+  expect_false(grepl("(?m)^\\s*mod_biostat_(tree|mirror)_(ui|server)\\(", app_src, perl = TRUE),
+              info = paste("app.R monte encore un module biostat en ligne active —",
+                           "démontage opérateur 2026-11-07 incomplet"))
 
   manifest <- readLines(file.path(ts_project_root(), "R", ".sources_manifest.txt"),
                         warn = FALSE)

@@ -406,9 +406,11 @@ test_that("W7 pont bulk_shared_rv : publié par mod_bulk, monté dans app.R, lec
   expect_false(grepl("(?m)^\\s*mod_biostat_tree_server\\(", app_src, perl = TRUE),
               info = paste("app.R remonte l'assistant M4 en ligne active —",
                            "BULK-9 réapparaîtrait (chaîne fill rompue)"))
-  # Le MIROIR SC, lui, reste monté (lecture seule, hors cause BULK-9) :
-  expect_true(grepl("(?m)^\\s*mod_biostat_mirror_server\\(", app_src, perl = TRUE),
-              info = "le miroir SC doit rester monté en ligne active")
+  # Le MIROIR SC est DÉMONTÉ aussi (2026-11-07, décision opérateur : retour
+  # au long-terme roadmap avec meilleure visuelle/intégration) — zéro montage
+  # biostat actif dans app.R :
+  expect_false(grepl("(?m)^\\s*mod_biostat_mirror_server\\(", app_src, perl = TRUE),
+              info = "le miroir SC est encore monté — démontage opérateur 2026-11-07 incomplet")
 
   # (c) comportement via le pont + I1 ÉLARGI au pont : instantané complet du
   #     handle avant/après un parcours + confirmation -- identique (assertion).

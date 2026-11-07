@@ -699,12 +699,15 @@ ui <- page_navbar(
             # M3 BIOSTAT O27 : miroir LECTURE SEULE de la recommandation
             # validée côté Bulk (même source global_data$biostat_decision,
             # aucune re-dérivation ; uiOutput NULL = empreinte nulle à vide).
-            # ASSISTANT BIOSTAT RÉACTIVÉ (P0-1, 2026-11-06 — décision opérateur
-            # « go » après fix F2 ; le site de crash BUG #1 est réglé : la
-            # lecture initiale passe par isolate()-au-montage, pattern livré et
-            # testé vert par M4 [shinytest2-bulk 4/4 session réelle] ;
-            # mod_biostat_mirror_ui à côté du panneau SC) :
-            tagList(mod_sc_ui("sc"), mod_biostat_mirror_ui("biostat_sc"))),
+            # BIOSTAT-SC-DISMOUNT-UI (décision opérateur 2026-11-07) : le
+            # miroir lecture SC est démonté — « pas assez bon tel qu'imaginé,
+            # retour au long-terme roadmap avec meilleure visuelle/intégration »
+            # ; même règle fill que BULK-9 : enfant UNIQUE du nav_panel.
+            # Réactivation future = layout fill-safe falsifié live, puis
+            # décommenter les 2 blocs BIOSTAT-SC-DISMOUNT.
+            # BIOSTAT-SC-DISMOUNT-UI:
+            # tagList(mod_sc_ui("sc"), mod_biostat_mirror_ui("biostat_sc"))),
+            mod_sc_ui("sc")),
 
 
 
@@ -1271,10 +1274,13 @@ server <- function(input, output, session) {
   # BIOSTAT-BULK-DISMOUNT-SERVER — arbitrage opérateur du merge 2026-11-07
   # (fix BULK-9 gagne sur la réactivation P0-1 du 2026-11-06 ; le site de
   # crash BUG #1 reste réglé par isolate() — pattern M4 — pour la
-  # réactivation future). Le miroir SC, lui, reste monté :
+  # réactivation future). Le miroir SC est démonté aussi (bloc suivant).
   # mod_biostat_tree_server("biostat_bulk", global_data,
   #                         shared_rv = isolate(global_data$bulk_shared_rv))
-  mod_biostat_mirror_server("biostat_sc", global_data)
+  # BIOSTAT-SC-DISMOUNT-SERVER (décision opérateur 2026-11-07 : miroir
+  # lecture SC démonté — retour au long-terme roadmap avec meilleure
+  # visuelle/intégration ; même motif fill que BULK-9) :
+  # mod_biostat_mirror_server("biostat_sc", global_data)
 
   mod_spatial_server("spatial", global_data)
   
