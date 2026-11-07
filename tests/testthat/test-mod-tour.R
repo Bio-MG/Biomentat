@@ -197,3 +197,46 @@ test_that("(d) mod_tour_ui : bouton ns(start) + script embarque clé/handler/inp
   expect_true(grepl("tour-mark_done", html), info = "handler custom interpolé")
   expect_true(grepl("tour-first_run", html), info = "input first_run interpolé")
 })
+
+# FIX F2 (2026-11-07, bissect boots A/B) : le first_run émis synchroniquement
+# DANS `shiny:connected` (setInputValue priority="event") racole la pompe R
+# avant la fin de l'init serveur — server() jamais complet pour toute session
+# fraîche (signature fine F2 depuis le 4 nov). L'envoi DOIT vivre sur
+# `shiny:sessioninitialized` (config reçue, server() complété). Garde
+# structurelle : l'événement porteur d'un setInputValue est sessioninitialized,
+# et aucun setInputValue ne reste suspendu à shiny:connected.
+test_that("(e) FIX F2 : first_run émis sur shiny:sessioninitialized, pas connected", {
+  ui <- mod_tour_ui("tour")
+  html <- as.character(ui)
+  expect_true(grepl("shiny:sessioninitialized", html, fixed = TRUE),
+              info = "le first_run est porté par shiny:sessioninitialized (session serveur déjà initialisée)")
+  # Segment entre shiny:connected et shiny:sessioninitialized (le handler
+  # mark_done) : AUCUN setInputValue toléré — s'il réapparaît là, le message
+  # d'input repart avant la fin de l'init serveur = stall pompe R (F2).
+  i_from <- regexpr("shiny:connected", html, fixed = TRUE)
+  i_to <- regexpr("shiny:sessioninitialized", html, fixed = TRUE)
+  skip_if(i_from == -1L, "handler connected absent du script")
+  segment <- if (i_to > i_from) substr(html, i_from, i_to - 1L) else
+    substr(html, i_from, nchar(html))
+  expect_false(grepl("setInputValue", segment),
+               info = "aucun setInputValue dans le fragment shiny:connected (stall pompe R, F2)")
+})
+
+# FIX F2 cause racine (2026-11-07) : jsonlite::toJSON() seul interpole les
+# chaînes comme TABLEAUX JS (`var NS_FIRST = ["tour-first_run"];`) —
+# Shiny.setInputValue(Array, ...) lève TypeError « n.split is not a
+# function » en page réelle, et le throw dans shiny:connected interrompait
+# la séquence shinyapp.connect() → stall session (server() jamais appelé).
+# Les 3 interpolations doivent être des chaînes scalaires (auto_unbox).
+test_that("(f) FIX F2 : interpolations JS scalaires (auto_unbox), jamais des tableaux", {
+  ui <- mod_tour_ui("tour")
+  html <- as.character(ui)
+  expect_true(grepl(paste0('var KEY = "', TS_TOUR_STORAGE_KEY, '";'), html, fixed = TRUE),
+              info = "la clé localStorage est interpolée en chaîne JS scalaire")
+  expect_true(grepl('var NS_MARK = "tour-mark_done";', html, fixed = TRUE),
+              info = "le nom du handler custom est une chaîne JS scalaire")
+  expect_true(grepl('var NS_FIRST = "tour-first_run";', html, fixed = TRUE),
+              info = "le nom d'input first_run est une chaîne JS scalaire")
+  expect_false(grepl("var KEY = [", html, fixed = TRUE),
+               info = "aucune interpolation tableau JS (TypeError setInputValue, F2)")
+})

@@ -78,6 +78,27 @@ mod_tour_ui <- function(id) {
     # First-run + pose du drapeau : le script vit côté NAVIGATEUR. Les trois
     # littéraux (clé, handler, input) sont interpolés depuis les constantes
     # du registre et le ns — jamais codés en dur dans le JS.
+    #
+    # ⚠️ FIX F2 (2026-11-07, bissect par boots A/B mesurée — cause racine
+    # client-side) : les trois interpolations DOIVENT être des chaînes JS
+    # scalaires — jsonlite::toJSON() seul produit un TABLEAU JS
+    # (`var NS_FIRST = ["tour-first_run"];`). Mesuré en page réelle :
+    # Shiny.setInputValue(Array, ...) lève TypeError « n.split is not a
+    # function » (shiny 1.14.0). Dans le code d'origine, ce throw explosait
+    # DANS le handler shiny:connected, lui-même dispatché par le flux
+    # shinyapp.connect() — la séquence de connexion cliente s'interrompait
+    # avant l'envoi du message d'init : le serveur attendait une init qui ne
+    # venait jamais (CPU 0, server() jamais appelé, config jamais envoyée,
+    # ready.json jamais écrit) = la signature fine F2 « SEND config puis
+    # silence » filée depuis le 4 nov. Un client portant déjà la clé
+    # localStorage sautait la branche → sessions saines → « non
+    # déterministe » expliqué. (localStorage.getItem/handler name toléraient
+    # la coercition Array→string d'où des morceaux qui « marchaient ».)
+    # Deux défenses posées : (1) auto_unbox=TRUE — chaînes scalaires, le
+    # setInputValue part réellement ; (2) l'émission est portée par
+    # shiny:sessioninitialized (config reçue, server() complété) — une
+    # exception dans un handler ne peut plus interrompre la séquence de
+    # connexion elle-même.
     shiny::tags$script(shiny::HTML(sprintf(
       '(function() {
         var KEY = %s;
@@ -86,15 +107,15 @@ mod_tour_ui <- function(id) {
         Shiny.addCustomMessageHandler(NS_MARK, function(m) {
           try { localStorage.setItem(KEY, "1"); } catch (e) {}
         });
-        $(document).on("shiny:connected", function() {
+        $(document).on("shiny:sessioninitialized", function() {
           var done = false;
           try { done = !!localStorage.getItem(KEY); } catch (e) {}
           if (!done) { Shiny.setInputValue(NS_FIRST, true, { priority: "event" }); }
         });
       })();',
-      jsonlite::toJSON(TS_TOUR_STORAGE_KEY),
-      jsonlite::toJSON(ns("mark_done")),
-      jsonlite::toJSON(ns("first_run"))
+      jsonlite::toJSON(TS_TOUR_STORAGE_KEY, auto_unbox = TRUE),
+      jsonlite::toJSON(ns("mark_done"), auto_unbox = TRUE),
+      jsonlite::toJSON(ns("first_run"), auto_unbox = TRUE)
     )))
   )
 }
