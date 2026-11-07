@@ -117,8 +117,15 @@ mod_spatial_report_server <- function(id, global_data, shared_rv) {
 
     output$report_status <- renderText({
       global_data$language  # re-render on language switch
-      if (is.null(global_data$spatial_obj)) .tr("Importez d'abord un echantillon spatial.")
-      else .tr("Pret -- selectionnez les sections puis cliquez sur 'Generer le rapport'.")
+      base <- if (is.null(global_data$spatial_obj)) .tr("Importez d'abord un echantillon spatial.")
+              else .tr("Pret -- selectionnez les sections puis cliquez sur 'Generer le rapport'.")
+      # Chantier 7 : registre live du dernier artefact généré (cf. dl_report).
+      last <- shared_rv$last_report
+      if (is.list(last) && !is.null(last$name)) {
+        base <- paste0(base, " — ", .tr("dernier export : "), last$name,
+                       " (", last$kind, " ", last$at, ")")
+      }
+      base
     })
 
     .snapshot_results <- function() {
@@ -213,10 +220,37 @@ mod_spatial_report_server <- function(id, global_data, shared_rv) {
         paste0("rapport_spatial_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".", ext)
       },
       content = function(file) {
-        req(length(input$formats %||% character(0)) > 0)
-
-        ds_list <- tryCatch(.gather_datasets(), error = function(e) NULL)
-        validate(need(!is.null(ds_list) && length(ds_list) > 0, .tr("Aucun echantillon a inclure dans le rapport.")))
+        # P1-21 (fix 2026-11-06) : un abort dans un downloadHandler est
+        # INVISIBLE (SP14 : 8 tentatives, 0 octet, 0 message — le couple
+        # tryCatch(...)/validate() avale l'échec). Chaque abort est précédé
+        # d'une notification nommant la donnée manquante ET l'endroit qui
+        # la fournit (règle chantier 5).
+        if (!length(input$formats %||% character(0))) {
+          showNotification(.tr("❌ Rapport impossible : sélectionnez au moins un format (case « HTML ») avant de générer."), type = "error", duration = 12)
+          validate(.tr("Aucun format sélectionné."))
+          return()
+        }
+        nid <- showNotification(.tr("⏳ Génération du rapport spatial en cours — le knit peut prendre quelques dizaines de secondes…"), type = "message", duration = NULL, closeButton = FALSE)
+        on.exit(try(removeNotification(nid), silent = TRUE), add = TRUE)
+        # P1-21 (fix 2026-11-06) : pandoc absent => knit mort — refus immédiat
+        # livré DANS le fichier téléchargé (les notifications pendant un
+        # download n'atteignent pas le client — mesuré).
+        if (!rmarkdown::pandoc_available()) {
+          writeLines(c("⚠️ Rapport impossible : Pandoc est introuvable dans cet environnement R.",
+                       "Correctif : installer RStudio (fournit pandoc) ou définir RSTUDIO_PANDOC,",
+                       "puis relancer l'application."),
+                     file)
+          return()
+        }
+        ds_list <- tryCatch(.gather_datasets(), error = function(e) {
+          showNotification(.t_fmt(.tr("❌ Rapport impossible — collecte des données : {m}. Vérifiez qu'un échantillon spatial est importé (onglet « Import Données > Spatial ») et qu'il est ACTIF dans cette session."), m = conditionMessage(e)), type = "error", duration = 20)
+          NULL
+        })
+        if (is.null(ds_list) || !length(ds_list)) {
+          showNotification(.tr("❌ Aucun échantillon à inclure dans le rapport — importez un échantillon spatial puis lancez le pipeline (bouton « Lancer le pipeline » de l'onglet 2)."), type = "error", duration = 20)
+          validate(.tr("Aucun échantillon à inclure dans le rapport."))
+          return()
+        }
 
         template_path <- tryCatch(find_spatial_report_template(), error = function(e) {
           showNotification(conditionMessage(e), type = "error", duration = 15)
@@ -315,6 +349,12 @@ mod_spatial_report_server <- function(id, global_data, shared_rv) {
           } else {
             zip::zip(file, files = out_files, mode = "cherry-pick")
           }
+          # Chantier 7 (2026-11-08) : registre live — même règle que le module
+          # bulk (le succès d'un download ne peut pas notifier : R-6 mesuré ;
+          # la ligne report_status porte le dernier artefact).
+          shared_rv$last_report <- list(name = basename(file),
+                                        kind = .tr("Rapport spatial"),
+                                        at   = format(Sys.time(), "%H:%M:%S"))
         })
       }
     )

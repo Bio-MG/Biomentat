@@ -367,6 +367,10 @@
     showNotification(.t_fmt(.tr("\u2713 Contraste '{c}': {n} g\u00e8nes significatifs"),
                             c = ctx$cname, n = n_sig),
                      type = "message", duration = 6)
+    # Chantier 6 : écho badge « run UI » — un run fait à la souris laisse une
+    # trace sur le badge (l'ancien badge restait sur un scénario drive périmé).
+    global_data$badge_ui_run <- list(module = "bulk_de",
+                                     action = paste("run_de:", ctx$cname))
     if (!is.null(ctx$bypass_info)) {
       showNotification(
         .t_fmt(.tr("\u26a0\ufe0f Mode exploratoire sans r\u00e9plicat : dispersion impos\u00e9e (BCV = {b}), p-values NON inf\u00e9rentielles \u2014 \u00e0 ne pas publier comme une DE classique."),
@@ -412,8 +416,31 @@
       add = TRUE)
 
     req(input$run_de > 0 || shiny::isolate(drive_counter()) > 0)
-    req(shared_rv$filtered_counts, input$condition_col, input$group_ref, input$group_target,
-        input$de_engine)
+    req(shared_rv$filtered_counts, input$condition_col, input$de_engine)
+    # ── BULK-6 (fix 2026-11-06) : gardes de DÉCLARATION au RUN ──────────────
+    # Un refus ici est un verdict honnête (job_state$reason -> `invalid` sur
+    # le wire drive), jamais un calcul sur un contraste ré-résolu
+    # silencieusement contre un nouveau vocabulaire.
+    # 1) Déclaration périmée : le jeu a été remplacé (bulk_obj_epoch) sans
+    #    re-déclaration explicite (injection drive ou bouton « Re-déclarer »).
+    if (!isTRUE(shared_rv$de_decl_valid %||% TRUE)) {
+      showNotification(
+        .tr("❌ Contraste non re-déclaré depuis le changement de jeu de données — vérifiez variable / référence / cible dans le panneau 2, puis cliquez « Re-déclarer ce contraste » (banner de sync) avant de lancer."),
+        type = "error", duration = 12)
+      job_state$reason <- paste(
+        "DE declaration stale after dataset change:",
+        "re-declare the contrast (sync banner) before running")
+      return()
+    }
+    # 2) Groupes non déclarés (sélection vide) — empty-state explicite à la
+    #    place du req() silencieux (clan BULK-7 : ni message ni spinner).
+    if (!nzchar(input$group_ref %||% "") || !nzchar(input$group_target %||% "")) {
+      showNotification(
+        .tr("❌ Sélectionnez le Groupe Référence et le Groupe Cible (panneau 2) avant de lancer l'analyse."),
+        type = "error", duration = 10)
+      job_state$reason <- "group_ref/group_target not declared (empty selection)"
+      return()
+    }
 
     if (input$group_ref == input$group_target) {
       showNotification(.tr("⚠️ Le groupe Référence et le groupe Cible doivent être différents."),

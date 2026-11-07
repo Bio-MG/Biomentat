@@ -11896,6 +11896,182 @@
     {
       "fr": "Worker mirai indisponible — exécution synchrone : l'interface restera bloquée pendant le calcul.",
       "en": "mirai worker unavailable — synchronous run: the interface will stay blocked during the computation."
+    },
+    {
+      "fr": "⏳ Génération du rapport en cours — le rendu peut prendre quelques dizaines de secondes…",
+      "en": "⏳ Generating the report — rendering may take a few dozen seconds…"
+    },
+    {
+      "fr": "⏳ Génération du rapport spatial en cours — le knit peut prendre quelques dizaines de secondes…",
+      "en": "⏳ Generating the spatial report — the knit may take a few dozen seconds…"
+    },
+    {
+      "fr": "⏳ Génération du script reproductible (.zip) en cours…",
+      "en": "⏳ Generating the reproducible script (.zip)…"
+    },
+    {
+      "fr": "⏳ Génération du script reproductible en cours…",
+      "en": "⏳ Generating the reproducible script…"
+    },
+    {
+      "fr": "⏳ Préparation du paquet complet (.zip) en cours…",
+      "en": "⏳ Preparing the complete bundle (.zip)…"
+    },
+    {
+      "fr": "✓ Contraste re-déclaré — le run utilisera la sélection affichée (variable / référence / cible du panneau 2).",
+      "en": "✓ Contrast re-declared — the run will use the displayed selection (variable / reference / target of panel 2)."
+    },
+    {
+      "fr": "✓ Re-déclarer ce contraste",
+      "en": "✓ Re-declare this contrast"
+    },
+    {
+      "fr": "❌ Aucun échantillon à inclure dans le rapport — importez un échantillon spatial puis lancez le pipeline (bouton « Lancer le pipeline » de l'onglet 2).",
+      "en": "❌ No sample to include in the report — import a spatial sample then run the pipeline (button « Run the pipeline » of tab 2)."
+    },
+    {
+      "fr": "❌ Contraste non re-déclaré depuis le changement de jeu de données — vérifiez variable / référence / cible dans le panneau 2, puis cliquez « Re-déclarer ce contraste » (banner de sync) avant de lancer.",
+      "en": "❌ Contrast not re-declared since the dataset changed — check variable / reference / target in panel 2, then click « Re-declare this contrast » (sync banner) before running."
+    },
+    {
+      "fr": "❌ Export impossible : aucun objet spatial dans cette session — importez un échantillon (onglet « Import Données > Spatial ») ; en session multi-onglets, l'objet appartient à la session où l'import a été fait.",
+      "en": "❌ Export impossible: no spatial object in this session — import a sample (« Import Data > Spatial » tab); in multi-tab sessions the object belongs to the session where the import was done."
+    },
+    {
+      "fr": "❌ Export impossible : aucun résultat Milo — lancez d'abord l'analyse (bouton « Lancer Milo »).",
+      "en": "❌ Export impossible: no Milo result — run the analysis first (button « Run Milo »)."
+    },
+    {
+      "fr": "❌ Export impossible : aucun résultat scCODA — lancez d'abord l'analyse (bouton « Lancer scCODA »).",
+      "en": "❌ Export impossible: no scCODA result — run the analysis first (button « Run scCODA »)."
+    },
+    {
+      "fr": "❌ Rapport impossible — collecte des données : {m}. Vérifiez qu'un échantillon spatial est importé (onglet « Import Données > Spatial ») et qu'il est ACTIF dans cette session.",
+      "en": "❌ Report impossible — data collection: {m}. Check that a spatial sample is imported (« Import Data > Spatial » tab) and is ACTIVE in this session."
+    },
+    {
+      "fr": "❌ Rapport impossible : la matrice VST est absente — exécutez d'abord l'étape 1 « Pipeline Bulk — Contrôle qualité & filtrage » (panneau latéral 1).",
+      "en": "❌ Report impossible: the VST matrix is missing — run step 1 « Bulk Pipeline — Quality control & filtering » first (sidebar panel 1)."
+    },
+    {
+      "fr": "❌ Rapport impossible : sélectionnez au moins un format (case « HTML ») avant de générer.",
+      "en": "❌ Report impossible: select at least one format (« HTML » checkbox) before generating."
+    },
+    {
+      "fr": "❌ Script impossible : aucun contraste actif — lancez d'abord l'étape 2 « Design & Contrastes » (panneau latéral 2).",
+      "en": "❌ Script impossible: no active contrast — run step 2 « Design & Contrasts » first (sidebar panel 2)."
+    },
+    {
+      "fr": "❌ Script impossible : aucun jeu bulk chargé — importez d'abord vos données (onglet « Import Données > RNA Bulk »).",
+      "en": "❌ Script impossible: no bulk dataset loaded — import your data first (« Import Data > RNA Bulk » tab)."
+    },
+    {
+      "fr": "❌ Script impossible : aucun objet spatial (coordonnées) dans cette session — importez un échantillon spatial d'abord (onglet « Import Données > Spatial »).",
+      "en": "❌ Script impossible: no spatial object (coordinates) in this session — import a spatial sample first (« Import Data > Spatial » tab)."
+    },
+    {
+      "fr": "❌ Sélectionnez au moins 2 datasets à comparer — la liste se peuple via « Enregistrer l'état courant » (panneau « Multi-jeux — Datasets enregistrés »).",
+      "en": "❌ Select at least 2 datasets to compare — the list is populated via « Save current state » (« Multi-dataset — Saved datasets » panel)."
+    },
+    {
+      "fr": "❌ Sélectionnez d'abord un contraste commun aux jeux comparés (menu « Contraste »).",
+      "en": "❌ Select a contrast common to the compared datasets first (« Contrast » menu)."
+    },
+    {
+      "fr": "❌ Sélectionnez le Groupe Référence et le Groupe Cible (panneau 2) avant de lancer l'analyse.",
+      "en": "❌ Select the Reference Group and the Target Group (panel 2) before running the analysis."
+    },
+    {
+      "fr": "⚠️ Aucun dataset chargé — importez-en un (onglet 📥 Import Données).",
+      "en": "⚠️ No dataset loaded — import one (📥 Import Data tab)."
+    },
+    {
+      "fr": "⚠️ Correction de batch impossible : ",
+      "en": "⚠️ Batch correction impossible: "
+    },
+    {
+      "fr": "⚠️ Sélectionnez d'abord un gène/feature (panneau « Survie » de la barre latérale).",
+      "en": "⚠️ Select a gene/feature first (sidebar « Survival » panel)."
+    },
+    {
+      "fr": "⚠️ VST absente — lancez d'abord le Filtrage & VST (bouton « 🚀 Lancer Filtrage & VST », panneau Étape 1 de la barre latérale).",
+      "en": "⚠️ VST missing — run Filtration & VST first (button « 🚀 Run Filtration & VST », sidebar Step 1 panel)."
+    },
+    {
+      "fr": "Analyse différentielle",
+      "en": "Differential analysis"
+    },
+    {
+      "fr": "Aucun contraste actif — étape 2 requise.",
+      "en": "No active contrast — step 2 required."
+    },
+    {
+      "fr": "Aucun échantillon à inclure dans le rapport.",
+      "en": "No sample to include in the report."
+    },
+    {
+      "fr": "Aucun format sélectionné.",
+      "en": "No format selected."
+    },
+    {
+      "fr": "Aucun jeu bulk chargé.",
+      "en": "No bulk dataset loaded."
+    },
+    {
+      "fr": "Aucun jeu éligible : la liste se peuple avec le bouton « Enregistrer l'état courant » du panneau « Multi-jeux — Datasets enregistrés » (la sidebar Étape 2) — sauvegardez au moins deux jeux partageant un même nom de contraste.",
+      "en": "No eligible dataset: the list is populated with the button « Save current state » of the « Multi-dataset — Saved datasets » panel (the Step 2 sidebar) — save at least two datasets sharing the same contrast name."
+    },
+    {
+      "fr": "Aucun objet spatial (coordonnées) chargé.",
+      "en": "No spatial object (coordinates) loaded."
+    },
+    {
+      "fr": "Aucun objet spatial chargé.",
+      "en": "No spatial object loaded."
+    },
+    {
+      "fr": "dernier export : ",
+      "en": "last export: "
+    },
+    {
+      "fr": "Enrichissement",
+      "en": "Enrichment"
+    },
+    {
+      "fr": "Jeu de données remplacé depuis la dernière déclaration du contraste — vérifiez la variable, la référence et la cible (panneau 2), puis re-déclarez avant de lancer l'Étape 2.",
+      "en": "Dataset replaced since the contrast was last declared — check variable, reference and target (panel 2), then re-declare before running Step 2."
+    },
+    {
+      "fr": "Multi-jeux",
+      "en": "Multi-dataset"
+    },
+    {
+      "fr": "Rapport bulk",
+      "en": "Bulk report"
+    },
+    {
+      "fr": "Rapport spatial",
+      "en": "Spatial report"
+    },
+    {
+      "fr": "Script R",
+      "en": "R script"
+    },
+    {
+      "fr": "Signatures & profils",
+      "en": "Signatures & profiles"
+    },
+    {
+      "fr": "Un seul jeu éligible : sauvegardez un second état (« Enregistrer l'état courant », panneau « Multi-jeux — Datasets enregistrés ») pour lancer une comparaison.",
+      "en": "Only one eligible dataset: save a second state (« Save current state », « Multi-dataset — Saved datasets » panel) to run a comparison."
+    },
+    {
+      "fr": "VST absente — étape 1 requise.",
+      "en": "VST missing — step 1 required."
+    },
+    {
+      "fr": "🧹 Tout effacer les notifications",
+      "en": "🧹 Clear all notifications"
     }
   ]
 }

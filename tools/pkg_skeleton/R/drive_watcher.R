@@ -1950,8 +1950,16 @@ ts_drive_write_result <- function(seq, status, active_module, armed,
   .ascii_fold <- function(x) {
     vapply(as.character(x), function(s) {
       if (is.na(s) || !nzchar(s)) return(s)
-      r <- tryCatch(iconv(s, from = "UTF-8", to = "ASCII", sub = "-"),
-                    error = function(e) s)
+      # Chantier 6 (2026-11-08) : TRANSLIT d'abord — "terminé" lit "termine"
+      # et non "termin--" (REPORT_BULK micro-bug : le pli sec cassait la
+      # lisibilité). Mesuré Windows iconv : é->e, em-dash->" - ". Le fallback
+      # pli sec (N1 d'origine) reste si TRANSLIT indisponible/échoue ; la
+      # garantie wire ASCII est inchangée.
+      r <- tryCatch(iconv(s, from = "UTF-8", to = "ASCII//TRANSLIT", sub = "-"),
+                    error = function(e) NULL)
+      if (is.null(r) || is.na(r) || !nzchar(r))
+        r <- tryCatch(iconv(s, from = "UTF-8", to = "ASCII", sub = "-"),
+                      error = function(e) s)
       if (is.null(r) || is.na(r)) "" else r
     }, character(1), USE.NAMES = FALSE)
   }
@@ -3106,6 +3114,20 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
     if (!is.null(inj)) {
       applied <- inj(scn$inputs, module)
       warnings <- c(warnings, applied$warnings)
+      # BULK-6 (fix 2026-11-06) : une injection drive RÉUSSIE des inputs
+      # session-dérivés de bulk_de (condition_col/covariates/group_ref/
+      # group_target) est une DÉCLARATION EXPLICITE du contraste — elle
+      # re-valide shared_rv$de_decl_valid (garde au RUN, mod_bulk_de_run.R).
+      # Le marqueur est lu par mod_bulk_de_engine.R ; le canal est volontairement
+      # restreint à la voie drive : le re-pick automatique côté UI ne re-valide
+      # jamais (c'est lui qui produisait le contraste faux BULK-6).
+      if (!is.null(global_data) && identical(module, "bulk_de") &&
+          any(names(scn$inputs) %in%
+              c("bulk-de-condition_col", "bulk-de-covariates",
+                "bulk-de-group_ref", "bulk-de-group_target"))) {
+        global_data$ts_drive_de_declared <-
+          (global_data$ts_drive_de_declared %||% 0L) + 1L
+      }
     }
   }
 
@@ -4666,8 +4688,14 @@ ts_drive_badge_advance <- function(model, event, status = NULL, ack_seq = NULL,
 #' @param armed Is the session armed?
 #' @param state Current badge state.
 ts_drive_badge_visible <- function(enabled, interactive, selected, armed, state) {
-  isTRUE(enabled) && isTRUE(interactive) && isTRUE(selected) && isTRUE(armed) &&
-    nzchar(ts_drive_badge_chr(state)) && !identical(ts_drive_badge_chr(state), "off")
+  isTRUE(enabled) && isTRUE(interactive) && isTRUE(selected) &&
+    nzchar(ts_drive_badge_chr(state)) && !identical(ts_drive_badge_chr(state), "off") &&
+    # Chantier 6 (2026-11-08) : l'écho "ui" (run fait à la souris) est visible
+    # MÊME non armé — c'est le retour que l'opérateur d'un run UI n'avait
+    # jamais eu (REPORT_BULK micro-bug 2). Les quatre portes d'origine tiennent
+    # pour tous les états drive ; l'écho reste dev-only (enabled) et
+    # session-sélectionnée (selected).
+    (isTRUE(armed) || identical(ts_drive_badge_chr(state), "ui"))
 }
 
 
