@@ -174,6 +174,12 @@ mod_sc_pipeline_ui <- function(id) {
         i18n$t(" installé séparément — repli automatique sur Louvain si indisponible.")),
     actionButton(ns("run_pipeline"), i18n$t("Lancer Pipeline"),
                  class="btn-danger w-100", icon=icon("play")),
+    # P1-10 (fix 2026-11-07, plan post-E2E #10) : timeline PERSISTANTE des
+    # étapes du pipeline — contrairement à la Progress (fermée en fin de
+    # course) et aux notifications éphémères, elle reste lisible après le run
+    # (mesuré E2E : « Progress$new() ne montre rien pendant la phase t-SNE/
+    # finale »). Alimentée par le serveur ci-dessous (.tl_set/.tl_end).
+    uiOutput(ns("pipeline_timeline")),
     hr(),
     h6(i18n$t("Gros Dataset — Backend Disque (BPCells)"), style="font-weight:bold;"),
     selectInput(ns("bpcells_mode"), i18n$t("Mode"),
@@ -288,12 +294,80 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
                   Inf else input$max_cells_heavy)
     })
 
+    # ── P1-10 : timeline persistante des étapes (plan post-E2E #10) ──────────
+    # Étapes figées du pipeline manuel ; .tl_set() marque l'étape courante
+    # (running) et clôt les précédentes (done) ; .tl_end() clôt la course
+    # (tout done, ou étape en erreur + restantes pending). L'état vit dans un
+    # reactiveVal local (rendu) ET dans shared_rv (visible hors module —
+    # checkpoints/rapport). Pas d'étape « harmonie/t-SNE » exécutée → statut
+    # honnête « skip » en fin de course.
+    .TL_STEPS <- c(qc = "QC — filtres", doublets = "QC — doublets / ambiant",
+                   backend = "Backend stockage", norm = "Normalisation",
+                   pca = "PCA", harmony = "Harmony", cluster = "Clustering",
+                   reduction = "Réduction principale", tsne = "t-SNE secondaire")
+    timeline_rv <- shiny::reactiveVal(NULL)
+    .tl_set <- function(step, status = "running") {
+      idx <- match(step, names(.TL_STEPS))
+      if (is.na(idx)) return(invisible())
+      st <- ifelse(seq_along(.TL_STEPS) < idx, "done",
+            ifelse(seq_along(.TL_STEPS) == idx, status, "pending"))
+      tl <- data.frame(step = unname(.TL_STEPS), status = st, stringsAsFactors = FALSE)
+      timeline_rv(tl)
+      state_set(shared_rv, "pipeline_timeline", tl)
+    }
+    .tl_end <- function(ok, failed_step = NULL) {
+      cur_tl <- timeline_rv()
+      if (isTRUE(ok)) {
+        # les étapes marquées « skip » restent skip (honnêteté), le reste done
+        st <- if (!is.null(cur_tl) && nrow(cur_tl) == length(.TL_STEPS))
+          ifelse(cur_tl$status == "skip", "skip", "done")
+          else rep("done", length(.TL_STEPS))
+      } else {
+        failed_idx <- match(failed_step, names(.TL_STEPS))
+        if (is.null(failed_step) || is.na(failed_idx)) failed_idx <- 1L
+        st <- ifelse(seq_along(.TL_STEPS) < failed_idx, "done",
+              ifelse(seq_along(.TL_STEPS) == failed_idx, "error", "skip"))
+      }
+      tl <- data.frame(step = unname(.TL_STEPS), status = st, stringsAsFactors = FALSE)
+      timeline_rv(tl)
+      state_set(shared_rv, "pipeline_timeline", tl)
+    }
+    # Étape sautée (honnêteté : jamais « done » pour une étape non exécutée)
+    .tl_skip <- function(step) {
+      idx <- match(step, names(.TL_STEPS))
+      if (is.na(idx)) return(invisible())
+      tl <- timeline_rv()
+      if (is.null(tl)) return(invisible())
+      tl$status[idx] <- "skip"
+      timeline_rv(tl)
+      state_set(shared_rv, "pipeline_timeline", tl)
+    }
+    output$pipeline_timeline <- renderUI({
+      tl <- timeline_rv()
+      shiny::req(tl)
+      rows <- lapply(seq_len(nrow(tl)), function(i) {
+        mark <- switch(tl$status[i], done = "✓", running = "▶", error = "✗",
+                       skip = "—", "○")
+        cls <- switch(tl$status[i], done = "text-success", running = "text-primary",
+                      error = "text-danger", skip = "text-muted", "text-muted")
+        shiny::div(class = cls, style = "font-size:0.85em; line-height:1.5;",
+                   shiny::HTML(mark), " ", tl$step[i])
+      })
+      shiny::div(class = "alert alert-light mt-1", style = "padding:8px 12px;",
+                 shiny::tags$strong(style = "font-size:0.82em;",
+                                    .tr("Pipeline — dernière exécution")),
+                 rows)
+    })
+
     observeEvent(input$run_pipeline, {
       req(global_data$sc_obj)
       obj <- global_data$sc_obj
 
       p <- shiny::Progress$new(); on.exit(p$close())
       p$set(message=.tr("Pipeline..."), value=0)
+      # P1-10 : suivi de l'étape courante pour la timeline (erreur honnête)
+      cur_step <- "qc"
+      .tl_set("qc")
 
       tryCatch({
         # CHRYSALIS 2E : garde d'entree explicite — un objet non-Seurat
@@ -381,6 +455,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
           if (requireNamespace("scDblFinder", quietly = TRUE) &&
               exists("sc_filter_doublets_and_ambient", mode = "function")) {
             p$set(0.18, .tr("QC — doublets (scDblFinder)..."))
+            cur_step <- "doublets"; .tl_set("doublets")
             m4_res <- sc_filter_doublets_and_ambient(obj, params = list(
               seed = .SC_PIPELINE_SEED,
               batch_var = "orig.ident",
@@ -423,6 +498,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
 
         # ── Step 1b : Backend disque (BPCells) — Step-3.7A ─────────────────
         p$set(0.22, .tr("Backend stockage..."))
+        cur_step <- "backend"; .tl_set("backend")
         bpcells_mode <- input$bpcells_mode %||% "auto"
         threshold    <- input$bpcells_threshold %||% .BPCELLS_AUTO_THRESHOLD
         should_convert <- switch(bpcells_mode,
@@ -472,6 +548,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
 
         # ── Step 2 : Normalisation ────────────────────────────────────────
         p$set(0.30, .tr("Normalisation"))
+        cur_step <- "norm"; .tl_set("norm")
         if (input$norm_method == "sct") {
           obj <- SCTransform(obj, verbose=FALSE, variable.features.n=3000, vst.flavor="v2")
         } else {
@@ -483,6 +560,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
 
         # ── Step 3 : PCA ──────────────────────────────────────────────────
         p$set(0.50, .tr("PCA"))
+        cur_step <- "pca"; .tl_set("pca")
         obj <- RunPCA(obj, verbose=FALSE, npcs=input$pca_dim)
 
         # Step-3.7A.2: scale.data (dense, VariableFeatures x cells -- e.g.
@@ -513,6 +591,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
             if ("orig.ident" %in% colnames(obj@meta.data) &&
                 length(unique(obj$orig.ident)) >= 2) {
               p$set(0.55, .tr("Harmony (intégration avant clustering)..."))
+              cur_step <- "harmony"; .tl_set("harmony")
               .with_sequential_future({
                 if (.is_big_dataset(obj)) {
                   showNotification(.tr("Large dataset: paramètres Harmony réduits."), type="info", duration=3)
@@ -553,6 +632,9 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
 
         # ── Step 5 : Clustering (sur l'espace intégré le cas échéant) ──────
         p$set(0.60, .tr("Clustering"))
+        cur_step <- "cluster"; .tl_set("cluster")
+        # Honnêteté timeline : Harmony demandée mais non appliquée = skip
+        if (identical(input$reduction_method, "harmony") && !harmony_applied) .tl_skip("harmony")
         obj <- FindNeighbors(obj, reduction=clust_red, dims=1:clust_dims)
         algo <- suppressWarnings(as.integer(input$cluster_algo %||% "1"))
         obj <- tryCatch(
@@ -576,6 +658,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
 
         # ── Step 6 : Réduction dimensionnelle (méthode principale) ────────
         p$set(0.70, paste(.tr("Réduction:"), input$reduction_method))
+        cur_step <- "reduction"; .tl_set("reduction")
 
         if (harmony_applied) {
           obj <- .seeded(RunUMAP(obj, reduction="harmony", dims=1:clust_dims,
@@ -609,12 +692,14 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         # second manual pipeline run.
         if (!"tsne" %in% names(obj@reductions) && input$reduction_method != "tsne") {
           if (ncol(obj) > .AUTO_TSNE_MAX_CELLS) {
+            .tl_skip("tsne")
             showNotification(
               sprintf(.tr("t-SNE secondaire ignoré (%s cellules > %s max). Choisissez 't-SNE' comme méthode principale si nécessaire."),
                       format(ncol(obj), big.mark=" "), format(.AUTO_TSNE_MAX_CELLS, big.mark=" ")),
               type = "info", duration = 5)
           } else {
             p$set(0.85, .tr("t-SNE (secondaire)..."))
+            cur_step <- "tsne"; .tl_set("tsne")
             obj <- tryCatch(.seeded(RunTSNE(obj, dims = 1:input$pca_dim, verbose = FALSE)),
                             error = function(e) {
                               showNotification(paste(.tr("t-SNE secondaire ignoré:"), e$message),
@@ -625,9 +710,17 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         }
 
         global_data$sc_obj <- obj
+        # P1-7 (fix 2026-11-07, plan post-E2E #7) : point de pose ASR du
+        # pipeline MANUEL — le moteur session_checkpoint (sourcé app.R:106)
+        # n'avait aucun publish depuis ce module (les imports, l'auto-pipeline
+        # mod_sc.R:1772 et spatial en avaient) : un reload page après 30+ min
+        # de pipeline perdait tout. Verbatim du point de pose mod_sc.R:1772.
+        if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("pipeline_step_complete")
+        .tl_end(ok = TRUE)
         showNotification(.tr("✓ Pipeline terminé"), type = "message")
 
       }, error = function(e) {
+        .tl_end(ok = FALSE, failed_step = cur_step)
         showNotification(paste(.tr("Erreur pipeline:"), e$message), type="error", duration=10)
       })
     })

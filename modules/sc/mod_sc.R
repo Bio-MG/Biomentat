@@ -737,7 +737,14 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
             # title/position as Bulk and Spatial (ids unchanged).
             accordion_panel(i18n$t("Pipeline auto (1 clic)"), icon = icon("bolt"),
                             value = "0_autopipeline",
-                            actionButton(ns("btn_auto_pipeline_sc"), i18n$t("▶ Lancer Pipeline Complet (SC)"),
+                            # P1-9 (fix 2026-11-07, plan post-E2E #9) : le texte
+                            # « Lancer Pipeline » matchait 2 boutons — celui-ci
+                            # (ouvre une MODAL de paramètres) et le vrai launcher
+                            # manuel mod_sc_pipeline.R « Lancer Pipeline » ;
+                            # renommé pour lever la collision (automation/drive
+                            # matche par texte). Clé i18n nouvelle (append scopé),
+                            # l'ancienne reste au fichier (append-only).
+                            actionButton(ns("btn_auto_pipeline_sc"), i18n$t("▶ Pipeline guidé (paramètres)"),
                                          icon = icon("play-circle"), class = "btn-outline-success w-100 mb-1"),
                             # 3A (O28, UX-1) : le compte « retirées: » du log est
                             # la valeur la plus importante du QC — `pre` ne doit
@@ -1086,7 +1093,14 @@ mod_sc_server <- function(id, global_data) {
         try(accordion_panel_open(ns("acc_prep"), values = "0_metadata"), silent = TRUE)
       }, ignoreInit = TRUE)
     })
-    for (da_pfx in c("da_milo", "da_sccoda", "da_cross")) {
+    # P1-8 (fix 2026-11-07, plan post-E2E ADJUSTMENTS_PLAN.md #8) : boucle for →
+    # lapply. La closure renderUI capture `da_pfx` PARESSEUSEMENT (résolu au
+    # flush, quand la boucle for a déjà fini) — les 3 onglets DA rendaient donc
+    # TOUS le libellé de la dernière itération « DA croisées » (mesuré E2E :
+    # Milo DA / scCODA DA affichaient le titre de DA croisées ; le bug touchait
+    # aussi les cartes guarded). lapply crée un scope par itération : chaque
+    # closure capture son PROPRE da_pfx (idiome R standard anti-capture).
+    lapply(c("da_milo", "da_sccoda", "da_cross"), function(da_pfx) {
       output[[paste0(da_pfx, "_tab_title")]] <- renderUI({
         .sc_da_tab_title(switch(da_pfx,
           da_milo = .tr("Milo DA"), da_sccoda = .tr("scCODA DA"),
@@ -1108,7 +1122,8 @@ mod_sc_server <- function(id, global_data) {
           .sc_da_lock_card(purpose, da_pfx)
         }
       })
-    }
+      NULL
+    })
 
     # ── i18n: update report section choices on language switch ──────────────
     observeEvent(global_data$language, {

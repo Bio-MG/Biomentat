@@ -179,3 +179,46 @@ test_that("le gestionnaire englobant notifie SANS stop( (falsifiable)", {
 test_that("mod_sc_pipeline.R ne contribue aucun signalement C10", {
   expect_identical(ts_c10_sites(.MSP_FILE), integer(0))
 })
+
+# ---------------------------------------------------------------------------
+# P1-7 + P1-10 (fix 2026-11-07, plan post-E2E #7/#10) : point de pose ASR du
+# pipeline manuel (le moteur session_checkpoint n'avait aucun publish depuis ce
+# module — reload = perte de 30+ min de calcul) + timeline persistante des
+# étapes (Progress fermée en fin de course, notifications éphémères). Gardes
+# structurelles sur la fenêtre du point de pose (forme ASR-WIRING, contrat
+# §3.1 — le garde T8 de test-asr-wiring.R couvre l'appel GARDÉ verbatim).
+# ---------------------------------------------------------------------------
+test_that("P1-7 : le publish checkpoint est en fin de course, APRÈS l'écriture de sc_obj", {
+  lines <- readLines(file.path(ts_project_root(), .MSP_FILE), warn = FALSE)
+  hits <- grep("global_data$sc_obj <- obj", lines, fixed = TRUE)
+  expect_true(length(hits) >= 1L, info = "site d'écriture sc_obj introuvable")
+  win <- paste(lines[hits[1]:(hits[1] + 6L)], collapse = " ")
+  expect_match(win,
+               "if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish(\"pipeline_step_complete\")",
+               fixed = TRUE,
+               info = "point de pose ASR absent de la fenêtre de fin de course")
+  # L'écriture PRÉCÈDE le publish (le checkpoint capture l'objet terminal) :
+  expect_true(hits[1] < grep("session_checkpoint_publish(\"pipeline_step_complete\")", lines, fixed = TRUE)[1],
+              info = "publish AVANT l'écriture de sc_obj — ordre invalide")
+})
+
+test_that("P1-10 : timeline persistante — UI + helpers + états honnêtes", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSP_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # UI : la timeline vit SOUS le bouton, dans le panneau (pas une notification) :
+  expect_match(src, 'uiOutput(ns("pipeline_timeline"))', fixed = TRUE)
+  # Machine d'état : set (courant), end (done/skip préservés, error), skip :
+  expect_match(src, ".tl_set <- function(step, status = \"running\")", fixed = TRUE)
+  expect_match(src, ".tl_end <- function(ok, failed_step = NULL)", fixed = TRUE)
+  expect_match(src, ".tl_skip <- function(step)", fixed = TRUE)
+  # Honnêteté : les étapes non exécutées ne deviennent JAMAIS « done »
+  expect_match(src, 'ifelse(cur_tl$status == "skip", "skip", "done")', fixed = TRUE,
+               info = "les skip ne sont pas écrasés en done à la fin de course")
+  # État miroir dans shared_rv (checkpoint/rapport) :
+  expect_match(src, 'state_set(shared_rv, "pipeline_timeline", tl)', fixed = TRUE)
+  # Chaque étape lourde est câblée (9 sites .tl_set :
+  expect_identical(length(gregexpr(".tl_set(\"", src, fixed = TRUE)[[1]]),
+                   9L, info = "toutes les étapes de la timeline ne sont pas câblées")
+  # L'erreur marque l'étape courante (cur_step suivi) :
+  expect_match(src, ".tl_end(ok = FALSE, failed_step = cur_step)", fixed = TRUE)
+})

@@ -458,3 +458,63 @@ test_that("3A verrou source : rappel QC dans l'onglet + log non tronqué + captu
   # Purge honnête au changement de dataset :
   expect_match(src, "qc_applied_rv(NULL)", fixed = TRUE)
 })
+
+# ---------------------------------------------------------------------------
+# P1-8 (fix 2026-11-07, plan post-E2E #8) : les 3 onglets DA rendaient TOUS le
+# libellé « DA croisées » — closure renderUI capturant PARESSEUSEMENT la
+# variable de boucle for (résolue au flush, après la fin de la boucle).
+# Verrou structurel : registration via lapply (scope par itération), plus
+# aucune boucle for sur da_pfx. Sémantique R documentée par le 2e test.
+# ---------------------------------------------------------------------------
+test_that("P1-8 : titres DA enregistrés via lapply — jamais for (capture paresseuse)", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCR_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src,
+               'lapply(c("da_milo", "da_sccoda", "da_cross"), function(da_pfx)',
+               fixed = TRUE,
+               info = "les outputs DA (titre + guarded) sont enregistrés dans un lapply")
+  expect_false(grepl("for (da_pfx in", src, fixed = TRUE),
+               info = paste("une boucle for sur da_pfx est réapparue — les closures",
+                            "renderUI captureraient la DERNIÈRE valeur (bug P1-8)"))
+})
+
+test_that("P1-8 : sémantique de capture R — for fuit la dernière itération, lapply capture", {
+  # Documentation exécutable du mécanisme du bug : la closure d'un for résout
+  # la variable au flush (dernière valeur) ; lapply crée un scope par itération.
+  via_for <- local({
+    outs <- list()
+    for (p in c("da_milo", "da_sccoda", "da_cross")) outs[[p]] <- function() p
+    outs
+  })
+  expect_identical(via_for$da_milo(), "da_cross")  # le bug historique, figé
+  via_lapply <- lapply(c("da_milo", "da_sccoda", "da_cross"), function(p) function() p)
+  expect_identical(via_lapply[[1]](), "da_milo")
+  expect_identical(via_lapply[[2]](), "da_sccoda")
+  expect_identical(via_lapply[[3]](), "da_cross")
+})
+
+# ---------------------------------------------------------------------------
+# P1-9 (fix 2026-11-07, plan post-E2E #9) : le texte « Lancer Pipeline »
+# matchait 2 boutons — la MODAL (btn_auto_pipeline_sc) et le vrai launcher
+# (mod_sc_pipeline.R run_pipeline). La clé SC de la modal est renommée ; le
+# launcher garde « Lancer Pipeline » (libellé canonique). Nouvelle clé i18n
+# append scopée (fr/en) — le garde d'intégrité translation.json couvre les
+# doublons/vides.
+# ---------------------------------------------------------------------------
+test_that("P1-9 : le bouton modal ne porte plus la sous-chaîne « Lancer Pipeline »", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCR_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_false(grepl("Lancer Pipeline Complet (SC)", src, fixed = TRUE),
+               info = paste("l'ancienne clé en collision est réapparue dans mod_sc.R —",
+                            "le drive/automation matchant « Lancer Pipeline » ouvrait la",
+                            "MODAL au lieu de lancer"))
+  expect_match(src, "▶ Pipeline guidé (paramètres)", fixed = TRUE,
+               info = "nouvelle clé du bouton modal")
+  # La clé nouvelle existe en fr/en dans translation.json (append scopé) :
+  j <- jsonlite::fromJSON(file.path(ts_project_root(), "i18n", "translation.json"),
+                          simplifyVector = FALSE)
+  fr <- vapply(j$translation, function(x) if (is.null(x$fr)) "" else x$fr, character(1))
+  idx <- match("▶ Pipeline guidé (paramètres)", fr)
+  expect_false(is.na(idx), info = "clé FR absente de translation.json")
+  expect_true(nzchar(j$translation[[idx]]$en %||% ""), info = "traduction EN manquante")
+})
