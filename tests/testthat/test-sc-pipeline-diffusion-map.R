@@ -54,6 +54,11 @@ test_that("F03 : `npcs` borne les colonnes utilisees, sans transposer", {
 test_that("F03 : le chemin 'dm' ne transpose plus les embeddings (verrou source)", {
   p     <- ts_ast_parse(.DM_FILE)
   calls <- ts_ast_find_all(p, function(x) TRUE)
+  # P1-6a (2026-11-07) : le CŒUR daemon (run_sc_manual_pipeline_core,
+  # sc_pipeline.R) porte sa copie privée .man_dm_from_pca — verrouillée au
+  # même titre (anti-transposition) ; on parse les DEUX fichiers.
+  core_file <- "tools/pkg_skeleton/R/sc_pipeline.R"
+  calls <- c(calls, ts_ast_find_all(ts_ast_parse(core_file), function(x) TRUE))
 
   # Anti-vacuite : un garde qui ne visite rien passerait au vert a vide.
   expect_true(length(calls) > 0L)
@@ -63,6 +68,8 @@ test_that("F03 : le chemin 'dm' ne transpose plus les embeddings (verrou source)
   # La forme fautive exacte : DiffusionMap(t(...)).
   expect_identical(sum(grepl("DiffusionMap(t(", d, fixed = TRUE)), 0L)
 
-  # Le chemin passe bien par le helper unique (pas un appel nu ailleurs).
-  expect_true(sum(grepl(".dm_from_pca(", d, fixed = TRUE)) >= 2L)
+  # Le chemin passe bien par le helper unique (pas un appel nu ailleurs) —
+  # définition + usage, sur l'ensemble module + cœur :
+  expect_true(sum(grepl(".dm_from_pca(", d, fixed = TRUE)) +
+              sum(grepl(".man_dm_from_pca(", d, fixed = TRUE)) >= 2L)
 })

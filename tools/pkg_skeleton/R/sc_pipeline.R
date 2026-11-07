@@ -617,6 +617,431 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
 #' @param shared_rv SC shared state
 #' @param session Shiny session (for showNotification, log)
 #' @param sc_log_rv reactiveVal for log
+# ── P1-6a (2026-11-07, plan post-E2E #6) : cœur PUR du pipeline manuel ───────
+#
+# Transposition du corps du handler mod_sc_pipeline.R (qui tournait
+# SYNCHRONE dans la session Shiny : 15-60 min de thread bloqué, inputs en
+# file, fausse « session morte »). Le module délègue désormais à ce cœur via
+# ExtendedTask + mirai (pool unique ensure_app_daemons(), pattern de
+# run_sc_auto_pipeline_core déjà en daemon), avec repli synchrone tracé.
+#
+# AUCUN appel Shiny ici : les notifications sont COLLECTÉES (liste de
+# list(type=, msg=)), l'état partagé est RETOURNÉ (le module l'applique dans
+# sa session), la progression part par log_fn (lignes [TL] step|status
+# consommées par le tracker du module) + on_progress (repli synchrone).
+#
+# @param obj Seurat object (assert_seurat)
+# @param params liste nommée : qc_min_gene, qc_max_gene, qc_mt,
+#   doublets_enabled, doublet_score_cutoff, max_contamination, run_ambient,
+#   bpcells_mode, bpcells_threshold, norm_method, pca_dim, clust_res,
+#   cluster_algo, reduction_method, seed — défauts = défauts UI du module.
+# @param log_file chemin de log inter-process (streaming tracker)
+# @param on_progress function(step, status) — repli synchrone (timeline)
+# @return list(ok, obj, qc_snapshot, qc_dist_before, qc_dist_after,
+#   provenance, bpcells_conv, skipped_steps, notifications, step, timings,
+#   harmony_applied, mix_msg)
+run_sc_manual_pipeline_core <- function(obj, params = list(), log_file = NULL,
+                                        on_progress = NULL) {
+  assert_seurat(obj, context = "run_sc_manual_pipeline_core")
+
+  # ── helpers locaux (aucune pollution globale, aucune collision module) ──
+  .man_mt_pattern <- function(o) {
+    genes <- rownames(o)
+    if (any(grepl("^MT-",  genes, ignore.case = FALSE))) return("^MT-")
+    if (any(grepl("^mt-",  genes, ignore.case = FALSE))) return("^mt-")
+    if (any(grepl("^MT-",  genes, ignore.case = TRUE)))  return("^MT-")
+    NULL
+  }
+  .man_sequential_future <- function(expr) {
+    old_plan <- future::plan()
+    on.exit(future::plan(old_plan), add = TRUE)
+    future::plan("sequential")
+    force(expr)
+  }
+  .man_seeded <- function(expr, seed) withr::with_seed(seed, force(expr))
+  # Copie daemon-safe de .dm_from_pca (module mod_sc_pipeline.R, verrouillé
+  # par test-sc-pipeline-diffusion-map.R — on ne le déplace pas) ; mêmes
+  # arguments, même orientation (CELLULES en lignes).
+  .man_dm_from_pca <- function(pca_embeddings, npcs = NULL) {
+    emb <- as.matrix(pca_embeddings)
+    if (!is.null(npcs) && length(npcs) == 1L && is.finite(npcs)) {
+      npcs <- as.integer(npcs)
+      if (npcs >= 1L && npcs < ncol(emb)) emb <- emb[, seq_len(npcs), drop = FALSE]
+    }
+    dm <- destiny::DiffusionMap(emb)
+    n_out <- min(2L, ncol(dm@eigenvectors))
+    dm@eigenvectors[, seq_len(n_out), drop = FALSE]
+  }
+  .man_tl <- function(step, status) {
+    line <- sprintf("[TL] %s|%s", step, status)
+    log_fn(line)
+    if (is.function(on_progress)) {
+      tryCatch(on_progress(step, status), error = function(e) NULL)
+    }
+    invisible()
+  }
+
+  t_start <- Sys.time()
+  log_lines <- character(0)
+  log_fn <- function(msg) {
+    line <- paste0("[", format(Sys.time(), "%H:%M:%S"), "] ", msg)
+    log_lines <<- c(log_lines, line)
+    if (!is.null(log_file) && is.character(log_file) && nzchar(log_file)) {
+      tryCatch(cat(line, "\n", file = log_file, append = TRUE), error = function(e) NULL)
+    }
+  }
+
+  # ── résolution des paramètres (défauts = défauts UI du module) ────────────
+  qc_min_gene  <- as.numeric(params$qc_min_gene %||% 100)
+  qc_max_gene  <- as.numeric(params$qc_max_gene %||% 8000)
+  qc_mt        <- as.numeric(params$qc_mt %||% 20)
+  doublets_enabled <- isTRUE(params$doublets_enabled %||%
+                               requireNamespace("scDblFinder", quietly = TRUE))
+  doublet_cutoff <- as.numeric(params$doublet_score_cutoff %||%
+    if (exists("TS_SC_QC_DOUBLET_SCORE_CUTOFF")) TS_SC_QC_DOUBLET_SCORE_CUTOFF else 0.25)
+  max_contam   <- as.numeric(params$max_contamination %||%
+    if (exists("TS_SC_QC_MAX_CONTAMINATION")) TS_SC_QC_MAX_CONTAMINATION else 0.20)
+  run_ambient  <- isTRUE(params$run_ambient)
+  bpcells_mode <- as.character(params$bpcells_mode %||% "auto")
+  bpcells_threshold <- as.numeric(params$bpcells_threshold %||%
+    if (exists("TS_BPCELLS_AUTO_THRESHOLD")) TS_BPCELLS_AUTO_THRESHOLD else 150000L)
+  norm_method  <- as.character(params$norm_method %||% "log")
+  pca_dim      <- as.integer(params$pca_dim %||% 20)
+  clust_res    <- as.numeric(params$clust_res %||% 0.5)
+  cluster_algo <- suppressWarnings(as.integer(params$cluster_algo %||% "1"))
+  reduction_method <- as.character(params$reduction_method %||% "umap")
+  seed         <- as.integer(params$seed %||%
+                               if (exists("TS_SC_PIPELINE_SEED")) TS_SC_PIPELINE_SEED else 989L)
+
+  notifications <- list()
+  note <- function(type, msg) {
+    notifications <<- c(notifications, list(list(type = type, msg = msg)))
+    log_fn(paste0("[", toupper(type), "] ", msg))
+    invisible()
+  }
+
+  timings <- list(qc_s = 0, doublets_s = 0, backend_s = 0, norm_s = 0, pca_s = 0,
+                  harmony_s = 0, clustering_s = 0, reduction_s = 0, tsne_s = 0,
+                  total_s = 0)
+  qc_snapshot <- NULL
+  qc_dist_before <- NULL
+  qc_dist_after <- NULL
+  prov_list <- list()
+  bpcells_conv <- NULL
+  harmony_applied <- FALSE
+  mix_msg <- NULL
+  skipped_steps <- character(0)
+  step <- "qc"
+
+  out_fail <- function(e) {
+    list(ok = FALSE, obj = obj, qc_snapshot = qc_snapshot,
+         qc_dist_before = qc_dist_before, qc_dist_after = qc_dist_after,
+         provenance = prov_list, bpcells_conv = bpcells_conv,
+         skipped_steps = skipped_steps, notifications = notifications,
+         step = step, timings = timings, harmony_applied = harmony_applied,
+         mix_msg = mix_msg, error = e)
+  }
+
+  tryCatch({
+    .man_tl("qc", "running")
+
+    # ── Step 1 : QC ────────────────────────────────────────────────────────
+    t0 <- Sys.time()
+    mt_pattern <- .man_mt_pattern(obj)
+    if (!is.null(mt_pattern)) {
+      obj[["percent.mt"]] <- PercentageFeatureSet(obj, pattern = mt_pattern)
+    } else {
+      obj[["percent.mt"]] <- 0
+      note("warning", "Aucun gène mitochondrial détecté. Filtre MT ignoré.")
+    }
+
+    n_before <- ncol(obj)
+    meta_pre <- obj@meta.data
+    n_ok_min <- sum(meta_pre$nFeature_RNA >  qc_min_gene, na.rm = TRUE)
+    n_ok_max <- sum(meta_pre$nFeature_RNA <  qc_max_gene, na.rm = TRUE)
+    n_ok_mt  <- sum(meta_pre$percent.mt   <  qc_mt,       na.rm = TRUE)
+    n_ok_all <- sum(meta_pre$nFeature_RNA >  qc_min_gene &
+                    meta_pre$nFeature_RNA <  qc_max_gene &
+                    meta_pre$percent.mt   <  qc_mt, na.rm = TRUE)
+
+    obj <- subset(obj,
+      subset = nFeature_RNA > qc_min_gene &
+               nFeature_RNA < qc_max_gene &
+               percent.mt   < qc_mt)
+
+    if (ncol(obj) < 10) {
+      stop(errorCondition(sprintf(
+        paste0(
+          "Seulement %d cellule(s) après QC (départ : %d). Diagnostic par filtre :\n",
+          "  • Min gènes > %d  : %d cellules passent (%d%%)\n",
+          "  • Max gènes < %d  : %d cellules passent (%d%%)\n",
+          "  • %% Mito < %d%%  : %d cellules passent (%d%%)\n",
+          "  • Les 3 combinés  : %d cellules passent\n\n",
+          "Suggestions : réduire Min gènes (essayez %d), augmenter Max gènes (%d) ou %% Mito (%d%%)."
+        ),
+        ncol(obj), n_before,
+        qc_min_gene, n_ok_min, round(100 * n_ok_min / n_before),
+        qc_max_gene, n_ok_max, round(100 * n_ok_max / n_before),
+        qc_mt,       n_ok_mt,  round(100 * n_ok_mt  / n_before),
+        n_ok_all,
+        max(10,  qc_min_gene - 100),
+        min(50000, qc_max_gene + 2000),
+        min(50,  qc_mt + 15)
+      ), class = "mod_sc_pipeline_error"))
+    }
+
+    # snapshot QC par échantillon (méta pré-filtre, cf. module Step-3.7A.2)
+    samples    <- union(names(table(meta_pre$orig.ident)), unique(as.character(obj$orig.ident)))
+    before_tab <- table(meta_pre$orig.ident)
+    after_tab  <- table(obj$orig.ident)
+    mt_med     <- tapply(meta_pre$percent.mt, meta_pre$orig.ident, median, na.rm = TRUE)
+    qc_snapshot <- data.frame(
+      Echantillon     = samples,
+      Cellules_avant  = as.integer(ifelse(is.na(before_tab[samples]), 0L, before_tab[samples])),
+      Cellules_apres  = as.integer(ifelse(is.na(after_tab[samples]),  0L, after_tab[samples])),
+      Pct_Mito_Median = round(as.numeric(mt_med[samples]), 1),
+      stringsAsFactors = FALSE
+    )
+    qc_snapshot$Pct_Conserve <- round(100 * qc_snapshot$Cellules_apres /
+                                        pmax(qc_snapshot$Cellules_avant, 1), 1)
+    timings$qc_s <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+    .man_tl("qc", "done")
+
+    # ── Step 1c : doublets & ambiant (M4) ───────────────────────────────────
+    if (isTRUE(doublets_enabled)) {
+      if (requireNamespace("scDblFinder", quietly = TRUE) &&
+          exists("sc_filter_doublets_and_ambient", mode = "function")) {
+        step <- "doublets"; .man_tl("doublets", "running")
+        t0 <- Sys.time()
+        m4_res <- sc_filter_doublets_and_ambient(obj, params = list(
+          seed = seed,
+          batch_var = "orig.ident",
+          doublet_score_cutoff = doublet_cutoff,
+          max_contamination    = max_contam,
+          run_ambient          = run_ambient
+        ))
+        obj <- m4_res$obj
+        qc_dist_before <- list(nCount_RNA   = m4_res$qc_metrics$distributions$nCount_RNA$before,
+                               nFeature_RNA = m4_res$qc_metrics$distributions$nFeature_RNA$before)
+        qc_dist_after  <- list(nCount_RNA   = m4_res$qc_metrics$distributions$nCount_RNA$after,
+                               nFeature_RNA = m4_res$qc_metrics$distributions$nFeature_RNA$after)
+        excl_cells <- as.character(m4_res$provenance$cells_excluded)
+        if ("orig.ident" %in% colnames(meta_pre)) {
+          exc_by_sample <- table(factor(meta_pre[excl_cells, "orig.ident"], levels = samples))
+          qc_snapshot$Doublets_exclus <- as.integer(
+            ifelse(is.na(exc_by_sample[samples]), 0L, exc_by_sample[samples]))
+        } else {
+          qc_snapshot$Doublets_exclus <- 0L
+        }
+        qc_snapshot$Pct_Doublets <- round(100 * qc_snapshot$Doublets_exclus /
+                                            pmax(qc_snapshot$Cellules_apres, 1), 1)
+        prov_list <- c(prov_list, list(m4_res$provenance))
+        if (length(excl_cells) > 0) {
+          note("message", sprintf("✓ Doublets : %d cellule(s) exclue(s).", length(excl_cells)))
+        }
+        timings$doublets_s <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+        .man_tl("doublets", "done")
+      } else {
+        note("warning", "scDblFinder non installé — étape doublets ignorée.")
+        skipped_steps <- c(skipped_steps, "doublets")
+        .man_tl("doublets", "skip")
+      }
+    } else {
+      skipped_steps <- c(skipped_steps, "doublets")
+      .man_tl("doublets", "skip")
+    }
+
+    # ── Step 1b : backend disque (BPCells) ──────────────────────────────────
+    step <- "backend"; .man_tl("backend", "running")
+    t0 <- Sys.time()
+    should_convert <- switch(bpcells_mode,
+      "always" = TRUE,
+      "never"  = FALSE,
+      ncol(obj) > bpcells_threshold
+    )
+    if (should_convert && sc_backend_status(obj) == "memory") {
+      if (!.bpcells_available()) {
+        note("warning", paste0("Package 'BPCells' non installé — pipeline exécuté en RAM comme d'habitude. ",
+                               "Installez-le pour les très gros datasets (remotes::install_github('bnprks/BPCells/r'))."))
+      } else {
+        conv <- tryCatch(convert_seurat_to_bpcells(obj), error = function(e) {
+          note("warning", paste("BPCells: conversion échouée, poursuite en RAM —", e$message))
+          NULL
+        })
+        if (!is.null(conv)) {
+          obj <- conv$object
+          bpcells_conv <- conv
+          if (!isTRUE(conv$already_disk)) {
+            note("message", sprintf("💽 Backend disque activé (BPCells) — %s cellules, RAM préservée pour la suite.",
+                                    format(conv$n_cells, big.mark = " ")))
+          }
+        }
+      }
+    }
+    # future séquentiel sur objets disque (cf. module — export de closures
+    # géantes par le dispatch parallèle Seurat, observé sur 1.3M cellules)
+    if (sc_backend_status(obj) == "disk") .man_sequential_future(NULL)
+    timings$backend_s <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+    .man_tl("backend", "done")
+
+    # ── Step 2 : Normalisation ──────────────────────────────────────────────
+    step <- "norm"; .man_tl("norm", "running")
+    t0 <- Sys.time()
+    if (identical(norm_method, "sct")) {
+      obj <- SCTransform(obj, verbose = FALSE, variable.features.n = 3000, vst.flavor = "v2")
+    } else {
+      DefaultAssay(obj) <- "RNA"
+      obj <- NormalizeData(obj)
+      obj <- FindVariableFeatures(obj, selection.method = "vst", nfeatures = 2000)
+      obj <- smart_scale_data(obj)
+    }
+    timings$norm_s <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+    .man_tl("norm", "done")
+
+    # ── Step 3 : PCA (+ libération scale.data) ─────────────────────────────
+    step <- "pca"; .man_tl("pca", "running")
+    t0 <- Sys.time()
+    obj <- RunPCA(obj, verbose = FALSE, npcs = pca_dim)
+    obj <- tryCatch({
+      da <- DefaultAssay(obj)
+      if (isTRUE("scale.data" %in% SeuratObject::Layers(obj[[da]]))) obj[[da]]$scale.data <- NULL
+      obj
+    }, error = function(e) obj)
+    # libération RAM : clean_mem (memory.R, sourcé session) si présent — le
+    # cœur doit rester exécutable hors app (smoke headless)
+    if (exists("clean_mem", mode = "function")) clean_mem() else invisible(gc())
+    timings$pca_s <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+    .man_tl("pca", "done")
+
+    # ── Step 4 : Harmony (AVANT clustering) ─────────────────────────────────
+    if (identical(reduction_method, "harmony")) {
+      if (requireNamespace("harmony", quietly = TRUE)) {
+        if ("orig.ident" %in% colnames(obj@meta.data) &&
+            length(unique(obj$orig.ident)) >= 2) {
+          step <- "harmony"; .man_tl("harmony", "running")
+          t0 <- Sys.time()
+          if (ncol(obj) > 100000) {
+            note("info", "Large dataset: paramètres Harmony réduits.")
+            obj <- .man_sequential_future(
+              RunHarmony(obj, group.by.vars = "orig.ident",
+                         dims.use = 1:min(30, pca_dim), max.iter.harmony = 10, verbose = FALSE))
+          } else {
+            obj <- .man_sequential_future(
+              RunHarmony(obj, group.by.vars = "orig.ident",
+                         dims.use = 1:pca_dim, verbose = FALSE))
+          }
+          harmony_applied <- TRUE
+          mix_msg <- tryCatch({
+            before <- sc_batch_mixing_score(obj, reduction = "pca", batch_col = "orig.ident")
+            after  <- sc_batch_mixing_score(obj, reduction = "harmony", batch_col = "orig.ident")
+            sprintf("Mélange des batchs (0 = séparés, 1 = mélangés) : PCA brute %.0f%% → Harmony %.0f%%.",
+                    100 * before$score, 100 * after$score)
+          }, error = function(e) NULL)
+          if (!is.null(mix_msg)) note("message", mix_msg)
+          timings$harmony_s <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+          .man_tl("harmony", "done")
+        } else {
+          note("warning", "Harmony non appliquée : 0 ou 1 échantillon (orig.ident) — clustering et UMAP sur PCA brute.")
+          skipped_steps <- c(skipped_steps, "harmony")
+          .man_tl("harmony", "skip")
+        }
+      } else {
+        note("warning", "Package 'harmony' introuvable — clustering et UMAP sur PCA brute.")
+        skipped_steps <- c(skipped_steps, "harmony")
+        .man_tl("harmony", "skip")
+      }
+    } else {
+      skipped_steps <- c(skipped_steps, "harmony")
+      .man_tl("harmony", "skip")
+    }
+
+    # espace de clustering = Harmony si appliquée, sinon PCA brute
+    clust_red  <- if (harmony_applied) "harmony" else "pca"
+    clust_dims <- if (harmony_applied) min(pca_dim, ncol(Seurat::Embeddings(obj, "harmony")))
+                  else pca_dim
+
+    # ── Step 5 : Clustering ─────────────────────────────────────────────────
+    step <- "cluster"; .man_tl("cluster", "running")
+    t0 <- Sys.time()
+    obj <- FindNeighbors(obj, reduction = clust_red, dims = 1:clust_dims)
+    obj <- tryCatch(
+      FindClusters(obj, resolution = clust_res, algorithm = cluster_algo),
+      error = function(e) {
+        if (cluster_algo != 1L) {
+          algo_name <- c("2" = "Louvain multilevel", "3" = "SLM", "4" = "Leiden")[as.character(cluster_algo)]
+          note("warning", paste0(algo_name %||% "Algorithme",
+                                 " indisponible/a échoué sur cet objet — repli sur Louvain standard. ",
+                                 e$message))
+          FindClusters(obj, resolution = clust_res, algorithm = 1)
+        } else stop(e)
+      }
+    )
+    timings$clustering_s <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+    .man_tl("cluster", "done")
+
+    # ── Step 6 : réduction principale ───────────────────────────────────────
+    step <- "reduction"; .man_tl("reduction", "running")
+    t0 <- Sys.time()
+    if (harmony_applied) {
+      obj <- .man_seeded(RunUMAP(obj, reduction = "harmony", dims = 1:clust_dims,
+                                 verbose = FALSE, reduction.name = "umap_harmony"), seed)
+    } else if (identical(reduction_method, "harmony")) {
+      obj <- .man_seeded(RunUMAP(obj, dims = 1:pca_dim, verbose = FALSE), seed)
+    } else if (identical(reduction_method, "umap")) {
+      obj <- .man_seeded(RunUMAP(obj, dims = 1:pca_dim, verbose = FALSE), seed)
+    } else if (identical(reduction_method, "tsne")) {
+      obj <- .man_seeded(RunTSNE(obj, dims = 1:pca_dim, verbose = FALSE), seed)
+    } else if (identical(reduction_method, "dm")) {
+      if (requireNamespace("destiny", quietly = TRUE)) {
+        dm_emb <- .man_dm_from_pca(Seurat::Embeddings(obj, "pca"), npcs = pca_dim)
+        obj[["dm"]] <- CreateDimReducObject(embeddings = dm_emb,
+                                            key = "DM_", assay = DefaultAssay(obj))
+      } else {
+        note("warning", "Package 'destiny' introuvable. UMAP utilisé.")
+        obj <- .man_seeded(RunUMAP(obj, dims = 1:pca_dim, verbose = FALSE), seed)
+      }
+    }
+    timings$reduction_s <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+    .man_tl("reduction", "done")
+
+    # ── Step 5b : t-SNE secondaire ──────────────────────────────────────────
+    tsne_cap <- if (exists("TS_AUTO_TSNE_MAX_CELLS")) TS_AUTO_TSNE_MAX_CELLS else 10000L
+    if (!"tsne" %in% names(obj@reductions) && !identical(reduction_method, "tsne")) {
+      if (ncol(obj) > tsne_cap) {
+        skipped_steps <- c(skipped_steps, "tsne")
+        .man_tl("tsne", "skip")
+        note("info", sprintf("t-SNE secondaire ignoré (%s cellules > %s max). Choisissez 't-SNE' comme méthode principale si nécessaire.",
+                             format(ncol(obj), big.mark = " "), format(tsne_cap, big.mark = " ")))
+      } else {
+        step <- "tsne"; .man_tl("tsne", "running")
+        t0 <- Sys.time()
+        obj <- tryCatch(.man_seeded(RunTSNE(obj, dims = 1:pca_dim, verbose = FALSE), seed),
+                        error = function(e) {
+                          note("warning", paste("t-SNE secondaire ignoré:", e$message))
+                          obj
+                        })
+        timings$tsne_s <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+        .man_tl("tsne", "done")
+      }
+    } else {
+      skipped_steps <- c(skipped_steps, "tsne")
+      .man_tl("tsne", "skip")
+    }
+
+    timings$total_s <- as.numeric(difftime(Sys.time(), t_start, units = "secs"))
+    .man_tl("END", "ok")
+    list(ok = TRUE, obj = obj, qc_snapshot = qc_snapshot,
+         qc_dist_before = qc_dist_before, qc_dist_after = qc_dist_after,
+         provenance = prov_list, bpcells_conv = bpcells_conv,
+         skipped_steps = skipped_steps, notifications = notifications,
+         step = step, timings = timings, harmony_applied = harmony_applied,
+         mix_msg = mix_msg, error = NULL)
+  }, error = function(e) {
+    .man_tl("END", paste0("error:", step))
+    out_fail(e)
+  })
+}
+
 run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_rv) {
       # ── M-2 phase 1 (2026-09-30) : les paramètres passent par le normalisateur PUR —
       # liste fermée, défauts canoniques, clés inconnues perdues (la classe « une clé
@@ -691,3 +1116,4 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
         stop(e)
       })
 }
+

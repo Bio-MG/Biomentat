@@ -7,21 +7,15 @@
 #   - "Max cellules/cluster pour analyses lourdes" slider -> shared_rv$max_cells_heavy,
 #     read by mod_sc_markers.R / mod_sc_corr.R (and the auto-pipeline in mod_sc.R)
 #     to cap FindAllMarkers / find_correlated_genes on large datasets.
-
-.get_mt_pattern <- function(obj) {
-  genes <- rownames(obj)
-  if (any(grepl("^MT-",  genes, ignore.case=FALSE))) return("^MT-")
-  if (any(grepl("^mt-",  genes, ignore.case=FALSE))) return("^mt-")
-  if (any(grepl("^MT-",  genes, ignore.case=TRUE)))  return("^MT-")
-  NULL
-}
-
-.with_sequential_future <- function(expr) {
-  old_plan <- future::plan()
-  on.exit(future::plan(old_plan), add=TRUE)
-  future::plan("sequential")
-  force(expr)
-}
+#
+# P1-6a (2026-11-07, plan post-E2E #6) : le CORPS du pipeline vit désormais
+# dans run_sc_manual_pipeline_core() (tools/pkg_skeleton/R/sc_pipeline.R,
+# moteur PUR, préchargé daemons via APP_DAEMON_SOURCE_FILES) — le module
+# délègue via ExtendedTask + mirai (pool unique ensure_app_daemons(), même
+# pattern que l'auto-pipeline mod_sc.R), repli synchrone TRACÉ si le pool
+# est indisponible (jamais muet, convention run_job). Les helpers transférés
+# dans le cœur (mt-pattern, future séquentiel, seed, big-dataset) ne vivent
+# plus ici — 15-60 min de thread Shiny bloqué : terminé.
 
 # Carte de diffusion depuis les embeddings PCA (chemin manuel "dm").
 #
@@ -52,12 +46,6 @@
 # exécutions du pipeline produisent les mêmes embeddings sans fuiter l'état
 # du RNG global vers le reste de l'application.
 .SC_PIPELINE_SEED <- if (exists("TS_SC_PIPELINE_SEED")) TS_SC_PIPELINE_SEED else 989L
-
-.seeded <- function(expr) {
-  withr::with_seed(.SC_PIPELINE_SEED, force(expr))
-}
-
-.is_big_dataset <- function(obj) ncol(obj) > 100000
 
 # t-SNE is quadratic-ish in cost vs UMAP's approximate NN — cap the automatic
 # "secondary" run so it never becomes the bottleneck of a routine pipeline run
@@ -359,370 +347,171 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
                  rows)
     })
 
+    # ── P1-6a : ExtendedTask + mirai (pattern auto-pipeline mod_sc.R) ───────
+    # Pool UNIQUE de l'application (ensure_app_daemons → init_spatial_daemons,
+    # preload APP_DAEMON_SOURCE_FILES dont sc_pipeline.R) ; bind_task_button
+    # désactive le bouton pendant la course (anti double-clic) ; le tracker
+    # streame le log du daemon (lignes [TL] step|status → timeline P1-10).
+    ext_task_cls <- if (exists("ExtendedTask", where = asNamespace("shiny"), inherits = FALSE)) {
+      get("ExtendedTask", envir = asNamespace("shiny"))
+    } else if (exists("ExtendedTask", where = asNamespace("bslib"), inherits = FALSE)) {
+      get("ExtendedTask", envir = asNamespace("bslib"))
+    } else {
+      get0("ExtendedTask", envir = globalenv())
+    }
+    manual_task <- if (!is.null(ext_task_cls) && requireNamespace("mirai", quietly = TRUE)) {
+      # Déps du cœur NON présentes dans le preload daemons (APP_DAEMON_SOURCE_
+      # FILES — spatial_async.R, périmètre Lane A intouché) : memory.R (clean_mem)
+      # et sc_qc_doublets.R (étape M4) partent avec la tâche, chemins absolus
+      # calculés côté session ; source() est idempotent et les garde-fous
+      # exists() du cœur restent honnêtes.
+      core_deps <- c(
+        file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "memory.R"),
+        file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "sc_qc_doublets.R")
+      )
+      t <- ext_task_cls$new(function(obj, params, log_file, deps = core_deps) {
+        ensure_app_daemons()
+        mirai::mirai(
+          {
+            for (f in deps) if (file.exists(f)) source(f, local = FALSE)
+            run_sc_manual_pipeline_core(obj, params, log_file = log_file)
+          },
+          obj = obj, params = params, log_file = log_file, deps = core_deps,
+          .timeout = TS_SC_AUTO_PIPELINE_TIMEOUT_S * 1000L
+        )
+      })
+      tryCatch(bslib::bind_task_button(t, "run_pipeline"), error = function(e) NULL)
+      t
+    } else {
+      NULL
+    }
+
+    # Applique le résultat du cœur dans la session (async ET repli synchrone) :
+    .apply_manual_result <- function(res) {
+      if (!isTRUE(res$ok)) {
+        for (n in res$notifications) {
+          showNotification(n$msg, type = n$type, duration = 6)
+        }
+        err <- res$error
+        .tl_end(ok = FALSE, failed_step = res$step)
+        showNotification(paste(.tr("Erreur pipeline:"),
+                               if (inherits(err, "error")) err$message else as.character(err)),
+                         type = "error", duration = 10)
+        return(invisible())
+      }
+      # P1-7 : point de pose ASR du pipeline MANUEL — le moteur
+      # session_checkpoint (sourcé app.R:106) n'avait aucun publish depuis ce
+      # module (imports, auto-pipeline mod_sc.R:1772, spatial en avaient) :
+      # un reload page après 30+ min de pipeline perdait tout. Verbatim du
+      # point de pose mod_sc.R:1772, APRÈS l'écriture de sc_obj.
+      global_data$sc_obj <- res$obj
+      if (!is.null(res$qc_snapshot)) state_set(shared_rv, "qc_snapshot", res$qc_snapshot)
+      if (!is.null(res$qc_dist_before)) {
+        state_set(shared_rv, "qc_dist_before", res$qc_dist_before)
+        state_set(shared_rv, "qc_dist_after", res$qc_dist_after)
+      }
+      for (pr in res$provenance) provenance_append(shared_rv, pr)
+      if (!is.null(res$bpcells_conv) && !isTRUE(res$bpcells_conv$already_disk)) {
+        # One folder per conversion accumulates in tempdir() — cleanup at
+        # session close (comportement historique du module).
+        session$onSessionEnded(function() unlink(res$bpcells_conv$dir, recursive = TRUE))
+      }
+      for (n in res$notifications) {
+        showNotification(n$msg, type = n$type, duration = if (identical(n$type, "warning")) 8 else 6)
+      }
+      if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("pipeline_step_complete")
+      .tl_end(ok = TRUE)
+      showNotification(.tr("✓ Pipeline terminé"), type = "message")
+    }
+
     observeEvent(input$run_pipeline, {
       req(global_data$sc_obj)
-      obj <- global_data$sc_obj
+      # garde re-entrance : une course déjà active ne relance pas
+      if (!is.null(manual_task) && identical(manual_task$status(), "running")) return(invisible())
+      obj <- shiny::isolate(global_data$sc_obj)
 
-      p <- shiny::Progress$new(); on.exit(p$close())
-      p$set(message=.tr("Pipeline..."), value=0)
-      # P1-10 : suivi de l'étape courante pour la timeline (erreur honnête)
-      cur_step <- "qc"
-      .tl_set("qc")
+      params <- list(
+        qc_min_gene = input$qc_min_gene, qc_max_gene = input$qc_max_gene,
+        qc_mt = input$qc_mt,
+        doublets_enabled = isTRUE(input$doublets_enabled),
+        doublet_score_cutoff = input$doublet_score_cutoff %||% .PIPELINE_DOUBLET_CUTOFF_DEFAULT,
+        max_contamination = input$max_contamination %||% .PIPELINE_MAX_CONTAMINATION_DEFAULT,
+        run_ambient = isTRUE(input$run_ambient),
+        bpcells_mode = input$bpcells_mode %||% "auto",
+        bpcells_threshold = input$bpcells_threshold %||% .BPCELLS_AUTO_THRESHOLD,
+        norm_method = input$norm_method %||% "log",
+        pca_dim = input$pca_dim, clust_res = input$clust_res,
+        cluster_algo = input$cluster_algo,
+        reduction_method = input$reduction_method %||% "umap",
+        seed = .SC_PIPELINE_SEED
+      )
 
-      tryCatch({
-        # CHRYSALIS 2E : garde d'entree explicite — un objet non-Seurat
-        # produit desormais un message FR clair au lieu d'un echec silencieux.
-        assert_seurat(obj, context = "pipeline Single-Cell")
-
-        # ── Step 1 : QC ───────────────────────────────────────────────────
-        p$set(0.10, .tr("QC — détection mitochondriale"))
-        mt_pattern <- .get_mt_pattern(obj)
-        if (!is.null(mt_pattern)) {
-          obj[["percent.mt"]] <- PercentageFeatureSet(obj, pattern=mt_pattern)
-        } else {
-          obj[["percent.mt"]] <- 0
-          showNotification(.tr("Aucun gène mitochondrial détecté. Filtre MT ignoré."),
-                           type="warning", duration=3)
-        }
-
-        # Capture pre-filter counts for diagnostic message
-        n_before     <- ncol(obj)
-        meta_pre     <- obj@meta.data
-        n_ok_min     <- sum(meta_pre$nFeature_RNA >  input$qc_min_gene, na.rm=TRUE)
-        n_ok_max     <- sum(meta_pre$nFeature_RNA <  input$qc_max_gene, na.rm=TRUE)
-        n_ok_mt      <- sum(meta_pre$percent.mt   <  input$qc_mt,       na.rm=TRUE)
-        n_ok_all     <- sum(meta_pre$nFeature_RNA >  input$qc_min_gene &
-                            meta_pre$nFeature_RNA <  input$qc_max_gene &
-                            meta_pre$percent.mt   <  input$qc_mt,       na.rm=TRUE)
-
-        obj <- subset(obj,
-          subset = nFeature_RNA > input$qc_min_gene &
-                   nFeature_RNA < input$qc_max_gene &
-                   percent.mt   < input$qc_mt)
-
-        # Actionable QC error with per-filter diagnostics (i18n)
-        if (ncol(obj) < 10) {
-          stop(errorCondition(sprintf(
-            paste0(
-              .tr("Seulement %d cellule(s) après QC (départ : %d). Diagnostic par filtre :\n"),
-              .tr("  • Min gènes > %d  : %d cellules passent (%d%%)\n"),
-              .tr("  • Max gènes < %d  : %d cellules passent (%d%%)\n"),
-              .tr("  • %% Mito < %d%%  : %d cellules passent (%d%%)\n"),
-              .tr("  • Les 3 combinés  : %d cellules passent\n\n"),
-              .tr("Suggestions : réduire Min gènes (essayez %d), augmenter Max gènes (%d) ou %% Mito (%d%%).")
-            ),
-            ncol(obj), n_before,
-            input$qc_min_gene, n_ok_min, round(100*n_ok_min/n_before),
-            input$qc_max_gene, n_ok_max, round(100*n_ok_max/n_before),
-            input$qc_mt,       n_ok_mt,  round(100*n_ok_mt /n_before),
-            n_ok_all,
-            max(10,  input$qc_min_gene - 100),
-            min(50000, input$qc_max_gene + 2000),
-            min(50,  input$qc_mt + 15)
-          ), class = "mod_sc_pipeline_error"))
-        }
-
-        # Step-3.7A.2: per-sample QC snapshot (before/after counts + %mito
-        # median) -- MUST be captured here, meta_pre is the only place the
-        # "before filter" metadata still exists. Doublet rate is NOT captured
-        # here (scDblFinder runs after QC) -- build_qc_summary_table() joins
-        # it in live from the current object at display time instead.
-        samples    <- union(names(table(meta_pre$orig.ident)), unique(as.character(obj$orig.ident)))
-        before_tab <- table(meta_pre$orig.ident)
-        after_tab  <- table(obj$orig.ident)
-        mt_med     <- tapply(meta_pre$percent.mt, meta_pre$orig.ident, median, na.rm = TRUE)
-        qc_snap <- data.frame(
-          Echantillon     = samples,
-          Cellules_avant  = as.integer(ifelse(is.na(before_tab[samples]), 0L, before_tab[samples])),
-          Cellules_apres  = as.integer(ifelse(is.na(after_tab[samples]),  0L, after_tab[samples])),
-          Pct_Mito_Median = round(as.numeric(mt_med[samples]), 1),
-          stringsAsFactors = FALSE
+      pool_ok <- isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE))
+      if (!is.null(manual_task) && pool_ok) {
+        .tl_set("qc")
+        # log de daemon → tracker → timeline (lignes [TL] step|status)
+        manual_log_file <- tempfile(pattern = "sc_manual_log_", fileext = ".txt")
+        manual_tracker <- create_reactive_tracker(session, manual_log_file, interval_ms = 800)
+        observe({
+          lines <- manual_tracker()
+          if (length(lines)) for (ln in lines) {
+            if (!grepl("^[[:space:]]*\\[TL\\] ", ln)) next
+            body <- sub("^[[:space:]]*\\[TL\\] ", "", ln)
+            stp <- sub("\\|.*$", "", body)
+            sta <- sub("^[^|]*\\|", "", body)
+            if (identical(stp, "END")) {
+              if (grepl("^error", sta)) .tl_end(FALSE, failed_step = sub("^error:", "", sta))
+              else .tl_end(TRUE)
+            } else if (identical(sta, "running")) .tl_set(stp)
+            else if (identical(sta, "skip")) .tl_skip(stp)
+          }
+        })
+        manual_task$invoke(obj, params, manual_log_file)
+      } else {
+        # Repli synchrone TRACÉ (jamais muet — convention run_job) : le pool
+        # mirai est indisponible ; l'interface se re-bloque pour la course,
+        # la timeline est alimentée en direct par on_progress.
+        showNotification(.tr("Worker mirai indisponible — exécution synchrone : l'interface restera bloquée pendant la course."),
+                         type = "warning", duration = 8)
+        .tl_set("qc")
+        p <- shiny::Progress$new(); on.exit(p$close())
+        p$set(message = .tr("Pipeline..."), value = 0)
+        res <- tryCatch(
+          run_sc_manual_pipeline_core(obj, params, on_progress = function(stp, sta) {
+            if (identical(stp, "END")) {
+              if (grepl("^error", sta)) .tl_end(FALSE, failed_step = sub("^error:", "", sta))
+              else .tl_end(TRUE)
+            } else if (identical(sta, "running")) .tl_set(stp)
+            else if (identical(sta, "skip")) .tl_skip(stp)
+          }),
+          error = function(e) list(ok = FALSE, error = e, notifications = list(),
+                                   step = "qc", obj = NULL)
         )
-        qc_snap$Pct_Conserve <- round(100 * qc_snap$Cellules_apres / pmax(qc_snap$Cellules_avant, 1), 1)
-        state_set(shared_rv, "qc_snapshot", qc_snap)
-
-        # ── Step 1c : QC doublets & ambiant (M4, features 19-24) ─────────────
-        # scDblFinder runs after QC (cf. commentaire historique ci-dessus) —
-        # appel du moteur PUR sc_filter_doublets_and_ambient (zéro Shiny) :
-        # scores pré-filtre par cellule, exclusion stricte score > cutoff,
-        # provenance PRODUITE par le moteur (convention provenance.R:4-9,
-        # jamais reconstruite), distributions avant/après (feature 22) stockées
-        # dans shared_rv pour les violons, puis le sous-ensemble propre se
-        # propage à toute la suite du pipeline (feature 24). Une erreur classée
-        # sc_qc_error (ex. run_ambient sans SoupX/celda) ATTEINT le tryCatch
-        # englobant : notification d'erreur, jamais de repli silencieux.
-        if (isTRUE(input$doublets_enabled)) {
-          if (requireNamespace("scDblFinder", quietly = TRUE) &&
-              exists("sc_filter_doublets_and_ambient", mode = "function")) {
-            p$set(0.18, .tr("QC — doublets (scDblFinder)..."))
-            cur_step <- "doublets"; .tl_set("doublets")
-            m4_res <- sc_filter_doublets_and_ambient(obj, params = list(
-              seed = .SC_PIPELINE_SEED,
-              batch_var = "orig.ident",
-              doublet_score_cutoff = input$doublet_score_cutoff %||% .PIPELINE_DOUBLET_CUTOFF_DEFAULT,
-              max_contamination    = input$max_contamination    %||% .PIPELINE_MAX_CONTAMINATION_DEFAULT,
-              run_ambient          = isTRUE(input$run_ambient)
-            ))
-            obj <- m4_res$obj
-            # Feature 22 : feuilles numériques finies de qc_metrics -> violons.
-            state_set(shared_rv, "qc_dist_before",
-                      list(nCount_RNA   = m4_res$qc_metrics$distributions$nCount_RNA$before,
-                           nFeature_RNA = m4_res$qc_metrics$distributions$nFeature_RNA$before))
-            state_set(shared_rv, "qc_dist_after",
-                      list(nCount_RNA   = m4_res$qc_metrics$distributions$nCount_RNA$after,
-                           nFeature_RNA = m4_res$qc_metrics$distributions$nFeature_RNA$after))
-            # Récap doublets par échantillon -> colonnes additionnelles de qc_snapshot.
-            excl_cells <- as.character(m4_res$provenance$cells_excluded)
-            if ("orig.ident" %in% colnames(meta_pre)) {
-              exc_by_sample <- table(factor(meta_pre[excl_cells, "orig.ident"], levels = samples))
-              qc_snap$Doublets_exclus <- as.integer(
-                ifelse(is.na(exc_by_sample[samples]), 0L, exc_by_sample[samples]))
-            } else {
-              qc_snap$Doublets_exclus <- 0L
-            }
-            qc_snap$Pct_Doublets <- round(100 * qc_snap$Doublets_exclus /
-                                            pmax(qc_snap$Cellules_apres, 1), 1)
-            state_set(shared_rv, "qc_snapshot", qc_snap)
-            # Feature 23 : l'entrée de provenance PRODUITE par le moteur.
-            provenance_append(shared_rv, m4_res$provenance)
-            if (length(excl_cells) > 0) {
-              showNotification(sprintf(.tr("✓ Doublets : %d cellule(s) exclue(s)."),
-                                       length(excl_cells)),
-                               type = "message", duration = 6)
-            }
-          } else {
-            showNotification(.tr("scDblFinder non installé — étape doublets ignorée."),
-                             type = "warning", duration = 8)
-          }
-        }
-
-        # ── Step 1b : Backend disque (BPCells) — Step-3.7A ─────────────────
-        p$set(0.22, .tr("Backend stockage..."))
-        cur_step <- "backend"; .tl_set("backend")
-        bpcells_mode <- input$bpcells_mode %||% "auto"
-        threshold    <- input$bpcells_threshold %||% .BPCELLS_AUTO_THRESHOLD
-        should_convert <- switch(bpcells_mode,
-          "always" = TRUE,
-          "never"  = FALSE,
-          ncol(obj) > threshold   # "auto"
-        )
-        if (should_convert && sc_backend_status(obj) == "memory") {
-          if (!.bpcells_available()) {
-            showNotification(
-              .tr("Package 'BPCells' non installé — pipeline exécuté en RAM comme d'habitude. Installez-le pour les très gros datasets (remotes::install_github('bnprks/BPCells/r'))."),
-              type = "warning", duration = 8)
-          } else {
-            conv <- tryCatch(convert_seurat_to_bpcells(obj), error = function(e) {
-              showNotification(paste(.tr("BPCells: conversion échouée, poursuite en RAM —"), e$message),
-                               type = "warning", duration = 8)
-              NULL
-            })
-            if (!is.null(conv)) {
-              obj <- conv$object
-              if (!isTRUE(conv$already_disk)) {
-                # One folder per conversion accumulates in tempdir() for the
-                # session's lifetime — clean it up when the session closes.
-                session$onSessionEnded(function() unlink(conv$dir, recursive = TRUE))
-                showNotification(
-                  sprintf(.tr("💽 Backend disque activé (BPCells) — %s cellules, RAM préservée pour la suite."),
-                          format(conv$n_cells, big.mark=" ")),
-                  type = "message", duration = 6)
-              }
-            }
-          }
-        }
-
-        # ── Steps 2-4: on disk-backed (BPCells) objects, force sequential
-        #    future -- Seurat's parallel dispatch for some of these steps can
-        #    try to export a huge closure environment as a "global" to
-        #    background worker processes (observed on a 1.3M-cell dataset: a
-        #    ~5GB function closure captured, blowing past
-        #    future.globals.maxSize and crashing right after PCA). Same fix
-        #    already used for Harmony below — restored via on.exit() when this
-        #    handler returns, so it never leaks into the rest of the app. ────
-        if (sc_backend_status(obj) == "disk") {
-          .pipeline_old_plan <- future::plan()
-          on.exit(future::plan(.pipeline_old_plan), add = TRUE)
-          future::plan("sequential")
-        }
-
-        # ── Step 2 : Normalisation ────────────────────────────────────────
-        p$set(0.30, .tr("Normalisation"))
-        cur_step <- "norm"; .tl_set("norm")
-        if (input$norm_method == "sct") {
-          obj <- SCTransform(obj, verbose=FALSE, variable.features.n=3000, vst.flavor="v2")
-        } else {
-          DefaultAssay(obj) <- "RNA"
-          obj <- NormalizeData(obj)
-          obj <- FindVariableFeatures(obj, selection.method="vst", nfeatures=2000)
-          obj <- smart_scale_data(obj)   # Step-3.7A: RAM-safe (VariableFeatures only, not all genes)
-        }
-
-        # ── Step 3 : PCA ──────────────────────────────────────────────────
-        p$set(0.50, .tr("PCA"))
-        cur_step <- "pca"; .tl_set("pca")
-        obj <- RunPCA(obj, verbose=FALSE, npcs=input$pca_dim)
-
-        # Step-3.7A.2: scale.data (dense, VariableFeatures x cells -- e.g.
-        # ~20 Go for 2000 genes x 1.3M cells) is only needed by RunPCA().
-        # Freeing it immediately gives FindNeighbors/FindClusters (next, the
-        # actual RAM/CPU bottleneck on huge datasets) more headroom. Heatmap
-        # re-derives scale.data on demand for whatever genes it needs via
-        # ensure_genes_scaled() (helpers_sc_bpcells.R) -- nothing downstream
-        # depends on scale.data surviving past this point.
-        obj <- tryCatch({
-          da <- DefaultAssay(obj)
-          if (isTRUE("scale.data" %in% SeuratObject::Layers(obj[[da]]))) obj[[da]]$scale.data <- NULL
-          obj
-        }, error = function(e) obj)
-        clean_mem()
-
-        # ── Step 4 : Intégration Harmony — AVANT le clustering ─────────────
-        # (audit 2026-09-27 §1.1 : historiquement, Harmony était calculée
-        # APRÈS FindNeighbors/FindClusters — clusters, marqueurs, annotation
-        # SingleR et abondance différentielle dérivaient donc de l'espace PCA
-        # brut non corrigé du batch. Ordre correct :
-        #   Normalize → PCA → RunHarmony → FindNeighbors(harmony) →
-        #   FindClusters → UMAP(harmony).)
-        harmony_applied <- FALSE
-        if (identical(input$reduction_method, "harmony")) {
-          if (requireNamespace("harmony", quietly=TRUE)) {
-            library(harmony)
-            if ("orig.ident" %in% colnames(obj@meta.data) &&
-                length(unique(obj$orig.ident)) >= 2) {
-              p$set(0.55, .tr("Harmony (intégration avant clustering)..."))
-              cur_step <- "harmony"; .tl_set("harmony")
-              .with_sequential_future({
-                if (.is_big_dataset(obj)) {
-                  showNotification(.tr("Large dataset: paramètres Harmony réduits."), type="info", duration=3)
-                  obj <- RunHarmony(obj, group.by.vars="orig.ident",
-                                    dims.use=1:min(30,input$pca_dim), max.iter.harmony=10, verbose=FALSE)
-                } else {
-                  obj <- RunHarmony(obj, group.by.vars="orig.ident", dims.use=1:input$pca_dim, verbose=FALSE)
-                }
-              })
-              harmony_applied <- TRUE
-              # Roadmap 4.3 : chiffre le mélange des batchs AVANT (pca brute)
-              # et APRÈS (harmony) — remplace le jugement « à l'œil » sur l'UMAP.
-              mix_msg <- tryCatch({
-                before <- sc_batch_mixing_score(obj, reduction = "pca", batch_col = "orig.ident")
-                after  <- sc_batch_mixing_score(obj, reduction = "harmony", batch_col = "orig.ident")
-                sprintf(.tr("Mélange des batchs (0 = séparés, 1 = mélangés) : PCA brute %.0f%% → Harmony %.0f%%."),
-                        100 * before$score, 100 * after$score)
-              }, error = function(e) NULL)
-              if (!is.null(mix_msg)) {
-                showNotification(mix_msg, type = "message", duration = 10)
-              }
-            } else {
-              showNotification(.tr("Harmony non appliquée : 0 ou 1 échantillon (orig.ident) — clustering et UMAP sur PCA brute."), type="warning", duration=8)
-            }
-          } else {
-            showNotification(.tr("Package 'harmony' introuvable — clustering et UMAP sur PCA brute."), type="warning", duration=8)
-          }
-        }
-
-        # Espace de clustering = Harmony si appliquée, sinon PCA brute. Dims
-        # plafonnées à la réduction réellement disponible (audit §1.2 : le
-        # slider va jusqu'à 50 mais RunHarmony gros dataset n'en produit que
-        # 30 — RunUMAP demandait alors des dims inexistantes, sans rattrapage).
-        clust_red  <- if (harmony_applied) "harmony" else "pca"
-        clust_dims <- if (harmony_applied)
-          min(input$pca_dim, ncol(Seurat::Embeddings(obj, "harmony")))
-        else input$pca_dim
-
-        # ── Step 5 : Clustering (sur l'espace intégré le cas échéant) ──────
-        p$set(0.60, .tr("Clustering"))
-        cur_step <- "cluster"; .tl_set("cluster")
-        # Honnêteté timeline : Harmony demandée mais non appliquée = skip
-        if (identical(input$reduction_method, "harmony") && !harmony_applied) .tl_skip("harmony")
-        obj <- FindNeighbors(obj, reduction=clust_red, dims=1:clust_dims)
-        algo <- suppressWarnings(as.integer(input$cluster_algo %||% "1"))
-        obj <- tryCatch(
-          FindClusters(obj, resolution=input$clust_res, algorithm=algo),
-          error = function(e) {
-            if (algo != 1L) {
-              # Step-3.8: algorithms 2 (Louvain multilevel refinement) and 3
-              # (SLM) were observed to crash on BPCells-backed objects
-              # (igraph/leiden C++ backends expecting a dense/standard sparse
-              # adjacency representation) -- same defensive fallback pattern
-              # already used for Leiden (algorithm=4) below, generalized.
-              algo_name <- c("2"="Louvain multilevel","3"="SLM","4"="Leiden")[as.character(algo)]
-              showNotification(
-                paste0(algo_name %||% .tr("Algorithme"), .tr(" indisponible/a échoué sur cet objet — repli sur Louvain standard. "),
-                      e$message),
-                type = "warning", duration = 10)
-              FindClusters(obj, resolution=input$clust_res, algorithm=1)
-            } else stop(e)
-          }
-        )
-
-        # ── Step 6 : Réduction dimensionnelle (méthode principale) ────────
-        p$set(0.70, paste(.tr("Réduction:"), input$reduction_method))
-        cur_step <- "reduction"; .tl_set("reduction")
-
-        if (harmony_applied) {
-          obj <- .seeded(RunUMAP(obj, reduction="harmony", dims=1:clust_dims,
-                                 verbose=FALSE, reduction.name="umap_harmony"))
-        } else if (input$reduction_method == "harmony") {
-          # Harmony demandée mais non applicable (0/1 batch, package absent) :
-          # notification déjà émise au Step 4 — UMAP sur PCA brute.
-          obj <- .seeded(RunUMAP(obj, dims=1:input$pca_dim, verbose=FALSE))
-        } else if (input$reduction_method == "umap") {
-          obj <- .seeded(RunUMAP(obj, dims=1:input$pca_dim, verbose=FALSE))
-        } else if (input$reduction_method == "tsne") {
-          obj <- .seeded(RunTSNE(obj, dims=1:input$pca_dim, verbose=FALSE))
-        } else if (input$reduction_method == "dm") {
-          if (requireNamespace("destiny", quietly=TRUE)) {
-            # `library(destiny)` masquait durablement les fonctions homonymes
-            # du reste de la session ; l'appel qualifie suffit.
-            dm_emb <- .dm_from_pca(Seurat::Embeddings(obj, "pca"), npcs = input$pca_dim)
-            obj[["dm"]] <- CreateDimReducObject(embeddings = dm_emb,
-                                                key="DM_", assay=DefaultAssay(obj))
-          } else {
-            showNotification(.tr("Package 'destiny' introuvable. UMAP utilisé."), type="warning", duration=4)
-            obj <- .seeded(RunUMAP(obj, dims=1:input$pca_dim, verbose=FALSE))
-          }
-        }
-        # pca: already computed in Step 3 — nothing extra
-
-        # ── Step 5b : t-SNE secondaire (Step-3.7) ──────────────────────────
-        # Always computed too (unless it's already the primary method chosen
-        # above, or the dataset is too big) so PCA/UMAP/t-SNE are ALL
-        # available in the Viz "Réduction à visualiser" picker without a
-        # second manual pipeline run.
-        if (!"tsne" %in% names(obj@reductions) && input$reduction_method != "tsne") {
-          if (ncol(obj) > .AUTO_TSNE_MAX_CELLS) {
-            .tl_skip("tsne")
-            showNotification(
-              sprintf(.tr("t-SNE secondaire ignoré (%s cellules > %s max). Choisissez 't-SNE' comme méthode principale si nécessaire."),
-                      format(ncol(obj), big.mark=" "), format(.AUTO_TSNE_MAX_CELLS, big.mark=" ")),
-              type = "info", duration = 5)
-          } else {
-            p$set(0.85, .tr("t-SNE (secondaire)..."))
-            cur_step <- "tsne"; .tl_set("tsne")
-            obj <- tryCatch(.seeded(RunTSNE(obj, dims = 1:input$pca_dim, verbose = FALSE)),
-                            error = function(e) {
-                              showNotification(paste(.tr("t-SNE secondaire ignoré:"), e$message),
-                                               type = "warning", duration = 5)
-                              obj
-                            })
-          }
-        }
-
-        global_data$sc_obj <- obj
-        # P1-7 (fix 2026-11-07, plan post-E2E #7) : point de pose ASR du
-        # pipeline MANUEL — le moteur session_checkpoint (sourcé app.R:106)
-        # n'avait aucun publish depuis ce module (les imports, l'auto-pipeline
-        # mod_sc.R:1772 et spatial en avaient) : un reload page après 30+ min
-        # de pipeline perdait tout. Verbatim du point de pose mod_sc.R:1772.
-        if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("pipeline_step_complete")
-        .tl_end(ok = TRUE)
-        showNotification(.tr("✓ Pipeline terminé"), type = "message")
-
-      }, error = function(e) {
-        .tl_end(ok = FALSE, failed_step = cur_step)
-        showNotification(paste(.tr("Erreur pipeline:"), e$message), type="error", duration=10)
-      })
+        .apply_manual_result(res)
+      }
     })
+
+    # Achèvement de la tâche async : application du résultat dans la session.
+    if (!is.null(manual_task)) {
+      observeEvent(manual_task$status(), {
+        st <- manual_task$status()
+        if (identical(st, "success")) {
+          .apply_manual_result(manual_task$result())
+        } else if (identical(st, "error")) {
+          # échec hors cœur (daemon mort, timeout) : pas de ligne [TL] END —
+          # l'étape faillible = la dernière « running » de la timeline.
+          tl <- timeline_rv()
+          failed <- if (!is.null(tl)) {
+            idx <- which(tl$status == "running")
+            if (length(idx)) names(.TL_STEPS)[idx[1]] else NULL
+          } else NULL
+          .tl_end(ok = FALSE, failed_step = failed)
+          err <- tryCatch(manual_task$result(), error = function(e) e)
+          showNotification(paste(.tr("Erreur pipeline:"),
+                                 if (inherits(err, "error")) err$message else as.character(err)),
+                           type = "error", duration = 10)
+        }
+      })
+    }
   })
 }

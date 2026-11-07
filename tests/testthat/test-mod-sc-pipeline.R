@@ -39,10 +39,17 @@
 # =============================================================================
 
 .MSP_FILE <- "modules/sc/mod_sc_pipeline.R"
+# P1-6a (2026-11-07) : le CORPS du pipeline vit dans le cœur PUR
+# run_sc_manual_pipeline_core (préchargé daemons) — les gardes AST du garde
+# QC pointent le CŒUR, plus le module.
+.MSCORE_FILE <- "tools/pkg_skeleton/R/sc_pipeline.R"
 
 # Fragments ASCII : le litteral source porte des accents (L262) dont l'encodage
 # de lecture n'est pas garanti => on assere des tranches SANS accent.
-.MSP_MSG_ASCII     <- "Seulement %d cellule(s)"
+# Aiguille UNIQUE au garde QC du pipeline manuel — sc_pipeline.R porte AUSSI
+# un garde QC pour l'AUTO-pipeline (message « Réduisez les seuils »), le
+# fragment « Seulement %d cellule(s) » seul matcherait les deux.
+.MSP_MSG_ASCII     <- "Diagnostic par filtre"
 # Fragment identifiant le gestionnaire avaleur PAR SON CONTENU (jamais par sa
 # position : le fichier porte plusieurs `tryCatch`).
 .MSP_HANDLER_ASCII <- 'paste(.tr("Erreur pipeline:")'
@@ -50,15 +57,17 @@
 
 # --- Les deux noeuds APPEL extraits de la SOURCE -----------------------------
 # ⚠️ On ne recopie RIEN : ces noeuds sont les expressions REELLES du fichier.
+#    (P1-6a : le cœur ; les params sont RÉSOLUS — qc_min_gene etc. — plus
+#    input$qc_*.)
 .msp_guard_call <- function() {
-  ts_ast_find(ts_ast_parse(.MSP_FILE), function(x) {
+  ts_ast_find(ts_ast_parse(.MSCORE_FILE), function(x) {
     ts_ast_is_call_to(x, "if") &&
       grepl(.MSP_MSG_ASCII, ts_ast_deparse(x), fixed = TRUE)
   })
 }
 
 .msp_stop_call <- function() {
-  ts_ast_find(ts_ast_parse(.MSP_FILE), function(x) {
+  ts_ast_find(ts_ast_parse(.MSCORE_FILE), function(x) {
     ts_ast_is_call_to(x, "stop") &&
       grepl(.MSP_MSG_ASCII, ts_ast_deparse(x), fixed = TRUE)
   })
@@ -66,9 +75,10 @@
 
 
 # --- Environnement d'execution de la garde -----------------------------------
-# La garde ne lit QUE : `ncol(obj)`, `n_before`, les 3 seuils `input$qc_*`, les
-# 4 compteurs `n_ok_*` et `.tr()`. On injecte exactement cette surface — un
-# maillon de moins et la garde meurt sur « object not found » (faux rouge).
+# La garde ne lit QUE : `ncol(obj)`, `n_before`, les 3 seuils résolus
+# `qc_min_gene/qc_max_gene/qc_mt`, les 4 compteurs `n_ok_*`. On injecte
+# exactement cette surface — un maillon de moins et la garde meurt sur
+# « object not found » (faux rouge).
 # `obj` : seul `ncol()` est lu par la garde => une matrice suffit, et c'est ce
 # qui rend le test HERMETIQUE (ni Seurat charge, ni objet reel a construire).
 .msp_env <- function(n_cells, n_before = 100L, min_gene = 200L,
@@ -80,9 +90,9 @@
   e$n_ok_max <- as.integer(n_cells)
   e$n_ok_mt  <- as.integer(n_cells)
   e$n_ok_all <- as.integer(n_cells)
-  e$input    <- list(qc_min_gene = min_gene, qc_max_gene = max_gene,
-                     qc_mt = mt)
-  e$.tr      <- function(key, ...) key   # i18n NULL rend la CLE = la chaine FR
+  e$qc_min_gene <- min_gene
+  e$qc_max_gene <- max_gene
+  e$qc_mt       <- mt
   e
 }
 
@@ -149,11 +159,11 @@ test_that("la classe est mod_sc_pipeline_error (execution de l'ARGUMENT du stop)
 # ---------------------------------------------------------------------------
 # VERROU SOURCE CIBLE : le site porte bien NOTRE classe
 # ---------------------------------------------------------------------------
-test_that("le site 260 porte errorCondition + class = mod_sc_pipeline_error", {
+test_that("le site 260 porte errorCondition + class = mod_sc_pipeline_error (cœur P1-6a)", {
   # ⚠️ La classe etant INOBSERVABLE a l'execution (gestionnaire avaleur), la
   # SOURCE est le seul canal ou elle est verifiable — et c'est exactement ce que
-  # C10 mesure.
-  hits <- ts_ast_stop_sites(.MSP_FILE, .MSP_MSG_ASCII)
+  # C10 mesure. P1-6a : le site vit dans le CŒUR (sc_pipeline.R).
+  hits <- ts_ast_stop_sites(.MSCORE_FILE, .MSP_MSG_ASCII)
   expect_length(hits, 1L)                                   # exactement UN site
   expect_true(grepl("errorCondition", hits[[1]], fixed = TRUE))
   expect_true(grepl('class = "mod_sc_pipeline_error"', hits[[1]], fixed = TRUE))
@@ -164,7 +174,15 @@ test_that("le site 260 porte errorCondition + class = mod_sc_pipeline_error", {
 # Justification EXECUTABLE du verrou source : le gestionnaire ne RELANCE pas
 # ---------------------------------------------------------------------------
 test_that("le gestionnaire englobant notifie SANS stop( (falsifiable)", {
-  d <- ts_ast_deparse(ts_ast_trycatch_handler(.MSP_FILE, .MSP_HANDLER_ASCII))
+  # P1-6a : le gestionnaire d'erreur est .apply_manual_result (module) — il
+  # consomme le résultat ok=FALSE du cœur et NOTIFIE, sans jamais relancer.
+  lines <- readLines(file.path(ts_project_root(), .MSP_FILE), warn = FALSE)
+  i0 <- grep(".apply_manual_result <- function(res)", lines, fixed = TRUE)
+  expect_true(length(i0) == 1L, info = "fonction .apply_manual_result introuvable")
+  # fin de fonction : première ligne '    }' au niveau 4 après i0
+  i1 <- i0 + 1L
+  while (i1 < length(lines) && !grepl("^    }\\s*$", lines[i1])) i1 <- i1 + 1L
+  d <- paste(lines[i0:i1], collapse = "\n")
   # Il rend la main en notifiant...
   expect_true(grepl("showNotification", d, fixed = TRUE))
   # ...et NE relance PAS. Si un jour il relancait, ce test echouerait et
@@ -188,23 +206,29 @@ test_that("mod_sc_pipeline.R ne contribue aucun signalement C10", {
 # structurelles sur la fenêtre du point de pose (forme ASR-WIRING, contrat
 # §3.1 — le garde T8 de test-asr-wiring.R couvre l'appel GARDÉ verbatim).
 # ---------------------------------------------------------------------------
-test_that("P1-7 : le publish checkpoint est en fin de course, APRÈS l'écriture de sc_obj", {
+test_that("P1-7 : le publish checkpoint est en fin de course, APRÈS l'écriture de sc_obj (P1-6a)", {
   lines <- readLines(file.path(ts_project_root(), .MSP_FILE), warn = FALSE)
-  hits <- grep("global_data$sc_obj <- obj", lines, fixed = TRUE)
-  expect_true(length(hits) >= 1L, info = "site d'écriture sc_obj introuvable")
-  win <- paste(lines[hits[1]:(hits[1] + 6L)], collapse = " ")
+  hits <- grep("global_data$sc_obj <- res$obj", lines, fixed = TRUE)
+  expect_true(length(hits) >= 1L, info = "site d'écriture sc_obj introuvable (.apply_manual_result)")
+  win <- paste(lines[hits[1]:(hits[1] + 16L)], collapse = " ")
   expect_match(win,
                "if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish(\"pipeline_step_complete\")",
                fixed = TRUE,
                info = "point de pose ASR absent de la fenêtre de fin de course")
   # L'écriture PRÉCÈDE le publish (le checkpoint capture l'objet terminal) :
-  expect_true(hits[1] < grep("session_checkpoint_publish(\"pipeline_step_complete\")", lines, fixed = TRUE)[1],
-              info = "publish AVANT l'écriture de sc_obj — ordre invalide")
+  pub <- grep("session_checkpoint_publish(\"pipeline_step_complete\")", lines, fixed = TRUE)
+  expect_true(hits[1] < pub[1], info = "publish AVANT l'écriture de sc_obj — ordre invalide")
+  # Le publish est GARDÉ (forme ASR-WIRING, contrat §3.1 — aussi verrouillé
+  # par le site T8 de test-asr-wiring.R) :
+  expect_match(win, "if (is.function(global_data$session_checkpoint_publish))",
+               fixed = TRUE)
 })
 
-test_that("P1-10 : timeline persistante — UI + helpers + états honnêtes", {
+test_that("P1-10 + P1-6a : timeline persistante alimentée par [TL] (daemon) ET on_progress (repli)", {
   src <- paste(readLines(file.path(ts_project_root(), .MSP_FILE),
                          warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  core <- paste(readLines(file.path(ts_project_root(), .MSCORE_FILE),
+                          warn = FALSE, encoding = "UTF-8"), collapse = "\n")
   # UI : la timeline vit SOUS le bouton, dans le panneau (pas une notification) :
   expect_match(src, 'uiOutput(ns("pipeline_timeline"))', fixed = TRUE)
   # Machine d'état : set (courant), end (done/skip préservés, error), skip :
@@ -216,9 +240,90 @@ test_that("P1-10 : timeline persistante — UI + helpers + états honnêtes", {
                info = "les skip ne sont pas écrasés en done à la fin de course")
   # État miroir dans shared_rv (checkpoint/rapport) :
   expect_match(src, 'state_set(shared_rv, "pipeline_timeline", tl)', fixed = TRUE)
-  # Chaque étape lourde est câblée (9 sites .tl_set :
-  expect_identical(length(gregexpr(".tl_set(\"", src, fixed = TRUE)[[1]]),
-                   9L, info = "toutes les étapes de la timeline ne sont pas câblées")
-  # L'erreur marque l'étape courante (cur_step suivi) :
-  expect_match(src, ".tl_end(ok = FALSE, failed_step = cur_step)", fixed = TRUE)
+  # CÂBLAGE ASYNC (P1-6a) : ExtendedTask + mirai + bind_task_button + tracker
+  expect_match(src, "ext_task_cls$new(function(obj, params, log_file, deps = core_deps)",
+               fixed = TRUE,
+               info = "la tâche ExtendedTask du pipeline manuel est absente")
+  expect_match(src, "run_sc_manual_pipeline_core(obj, params, log_file = log_file)",
+               fixed = TRUE, info = "le cœur n'est pas exécuté en daemon mirai")
+  expect_match(src, 'bslib::bind_task_button(t, "run_pipeline")', fixed = TRUE,
+               info = "le bouton n'est pas lié à la tâche (anti double-clic)")
+  expect_match(src, "create_reactive_tracker(session, manual_log_file", fixed = TRUE,
+               info = "pas de tracker de log — la timeline ne se mettrait pas à jour en daemon")
+  expect_match(src, '\\[TL\\] ', fixed = FALSE, info = "parseur de lignes [TL] absent")
+  # REPLI SYNCHRONE TRACÉ (jamais muet) :
+  expect_match(src, "Worker mirai indisponible", fixed = TRUE)
+  expect_match(src, "run_sc_manual_pipeline_core(obj, params, on_progress", fixed = TRUE,
+               info = "le repli synchrone n'alimente pas la timeline via on_progress")
+  # GARDE RE-ENTRANCE : pas de double lancement
+  expect_match(src, 'identical(manual_task$status(), "running")', fixed = TRUE)
+  # LE CŒUR émet les marqueurs [TL] (le module ne les fabrique pas) :
+  expect_true(length(gregexpr("\\[TL\\] %s\\|%s", core, fixed = TRUE)[[1]]) >= 1L,
+              info = "le cœur n'émet pas de lignes [TL] step|status")
+  # Le cœur est PUR : aucun appel Shiny dans run_sc_manual_pipeline_core
+  # (segment = la fonction seule — vient avant le wrapper Shiny auto-pipeline)
+  i0 <- gregexpr("run_sc_manual_pipeline_core <- function", core, fixed = TRUE)[[1]][1]
+  i1 <- gregexpr("run_sc_auto_pipeline <- function", core, fixed = TRUE)[[1]][1]
+  seg <- substr(core, i0, if (i1 > i0) i1 - 1L else nchar(core))
+  expect_false(grepl("showNotification|shiny::Progress|renderUI", seg),
+               info = "le cœur contient un appel Shiny — il casserait en daemon")
+})
+
+# ---------------------------------------------------------------------------
+# P1-6a : falsification EXÉCUTABLE du cœur — fixture seedée 500g × 300c × 3
+# clusters, le cœur tourne hors Shiny (comme en daemon : Seurat attaché, pas
+# d'i18n) et rend une timeline honnête + 3 clusters retrouvés + 3 réductions.
+# ---------------------------------------------------------------------------
+test_that("P1-6a : run_sc_manual_pipeline_core exécute le pipeline complet (fixture seedée)", {
+  skip_if_not(requireNamespace("Seurat", quietly = TRUE), "Seurat requis")
+  skip_if_not(requireNamespace("SeuratObject", quietly = TRUE), "SeuratObject requis")
+  # l'app attache Seurat (init différée) et les daemons via everywhere —
+  # l'équivalent honnête en test :
+  suppressMessages(suppressWarnings(library(Seurat)))
+  # mêmes deps que le smoke headless (l'harnais ne charge pas le squelette) :
+  for (dep in c("defaults.R", "thresholds.R", "io_helpers.R", "state.R",
+                "provenance.R", "validation.R", "memory.R", "sc_bpcells.R",
+                "sc_helpers.R", "sc_batch_metrics.R", "sc_qc_doublets.R")) {
+    source_project_file(file.path("tools", "pkg_skeleton", "R", dep))
+  }
+  source_project_file(.MSCORE_FILE)
+
+  set.seed(42)
+  ng <- 500L; nc <- 300L
+  cl <- sample(rep(1:3, length.out = nc))
+  counts <- matrix(rpois(ng * nc, lambda = 2), nrow = ng, ncol = nc)
+  counts[sample(seq_len(ng * nc), 2000)] <- 50L
+  for (k in 1:3) {
+    idx <- which(cl == k)
+    genes <- ((k - 1L) * 60L + 1L):(k * 60L)
+    counts[genes, idx] <- counts[genes, idx] + rpois(length(genes) * length(idx), 8)
+  }
+  obj <- SeuratObject::CreateSeuratObject(counts = counts)
+  obj <- Seurat::NormalizeData(obj, verbose = FALSE)
+
+  params <- list(qc_min_gene = 50, qc_max_gene = 10000, qc_mt = 40,
+                 doublets_enabled = FALSE, bpcells_mode = "never",
+                 norm_method = "log", pca_dim = 10, clust_res = 0.4,
+                 cluster_algo = "1", reduction_method = "umap", seed = 989L)
+  tl <- character(0)
+  res <- run_sc_manual_pipeline_core(obj, params,
+                                     on_progress = function(stp, sta)
+                                       tl[[length(tl) + 1L]] <<- paste(stp, sta, sep = "|"))
+  expect_true(isTRUE(res$ok),
+              info = paste("le cœur a échoué sur la fixture :",
+                           if (inherits(res$error, "error")) conditionMessage(res$error)
+                           else as.character(res$error)))
+  # skip honnêtes : doublets (désactivé), harmony (non demandée), tsne (déjà
+  # présent ? non — tsne tourne sur cette fixture ; skip = doublets + harmony)
+  expect_true(all(c("doublets", "harmony") %in% res$skipped_steps),
+              info = paste("skipped :", paste(res$skipped_steps, collapse = ",")))
+  # timeline honnête : chaque étape exécutée passe running→done, END|ok
+  expect_true("END|ok" %in% tl, info = paste("timeline :", paste(tl, collapse = " ")))
+  expect_true("qc|done" %in% tl && "cluster|done" %in% tl && "reduction|done" %in% tl)
+  expect_false(any(grepl("harmony[|]done|doublets[|]done", tl)),
+               info = "une étape sautée est marquée done — honnêteté bafouée")
+  # produit : clusters retrouvés + réductions
+  expect_true(length(unique(Seurat::Idents(res$obj))) >= 2L)
+  expect_true(all(c("pca", "umap") %in% names(res$obj@reductions)))
+  expect_s3_class(res$qc_snapshot, "data.frame")
 })
