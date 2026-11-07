@@ -1106,8 +1106,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       get0("ExtendedTask", envir = globalenv())
     }
     liana_core_deps <- c(
-      file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "sc_communication_engine.R"),
-      file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "error_state.R")
+      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "sc_communication_engine.R"),
+      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "error_state.R")
     )
     liana_task <- if (!is.null(ext_task_cls_liana) && requireNamespace("mirai", quietly = TRUE)) {
       t <- ext_task_cls_liana$new(function(obj, args, deps = liana_core_deps) {

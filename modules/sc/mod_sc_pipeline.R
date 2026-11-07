@@ -366,8 +366,8 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
       # calculés côté session ; source() est idempotent et les garde-fous
       # exists() du cœur restent honnêtes.
       core_deps <- c(
-        file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "memory.R"),
-        file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "sc_qc_doublets.R")
+        file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "memory.R"),
+        file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "sc_qc_doublets.R")
       )
       t <- ext_task_cls$new(function(obj, params, log_file, deps = core_deps) {
         ensure_app_daemons()
