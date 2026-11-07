@@ -11892,6 +11892,10 @@
     {
       "fr": "Worker mirai indisponible — exécution synchrone : l'interface restera bloquée pendant la course.",
       "en": "mirai worker unavailable — synchronous run: the interface will stay blocked during the run."
+    },
+    {
+      "fr": "Worker mirai indisponible — exécution synchrone : l'interface restera bloquée pendant le calcul.",
+      "en": "mirai worker unavailable — synchronous run: the interface will stay blocked during the computation."
     }
   ]
 }

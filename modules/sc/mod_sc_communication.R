@@ -1090,8 +1090,89 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       })
     })
 
+    # ── P1-6b (2026-11-07, plan post-E2E #6) : LIANA par échantillon → ──────
+    # worker mirai (mesuré E2E : >2h15min SYNCHRONE sur 16 échantillons ×
+    # 27,5k cellules, session bloquée pendant tout le calcul). Même pattern
+    # que le pipeline manuel (mod_sc_pipeline.R, P1-6a) : ExtendedTask +
+    # pool unique + bind_task_button + repli synchrone TRACÉ. Le moteur est
+    # déjà PUR (run_liana_by_sample, sc_communication_engine.R) — il n'est
+    # PAS dans le preload daemons (spatial_async.R, Lane A intouché) : il
+    # part avec la tâche (source idempotent, chemins absolus).
+    ext_task_cls_liana <- if (exists("ExtendedTask", where = asNamespace("shiny"), inherits = FALSE)) {
+      get("ExtendedTask", envir = asNamespace("shiny"))
+    } else if (exists("ExtendedTask", where = asNamespace("bslib"), inherits = FALSE)) {
+      get("ExtendedTask", envir = asNamespace("bslib"))
+    } else {
+      get0("ExtendedTask", envir = globalenv())
+    }
+    liana_core_deps <- c(
+      file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "sc_communication_engine.R"),
+      file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "error_state.R")
+    )
+    liana_task <- if (!is.null(ext_task_cls_liana) && requireNamespace("mirai", quietly = TRUE)) {
+      t <- ext_task_cls_liana$new(function(obj, args, deps = liana_core_deps) {
+        ensure_app_daemons()
+        mirai::mirai(
+          {
+            for (f in deps) if (file.exists(f)) source(f, local = FALSE)
+            run_liana_by_sample(
+              obj,
+              sample_col = args$sample_col,
+              condition_col = args$condition_col,
+              idents_col = args$idents_col,
+              method = args$method,
+              resource = args$resource,
+              seed = args$seed,
+              min_cells = args$min_cells,
+              on_progress = function(msg) NULL
+            )
+          },
+          obj = obj, args = args, deps = liana_core_deps,
+          .timeout = TS_SC_AUTO_PIPELINE_TIMEOUT_S * 1000L
+        )
+      })
+      tryCatch(bslib::bind_task_button(t, "comm_compute_liana"), error = function(e) NULL)
+      t
+    } else {
+      NULL
+    }
+
+    # Application du résultat (async ET repli synchrone) — section C de
+    # l'observer historique, verbatim.
+    .apply_liana_result <- function(collection, obj) {
+      manifest <- liana_collection_sample_manifest(collection)
+      keys <- as.character(manifest$sample_key)
+      if (!length(keys)) {
+        .liana_ui_stop("no_interactions", .tr("La collection LIANA ne contient aucun echantillon."))
+      }
+      first_key <- keys[[1L]]
+      first_result <- liana_collection_active(collection, first_key)
+      .store_result(first_result, obj, collection = collection,
+                    active_sample = first_key)
+      if (length(keys) > 1L) {
+        for (key in keys[-1L]) {
+          sample_result <- liana_collection_active(collection, key)
+          provenance_append(shared_rv, sample_result$provenance)
+        }
+      }
+      provenance_append(shared_rv, collection$provenance)
+
+      updateSelectInput(session, "comm_active_sample", choices = keys,
+                        selected = first_key)
+      condition_summary <- liana_collection_condition_summary(collection)
+      msg <- .t_fmt(
+        .tr("Collection LIANA : statut {status} — {n} echantillon(s), {c} condition(s)."),
+        status = as.character(collection$status %||% NA_character_),
+        n = length(keys), c = nrow(condition_summary)
+      )
+      comm_status_rv(paste0("[", as.character(collection$status %||% NA_character_), "]\n", msg))
+      showNotification(.tr("Calcul LIANA termine."), type = "message", duration = 4)
+    }
+
     observeEvent(input$comm_compute_liana, {
       req(global_data$sc_obj)
+      # garde re-entrance (P1-6b) : un calcul déjà en vol ne relance pas
+      if (!is.null(liana_task) && identical(liana_task$status(), "running")) return(invisible())
       tryCatch({
         obj <- assert_seurat(global_data$sc_obj, context = "moteur LIANA")
 
@@ -1132,51 +1213,40 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
 
         method <- input$comm_liana_method %||% TS_LIANA_METHOD_DEFAULT
         resource <- input$comm_liana_resource %||% TS_LIANA_RESOURCE_DEFAULT
-        collection <- withProgress(
-          message = .tr("Calcul LIANA par echantillon en cours..."),
-          value = 0,
-          {
-            run_liana_by_sample(
-              obj,
-              sample_col = sample_col,
-              condition_col = condition_col,
-              idents_col = identity_col,
-              method = method,
-              resource = resource,
-              seed = as.integer(input$comm_liana_seed),
-              min_cells = as.integer(input$comm_liana_min_cells),
-              on_progress = function(msg) incProgress(0, detail = msg)
-            )
-          }
-        )
+        args <- list(sample_col = sample_col, condition_col = condition_col,
+                     idents_col = identity_col, method = method,
+                     resource = resource,
+                     seed = as.integer(input$comm_liana_seed),
+                     min_cells = as.integer(input$comm_liana_min_cells))
 
-        manifest <- liana_collection_sample_manifest(collection)
-        keys <- as.character(manifest$sample_key)
-        if (!length(keys)) {
-          .liana_ui_stop("no_interactions", .tr("La collection LIANA ne contient aucun echantillon."))
+        pool_ok <- isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE))
+        if (!is.null(liana_task) && pool_ok) {
+          # ASYNC (P1-6b) : le calcul part en daemon — la session reste
+          # réactive ; l'application du résultat a lieu à l'achèvement.
+          liana_task$invoke(obj, args)
+        } else {
+          # Repli synchrone TRACÉ (jamais muet — convention run_job)
+          showNotification(.tr("Worker mirai indisponible — exécution synchrone : l'interface restera bloquée pendant le calcul."),
+                           type = "warning", duration = 8)
+          collection <- withProgress(
+            message = .tr("Calcul LIANA par echantillon en cours..."),
+            value = 0,
+            {
+              run_liana_by_sample(
+                obj,
+                sample_col = sample_col,
+                condition_col = condition_col,
+                idents_col = identity_col,
+                method = method,
+                resource = resource,
+                seed = as.integer(input$comm_liana_seed),
+                min_cells = as.integer(input$comm_liana_min_cells),
+                on_progress = function(msg) incProgress(0, detail = msg)
+              )
+            }
+          )
+          .apply_liana_result(collection, obj)
         }
-        first_key <- keys[[1L]]
-        first_result <- liana_collection_active(collection, first_key)
-        .store_result(first_result, obj, collection = collection,
-                      active_sample = first_key)
-        if (length(keys) > 1L) {
-          for (key in keys[-1L]) {
-            sample_result <- liana_collection_active(collection, key)
-            provenance_append(shared_rv, sample_result$provenance)
-          }
-        }
-        provenance_append(shared_rv, collection$provenance)
-
-        updateSelectInput(session, "comm_active_sample", choices = keys,
-                          selected = first_key)
-        condition_summary <- liana_collection_condition_summary(collection)
-        msg <- .t_fmt(
-          .tr("Collection LIANA : statut {status} — {n} echantillon(s), {c} condition(s)."),
-          status = as.character(collection$status %||% NA_character_),
-          n = length(keys), c = nrow(condition_summary)
-        )
-        comm_status_rv(paste0("[", as.character(collection$status %||% NA_character_), "]\n", msg))
-        showNotification(.tr("Calcul LIANA termine."), type = "message", duration = 4)
       }, error = function(e) {
         .clear_result_state()
         st <- liana_engine_error_state(e)
@@ -1187,6 +1257,34 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                          type = "error", duration = 10)
       })
     })
+
+    # Achèvement async (P1-6b) : application du résultat / erreur classée —
+    # mêmes surfaces que le chemin synchrone (statut, notification, purge).
+    if (!is.null(liana_task)) {
+      observeEvent(liana_task$status(), {
+        st <- liana_task$status()
+        if (identical(st, "success")) {
+          tryCatch({
+            .apply_liana_result(liana_task$result(), global_data$sc_obj)
+          }, error = function(e) {
+            .clear_result_state()
+            stt <- liana_engine_error_state(e)
+            detail <- if (is.na(stt)) conditionMessage(e) else
+              paste0(conditionMessage(e), " [etat : ", stt, "]")
+            comm_status_rv(paste(.tr("Erreur calcul LIANA :"), detail))
+            showNotification(paste(.tr("Erreur calcul LIANA :"), detail),
+                             type = "error", duration = 10)
+          })
+        } else if (identical(st, "error")) {
+          .clear_result_state()
+          err <- tryCatch(liana_task$result(), error = function(e) e)
+          detail <- if (inherits(err, "error")) conditionMessage(err) else as.character(err)
+          comm_status_rv(paste(.tr("Erreur calcul LIANA :"), detail))
+          showNotification(paste(.tr("Erreur calcul LIANA :"), detail),
+                           type = "error", duration = 10)
+        }
+      })
+    }
 
     observeEvent(input$comm_active_sample, {
       req(global_data$sc_obj, comm_state$collection, input$comm_active_sample)

@@ -237,3 +237,35 @@ test_that("3D : la bannière RDS CellChat est alignée sur le moteur (exact matc
   expect_identical(.n_hits(src, "n'est pas reconstitue"), 0L,
                    info = "l'ancien texte contredisant le moteur subsiste")
 })
+
+# ---------------------------------------------------------------------------
+# P1-6b (2026-11-07, plan post-E2E #6) : LIANA par échantillon → worker mirai
+# (mesuré E2E : >2h15min synchrone, session bloquée). Garde structurelle du
+# câblage — même famille que les gardes P1-6a du pipeline manuel.
+# ---------------------------------------------------------------------------
+test_that("P1-6b : LIANA délégué à un worker mirai, repli synchrone tracé", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "sc",
+                                   "mod_sc_communication.R"),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # Tâche async + pool unique + bouton lié :
+  expect_match(src, "ext_task_cls_liana$new(function(obj, args, deps = liana_core_deps)",
+               fixed = TRUE, info = "tâche ExtendedTask LIANA absente")
+  expect_match(src, "ensure_app_daemons()", fixed = TRUE,
+               info = "le pool applicatif unique n'est pas armé")
+  expect_match(src, "run_liana_by_sample(\n              obj,", fixed = TRUE,
+               info = "le moteur pur ne tourne pas en daemon")
+  expect_match(src, 'bslib::bind_task_button(t, "comm_compute_liana")', fixed = TRUE,
+               info = "bouton compute LIANA non lié à la tâche")
+  expect_match(src, 'identical(liana_task$status(), "running")', fixed = TRUE,
+               info = "pas de garde re-entrance sur le calcul LIANA")
+  # Déps daemon embarquées avec la tâche (moteur NON dans le preload) :
+  expect_match(src, '"sc_communication_engine.R"', fixed = TRUE)
+  # REPLI SYNCHRONE TRACÉ (jamais muet) :
+  expect_match(src, "Worker mirai indisponible", fixed = TRUE)
+  # L'application du résultat est FACTORISÉE (async et sync partagent) :
+  expect_match(src, ".apply_liana_result <- function(collection, obj)", fixed = TRUE)
+  expect_match(src, ".apply_liana_result(liana_task$result(), global_data$sc_obj)",
+               fixed = TRUE, info = "l'achèvement async n'applique pas le résultat")
+  # Le moteur n'est PAS re-câblé en dur dans l'observer sync principal :
+  expect_match(src, "liana_task$invoke(obj, args)", fixed = TRUE)
+})
