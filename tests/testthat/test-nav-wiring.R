@@ -156,7 +156,14 @@ test_that("B3-C: badge 🔒 sur les titres des panneaux gardés (wgcna, survie, 
       next
     }
     n_checked <- n_checked + 1L
-    ln <- lines[pos]
+    # FIX 2026-11-08 (re-basage — style opérateur « titre grisé + cadenas hors
+    # span », lane bulk merge bf8baa4) : le titre n'est plus sur la MÊME ligne
+    # que value= — il est enveloppé dans HTML(paste0('<span ...>', i18n$t(...),
+    # '</span>', ' 🔒')) sur les 2 lignes AU-DESSUS de value=. La fenêtre de
+    # lecture remonte donc de 2 lignes (l'appel accordion_panel + la
+    # continuation paste0) ; les assertions (i18n$t présent, 🔒 présent APRÈS,
+    # clé intacte) portent sur le texte JOIN de la fenêtre.
+    ln <- paste(lines[max(1L, pos - 2L):pos], collapse = " ")
     key <- regmatches(ln, regexpr('i18n\\$t\\("[^"]*"\\)', ln))
     ok <- grepl("i18n$t(", ln, fixed = TRUE) &&
       grepl(.test_lock, ln, fixed = TRUE) &&

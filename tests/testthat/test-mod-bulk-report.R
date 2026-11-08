@@ -135,6 +135,32 @@ source_project_file("modules/bulk/mod_bulk_report.R")
 
 # --- Environnement enfant ----------------------------------------------------
 # `rec` enregistre les etapes (temoins de traversee).
+#
+# FIX 2026-11-08 (re-basage dette lane bulk — chantier 6, merge bf8baa4) :
+# le content du downloadHandler commence desormais par le garde pandoc
+# (`if (!rmarkdown::pandoc_available()) { writeLines(...); return() }`,
+# fix mesuré 2026-11-06 : « Pandoc introuvable » écrit dans le fichier
+# téléchargé). `rmarkdown::` est NON MOCKABLE (doctrine :: du header,
+# §2cp.2) ⇒ la sonde de joignabilité du site 227 doit rendre
+# `pandoc_available()` VRAI pour atteindre le garde : on pointe
+# RSTUDIO_PANDOC vers un pandoc RÉEL du poste (RStudio/Quarto d'abord, PATH
+# ensuite). L'invariant du header reste entier : report_format = "INCONNU"
+# ⇒ formats_needed NULL ⇒ la boucle ne tourne PAS ⇒ rmarkdown::render()
+# jamais appelé ⇒ aucun coût latex, et incProgress (volontairement non
+# bouchonné) reste un témoin bruyant. Sans pandoc réel : skip honnête (la
+# sonde ne peut pas s'exécuter — jamais un faux vert).
+.mbr_pandoc_dir <- function() {
+  cands <- c(
+    Sys.getenv("RSTUDIO_PANDOC", unset = ""),
+    "C:/Program Files/RStudio/resources/app/bin/quarto/bin/tools",
+    dirname(Sys.which("pandoc"))
+  )
+  for (d in cands) {
+    if (nzchar(d) && (file.exists(file.path(d, "pandoc.exe")) ||
+                      file.exists(file.path(d, "pandoc")))) return(d)
+  }
+  ""
+}
 .mbr_env <- function(report_format, rec = NULL) {
   e <- new.env(parent = globalenv())
   e$.tr    <- function(s, ...) s
@@ -180,6 +206,9 @@ source_project_file("modules/bulk/mod_bulk_report.R")
 # LE COEUR DU LOT — la classe S'ECHAPPE (verdict inverse de §2cp / §2cq)
 # ---------------------------------------------------------------------------
 test_that("mod_bulk_report : aucun format genere => la classe S'ECHAPPE (site 227)", {
+  pd <- .mbr_pandoc_dir()
+  skip_if_not(nzchar(pd), message = "pandoc introuvable sur ce poste — sonde de joignabilité site 227 non exécutable")
+  withr::local_envvar(RSTUDIO_PANDOC = pd)
   steps <- character(0)
   res <- .mbr_call(.mbr_env("INCONNU", rec = function(s) steps <<- c(steps, s)))
 
@@ -200,6 +229,9 @@ test_that("mod_bulk_report : aucun format genere => la classe S'ECHAPPE (site 22
 # Aucun gestionnaire avaleur : rien n'a ete notifie (contraste avec §2cp/§2cq)
 # ---------------------------------------------------------------------------
 test_that("mod_bulk_report : aucun gestionnaire avaleur n'a tire", {
+  pd <- .mbr_pandoc_dir()
+  skip_if_not(nzchar(pd), message = "pandoc introuvable sur ce poste — sonde de joignabilité site 227 non exécutable")
+  withr::local_envvar(RSTUDIO_PANDOC = pd)
   steps <- character(0)
   res <- .mbr_call(.mbr_env("INCONNU", rec = function(s) steps <<- c(steps, s)))
 

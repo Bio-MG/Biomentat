@@ -44,6 +44,15 @@ suppressPackageStartupMessages({
   library(Seurat)      # prepare_seurat_object
 })
 source_project_file("tools/pkg_skeleton/R/rdata_io.R")
+# FIX 2026-11-08 (dette constatée au push 14167c9) : mod_import_sc_server
+# appelle désormais ts_drive_publish_importer() (câblage drive des imports)
+# — même motif que test-mod-import-bulk.R:37-42 (leçon G3 : « passed in the
+# full suite and errored alone ») : allowlist (qui DÉFINIT
+# ts_drive_publish_importer) + watcher SOURCÉS explicitement, sinon
+# testServer lève « impossible de trouver la fonction
+# "ts_drive_publish_importer" » au clic btn_load_single.
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 source_project_file("modules/import/mod_rdata_picker.R")
 source_project_file("modules/import/mod_import_sc.R")
 source_project_file("tools/check_conventions.R")
