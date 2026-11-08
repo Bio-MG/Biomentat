@@ -40,6 +40,61 @@ check_design_confounding <- function(metadata, condition_col, covariate_col) {
   all(nonzero_per_covariate_level == 1)
 }
 
+#' Numeric-covariate confounding guard — GEMS PA v1 (gemme canCorPairs).
+#'
+#' `check_design_confounding()` above only sees CATEGORICAL covariates (it
+#' cross-tabulates factors). A NUMERIC covariate glued to the condition
+#' (e.g. age perfectly tracking treatment arm) sails through it and silently
+#' soaks up the condition effect. This guard closes that hole.
+#'
+#' ⚠️ SUBSTITUTION MESURÉE (2026-11-08) : la gemme citait
+#' `limma::canCorPairs()` — la fonction N'EXISTE PAS dans le limma au lock
+#' (3.62.2 : ni exportée ni interne, mesuré). La même quantité est calculée
+#' directement : corrélation canonique condition×covariable réduite ici à la
+#' corrélation MAX entre les dummies de condition (model.matrix sans
+#' intercept utile) et la covariable numérique. Sémantique identique pour le
+#' cas 1 condition + 1 covariable numérique (le seul cas du garde) ;
+#  zéro dépendance nouvelle.
+#'
+#' @param metadata sample metadata (rownames = samples).
+#' @param condition_col name of the condition column (factor-like).
+#' @param covariate_col name of a NUMERIC covariate column. A categorical
+#'   covariate returns `confounded = FALSE` with a reason — the categorical
+#'   case is `check_design_confounding()`'s job.
+#' @param threshold correlation above which the pair is flagged (default 0.9).
+#' @return `list(confounded = <logical>, correlation = <numeric or NA>,
+#'   reason = <string>)`. Honest refusals (column missing, covariate not
+#'   numeric, <2 samples) return `confounded = FALSE` with the reason
+#'   stated — this guard NEVER throws (house rule).
+check_design_cancor <- function(metadata, condition_col, covariate_col, threshold = 0.9) {
+  miss <- function(reason) {
+    list(confounded = FALSE, correlation = NA_real_, reason = reason)
+  }
+  if (is.null(metadata) || !is.data.frame(metadata) ||
+      !condition_col %in% colnames(metadata) || !covariate_col %in% colnames(metadata)) {
+    return(miss("colonne introuvable dans les métadonnées."))
+  }
+  if (!is.numeric(metadata[[covariate_col]])) {
+    return(miss("covariable non numérique — hors périmètre (garde catégorielle = check_design_confounding)."))
+  }
+  if (nrow(metadata) < 2) return(miss("moins de 2 échantillons."))
+  X <- tryCatch(
+    stats::model.matrix(as.formula(paste("~", condition_col)), data = metadata),
+    error = function(e) NULL
+  )
+  if (is.null(X) || ncol(X) < 2) {
+    return(miss("matrice de design condition non construisible (1 seul niveau ?)."))
+  }
+  covv <- suppressWarnings(as.numeric(metadata[[covariate_col]]))
+  cors <- apply(X[, -1, drop = FALSE], 2L, function(z) {
+    if (length(unique(z)) < 2L) return(NA_real_)   # dummy constant → cor NaN
+    suppressWarnings(stats::cor(z, covv))
+  })
+  corr <- suppressWarnings(max(abs(cors), na.rm = TRUE))
+  if (!is.finite(corr)) return(miss("corrélation condition×covariable non calculable."))
+  list(confounded = corr > threshold, correlation = corr, reason = "")
+}
+
 #' Measure the residual degrees of freedom of a design (n samples vs p coefficients)
 #'
 #' A design is SATURATED when `n <= p`: the model has no residual degrees of

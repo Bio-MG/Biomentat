@@ -608,7 +608,24 @@ run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, g
 #' limma-voom fallback differential expression (2-group comparison)
 
 run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_target, group_ref,
-                              covariates = character(0), p_adjust_method = "BH") {
+                              covariates = character(0), p_adjust_method = "BH",
+                              pair_col = NULL, treat_lfc = 0) {
+
+  # GEMS PA v1 (fiche PROPOSAL_GEMS_IMPROVEMENT_PACKAGES_2026-11-04.md §PA,
+  # décisions D1/D2) — trois améliorations additives, zéro changement des
+  # colonnes de sortie (log2FoldChange/pvalue/padj/gene inchangées) :
+  #   1. `pair_col` : designs appariés/bloqués analysés par
+  #      `duplicateCorrelation` (l'ancien chemin les traitait comme
+  #      indépendants — puissance perdue, DF faux). Refus honnête
+  #      (bulk_de_error) si la colonne est absente ou si un bloc porte
+  #      moins de 2 échantillons (le bloc n'a alors aucun sens) ;
+  #   2. `voomWithQualityWeights` remplace `voom` sur le second passage
+  #      (pondération qualité — recette standard limma : voom simple pour
+  #      ESTIMER la corrélation intra-bloc, re-voom pondéré avec elle) ;
+  #   3. `treat_lfc > 0` bascule sur `limma::treat()` : test CONTRE un seuil
+  #      de FC (kill la classe « significatif mais trivial »). 0 = chemin
+  #      eBayes/topTable inchangé.
+  # D1 : `dream()` est HORS périmètre v1 (seconde vague, derrière re-mesure).
 
   # STAT-Q1 : limma::topTable(adjust.method=) accepte toute valeur de
   # stats::p.adjust.methods ; la colonne ajustée reste "adj.P.Val" quel que
@@ -663,20 +680,53 @@ run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_targ
 
   } else stats::model.matrix(~grp_keep)
 
-
+  # ── PA-1 : bloc apparié — validation stricte AVANT tout fitting ───────────
+  # Refus honnête (jamais de fallback silencieux vers « indépendant » : c'est
+  # précisément l'analyse fausse que PA corrige).
+  pair_keep <- NULL
+  if (!is.null(pair_col) && length(pair_col) == 1L && nzchar(trimws(as.character(pair_col)))) {
+    pair_col <- trimws(as.character(pair_col))
+    if (!pair_col %in% colnames(meta_keep)) {
+      stop(errorCondition(paste0("Colonne d'appariement « ", pair_col, " » introuvable dans les métadonnées (colonnes disponibles : ",
+                                 paste(colnames(meta_keep), collapse = ", "), ")."), class = "bulk_de_error"))
+    }
+    pair_keep <- droplevels(factor(meta_keep[[pair_col]]))
+    blk_tbl   <- table(pair_keep)
+    if (anyNA(pair_keep) || nlevels(pair_keep) < 2 || min(blk_tbl) < 2) {
+      stop(errorCondition(paste0("Colonne d'appariement « ", pair_col, " » invalide : chaque bloc doit porter au moins 2 échantillons et compter au moins 2 blocs (mesuré : min bloc = ",
+                                 if (length(blk_tbl)) min(blk_tbl) else 0,
+                                 ", blocs = ", nlevels(pair_keep), ")."), class = "bulk_de_error"))
+    }
+  }
 
   y      <- edgeR::DGEList(counts = round(counts_matrix[, keep, drop = FALSE]))
 
   y      <- edgeR::calcNormFactors(y)
 
-  v      <- limma::voom(y, design)
+  fit <- if (!is.null(pair_keep)) {
+    # Recette limma (user guide §blocking) : voom simple → corrélation
+    # consensus intra-bloc → re-voom PONDÉRÉ (voomWithQualityWeights) avec
+    # cette corrélation → lmFit avec bloc + corrélation → eBayes.
+    v0      <- limma::voom(y, design)
+    corfit  <- limma::duplicateCorrelation(v0, design, block = pair_keep)
+    v       <- limma::voomWithQualityWeights(y, design, block = pair_keep,
+                                             correlation = corfit$consensus)
+    limma::eBayes(limma::lmFit(v, design, block = pair_keep,
+                               correlation = corfit$consensus))
+  } else {
+    v <- limma::voomWithQualityWeights(y, design)
+    limma::eBayes(limma::lmFit(v, design))
+  }
 
-  fit    <- limma::eBayes(limma::lmFit(v, design))
-
-
-
-  res <- limma::topTable(fit, coef = 2, number = Inf, sort.by = "P",
-                         adjust.method = p_adjust_method)
+  # ── PA-2 : test contre un seuil de FC (treat) — opt-in treat_lfc > 0 ─────
+  res <- if (is.numeric(treat_lfc) && length(treat_lfc) == 1L &&
+             is.finite(treat_lfc) && treat_lfc > 0) {
+    limma::topTreat(limma::treat(fit, lfc = treat_lfc), coef = 2, number = Inf,
+                    sort.by = "P", adjust.method = p_adjust_method)
+  } else {
+    limma::topTable(fit, coef = 2, number = Inf, sort.by = "P",
+                    adjust.method = p_adjust_method)
+  }
 
   res$gene <- rownames(res)
 
@@ -700,7 +750,9 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
                                   covariates = character(0), p_adjust_method = "BH",
 
-                                  allow_non_integer = FALSE, fixed_dispersion = NULL) {
+                                  allow_non_integer = FALSE, fixed_dispersion = NULL,
+
+                                  pair_col = NULL, treat_lfc = 0) {
 
   # PLOT-S6c (P0, audit §2an) — les moteurs edgeR et limma faisaient
   # `round(counts)` SANS le moindre avertissement (DGEList(counts = round(...))).
@@ -709,6 +761,16 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
   # garde — les deux chemins sont donc couverts.
   bulk_assert_raw_counts(counts_matrix, paste0("analyse différentielle (", engine, ")"),
                          allow_non_integer = allow_non_integer)
+
+  # GEMS PA v1 : le bloc apparié (pair_col) n'est supporté que par le moteur
+  # limma (D1 — v1 = duplicateCorrelation+weights, dream en seconde vague).
+  # Refus HONNÊTE plutôt qu'un traitement silencieux comme indépendant —
+  # c'est précisément l'analyse fausse que PA corrige.
+  if (!is.null(pair_col) && length(pair_col) == 1L && nzchar(trimws(as.character(pair_col))) &&
+      !identical(engine, "limma")) {
+    stop(errorCondition(paste0("Le bloc apparié (pair_col) n'est supporté que par le moteur limma (GEMS PA v1) — moteur demandé : ", engine,
+                               ". Choisissez limma, ou désélectionnez la colonne d'appariement."), class = "bulk_de_error"))
+  }
 
   switch(engine,
 
@@ -725,7 +787,7 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
                          covariates = covariates, p_adjust_method = p_adjust_method,
                          fixed_dispersion = fixed_dispersion),
 
-    limma = run_limma_voom_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method),
+    limma = run_limma_voom_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method, pair_col = pair_col, treat_lfc = treat_lfc),
 
     stop(errorCondition(paste0("Moteur DE non supporté : ", engine), class = "bulk_de_error"))
 
@@ -792,7 +854,8 @@ run_de_core <- function(counts_matrix, metadata, engine,
                         condition_col, group_target, group_ref,
                         dds = NULL, shrink = TRUE, p_adjust_method = "BH",
                         covariates = character(0), fixed_dispersion = NULL,
-                        design_formula = "~condition") {
+                        design_formula = "~condition",
+                        pair_col = NULL, treat_lfc = 0) {
   dds_out <- dds
   if (is.null(dds_out) && identical(engine, "deseq2")) {
     dds_out <- build_dds(counts_matrix, metadata, design_formula = design_formula,
@@ -802,7 +865,8 @@ run_de_core <- function(counts_matrix, metadata, engine,
                               group_target, group_ref, dds = dds_out,
                               shrink = shrink, p_adjust_method = p_adjust_method,
                               covariates = covariates,
-                              fixed_dispersion = fixed_dispersion)
+                              fixed_dispersion = fixed_dispersion,
+                              pair_col = pair_col, treat_lfc = treat_lfc)
   res <- .normalize_de_cols(res, counts_for_basemean = counts_matrix)
   list(res = res, dds = dds_out)
 }
