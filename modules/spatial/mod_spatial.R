@@ -136,40 +136,30 @@ mod_spatial_ui <- function(id) {
                                 bslib::tooltip(icon("circle-info"),
                                                i18n$t("Autocorrélation spatiale (Moran) — gènes spatialement variables"))),
                         icon = icon("filter"),
-                        value = "panel_qc",
-                        p(class = "small text-muted mb-0",
-                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+                        value = "panel_qc"),
 
         accordion_panel(i18n$t("2. Clustering (BANKSY-lite)"), icon = icon("shapes"),
-                        value = "panel_cluster",
-                        p(class = "small text-muted mb-0",
-                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+                        value = "panel_cluster"),
 
         accordion_panel(i18n$t("3. Deconvolution"), icon = icon("puzzle-piece"),
-                        value = "panel_deconv",
-                        p(class = "small text-muted mb-0",
-                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+                        value = "panel_deconv"),
 
         accordion_panel(i18n$t("4. Visualisation"), icon = icon("eye"),
-                        value = "panel_viz",
-                        p(class = "small text-muted mb-0",
-                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+                        value = "panel_viz"),
 
         accordion_panel(i18n$t("5. Multi-echantillons"), icon = icon("layer-group"),
-                        value = "panel_multi",
-                        p(class = "small text-muted mb-0",
-                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+                        value = "panel_multi"),
 
         # LOT 5 (V1.x UX glossary): dual label — what "spatial niches" means.
-        accordion_panel(i18n$t("Niches spatiales — micro-environnements cellulaires"), icon = icon("diagram-project"),
-                        value = "panel_niche",
-                        p(class = "small text-muted mb-0",
-                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+        # FIX 2026-11-08 (harmonisation opérateur) : numérotée « 6. » comme les
+        # autres étapes (le trou 6 dans la séquence 0-5-7 venait du label
+        # non numéroté ; mod_spatial_pipeline.R:216 référençait déjà
+        # « l'onglet "6. Niches spatiales" »).
+        accordion_panel(i18n$t("6. Niches spatiales — micro-environnements cellulaires"), icon = icon("diagram-project"),
+                        value = "panel_niche"),
 
         accordion_panel(i18n$t("7. Export & Rapport"), icon = icon("file-export"),
-                        value = "panel_export",
-                        p(class = "small text-muted mb-0",
-                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite.")))
+                        value = "panel_export")
       )
     ),
     navset_card_underline(
@@ -200,7 +190,7 @@ mod_spatial_ui <- function(id) {
                 value = "results_multi",
                 mod_spatial_multi_ui(ns("multi"))),
 
-      nav_panel(i18n$t("Niches spatiales — micro-environnements cellulaires"), icon = icon("diagram-project"),
+      nav_panel(i18n$t("6. Niches spatiales — micro-environnements cellulaires"), icon = icon("diagram-project"),
                 value = "results_niche",
                 mod_spatial_niche_ui(ns("niche"))),
 

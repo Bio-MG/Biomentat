@@ -3942,6 +3942,14 @@
       "en": "Accepted formats: barcodes.tsv(.gz), features.tsv(.gz) or genes.tsv(.gz), matrix.mtx(.gz)."
     },
     {
+      "fr": "Ajouter un Dossier",
+      "en": "Add a Folder"
+    },
+    {
+      "fr": "Scanner un dossier parent (auto-découverte des échantillons)",
+      "en": "Scan a parent folder (sample auto-discovery)"
+    },
+    {
       "fr": "📁 Ajouter un Dossier",
       "en": "📁 Add a Folder"
     },
@@ -8084,6 +8092,10 @@
     {
       "fr": "Vélocité ARN — orientation des trajectoires",
       "en": "RNA velocity — trajectory orientation"
+    },
+    {
+      "fr": "6. Niches spatiales — micro-environnements cellulaires",
+      "en": "6. Spatial niches — cellular micro-environments"
     },
     {
       "fr": "Niches spatiales — micro-environnements cellulaires",

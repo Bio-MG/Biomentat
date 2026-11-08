@@ -440,6 +440,19 @@ ui <- page_navbar(
     # le card reprend sa hauteur au contenu, et le retry « empoisonné pendant
     # cachée → visible » fonctionne (instance.data survit à la suspension).
     tags$style(HTML(".html-fill-container > .html-fill-item.datatables { min-height: 120px !important; }")),
+    # FIX 2026-11-08 (feedback opérateur : bande vide sous la navbar).
+    # Cause racine MESURÉE sur le DOM réel (rendu headless de app.R, probe
+    # QC/_ui_dom_probe.html) : <main class="bslib-page-main bslib-gap-spacing
+    # html-fill-item html-fill-container"> empile comme flex-items la div
+    # i18n-state (visibility:hidden), les 3 uiOutput header vides
+    # (drive_badge / drive_not_selected_note / session_ckpt-restore_banner)
+    # et le tab-content — 5 items, soit 4 gaps × 1rem (--bslib-mb-spacer)
+    # = ~4rem de bande morte sous la navbar sur TOUS les onglets. Le gap:0
+    # ciblé ici ne touche QUE le main de la page (les layout_sidebar/cards
+    # internes gardent leur espacement propre) ; quand la bannière ASR ou le
+    # badge drive rendent un contenu réel, celui-ci reste visible, simplement
+    # sans espace réservé au-dessus du tab-content.
+    tags$style(HTML("main.bslib-page-main.bslib-gap-spacing { gap: 0; }")),
     # Chantier 6 : auto-expire 15 s des notifications persistantes. Les 411
     # sites showNotification restent INTACTS — le timer client clique le bouton
     # close des persistantes (elles en ont une) ; les auto-expirantes (duration
@@ -946,6 +959,32 @@ server <- function(input, output, session) {
 
   # First paint: the panel must be honest BEFORE the first tick (~800 ms).
   .drive_control_refresh(force = TRUE)
+
+  # FIX 2026-11-08 (feedback opérateur) — checkpoints de session ON PAR DÉFAUT
+  # quand l'agent pilote CETTE session. Déclencheur : drive_control() passe à
+  # state="armed" (armed_self ou armed_wildcard — l'agent tient le handshake).
+  # Le flip passe par bslib::update_switch sur l'input namespacé
+  # "session_ckpt-enabled" : le module ASR-3 exécute donc son chemin
+  # d'activation ÉPROUVÉ (publisher enregistré, pool booté, scan du magasin),
+  # sans duplication de logique. Garde UNIQUETÉ (flag une fois par session) :
+  # un flip manuel OFF de l'opérateur pendant une session agent n'est JAMAIS
+  # écrasé (les battements suivants re-déclenchent l'observer — heartbeat_n
+  # change — mais le flag bloque) ; l'observateur n'active que vers ON, ne
+  # désactive jamais. Rétention : le défaut moteur vaut déjà 3 checkpoints
+  # par dataset (TS_SESSION_CHECKPOINT_RETENTION_N, session_checkpoint.R:68)
+  # et la purge au-delà de N conserve les plus récents — « garder les 3
+  # derniers, jamais plus » est donc le comportement existant, sans réglage
+  # supplémentaire. OFF sans drive : inchangé (contrat ASR §4 opt-in humain).
+  .drive_ckpt_auton <- shiny::reactiveVal(FALSE)
+  shiny::observeEvent(drive_control(), {
+    st <- drive_control()
+    if (!is.list(st) || !identical(st$state, "armed")) return(invisible(NULL))
+    if (isTRUE(.drive_ckpt_auton())) return(invisible(NULL))
+    .drive_ckpt_auton(TRUE)
+    if (isTRUE(input[["session_ckpt-enabled"]])) return(invisible(NULL))
+    bslib::update_switch(id = "session_ckpt-enabled", value = TRUE,
+                         session = session)
+  })
 
   output$drive_control_ui <- shiny::renderUI({
     global_data$language                      # re-render on language switch

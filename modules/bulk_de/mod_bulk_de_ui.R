@@ -114,8 +114,8 @@ mod_bulk_de_ui <- function(id) {
 }
 
 
-# ── UI: Sticky Contrast Bar (B2-D, round 5) ───────────────────────────────────
-# Barre de sélection collante montée EN TÊTE des onglets de visualisation DE
+# ── UI: Contrast Bar (B2-D, round 5 ; DE-STICKY fix 2026-11-08) ───────────────
+# Barre de sélection montée EN TÊTE des onglets de visualisation DE
 # (Volcano / MA-Plot / Heatmap) via le slot `header` du navset « Résultats
 # Bulk RNA-seq » (mod_bulk.R) : changer de contraste actif n'exige plus
 # l'aller-retour vers la sidebar Étape 2. `active_contrast_sticky` est un
@@ -124,10 +124,15 @@ mod_bulk_de_ui <- function(id) {
 # dans mod_bulk_de_run.R. Choix remplis côté serveur sur la même reactive
 # shared_rv$contrasts que la synchro sidebar du moteur. ZÉRO changement
 # statistique : pure navigation d'affichage.
+# FIX 2026-11-08 (feedback opérateur : la barre masquait les menus de scroll
+# des résultats bulk qui passaient DERRIÈRE elle) : `sticky-top` +
+# `z-index:1000` RETIRÉS — la barre reste en tête du navset mais défile avec
+# le contenu ; plus rien ne passe sous elle. Le changement de contraste en
+# cours de scroll demande un retour en haut (le sélecteur sidebar Étape 2
+# reste disponible en parallèle) — arbitrage opérateur assumé.
 mod_bulk_de_contrast_bar_ui <- function(id) {
   ns <- NS(id)
-  div(class = "bulk-contrast-bar sticky-top bg-light border-bottom p-2 mb-3",
-      style = "z-index:1000;",
+  div(class = "bulk-contrast-bar bg-light border-bottom p-2 mb-3",
       selectInput(ns("active_contrast_sticky"), i18n$t("Contraste actif"),
                   choices = NULL, width = "320px"))
 }

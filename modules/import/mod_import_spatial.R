@@ -271,8 +271,16 @@ mod_import_spatial_ui <- function(id) {
           value_box(title = i18n$t("Statut"), value = textOutput(ns("status_obj")),
                     showcase = bsicons::bs_icon("check-circle"), theme = "light")
         ),
+        # FIX 2026-11-08 (feedback opérateur « Console de Log trop serrée ») :
+        # la carte Résumé et la carte « Reference scRNA-seq partagee (RCTD /
+        # Label Transfer) » sont deux fill-items du même layout_sidebar — la
+        # seconde (header long + alerte + fileInput) écrasait le pre de la
+        # console à quelques dizaines de px. Hauteur utile garantie + scroll :
+        # le pre reste lisible quelle que soit la place que prend la carte
+        # RCTD (fix purement CSS/inline, aucune logique).
         card_body(h5(i18n$t("Console de Log"), class = "text-muted"),
-                  verbatimTextOutput(ns("console_log"), placeholder = TRUE))
+                  div(style = "height:240px; overflow-y:auto;",
+                      verbatimTextOutput(ns("console_log"), placeholder = TRUE)))
       ),
 
       # v7 (backlog court-terme #1 — voir handoff_spatial_bio-mg.md) :

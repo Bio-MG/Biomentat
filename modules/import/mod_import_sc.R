@@ -203,11 +203,21 @@ mod_import_sc_ui <- function(id) {
             # P0-2 (fix 2026-11-08) : boutons STATIQUES — le renderUI
             # dépendant de la langue re-créait l'élément APRÈS le binding
             # shinyFiles -> bouton mort au premier chargement (BUG #2).
-            # Le label porte le span i18n (i18n$t direct) : la traduction
-            # client bascule SANS re-créer l'élément, le binding survit.
+            # FIX 2026-11-08 (feedback opérateur « I18N BROKEN ») : le label
+            # ne doit PAS porter le span i18n — shinyDirButton rend son label
+            # via as.character(label) (shinyFiles:::shinyDirButton), et
+            # as.character() re-transforme le shiny.tag du span en chaîne
+            # PLaine que tags$button échappe ensuite : l'opérateur voyait le
+            # markup littéral « <span class="i18n" data-key="📁 …"> » dans le
+            # bouton (mesuré sur le rendu du package). Le motif P0-2 « le span
+            # survit » était donc faux pour shinyFiles. i18n_plain() (même
+            # motif que title= ci-dessous) rend une chaîne brute : label
+            # propre, clé de traduction résolue au build (fr), libellés FR
+            # statiques pour ces 2 boutons (pas de bascule live — prix du
+            # bouton statique exigé par le binding shinyFiles).
             shinyDirButton(
               ns("dir_select"),
-              label = i18n$t("📁 Ajouter un Dossier"),
+              label = i18n_plain("Ajouter un Dossier"),
               title = i18n_plain("Sélectionner dossier contenant matrix.mtx"),
               class = "btn-secondary w-100",
               icon  = icon("folder-open")
@@ -216,7 +226,7 @@ mod_import_sc_ui <- function(id) {
             # des triplets 10X — 1 sélection remplace 6×(dossier + nom).
             shinyDirButton(
               ns("dir_scan"),
-              label = i18n$t("⚡ Scanner un dossier parent (auto-découverte des échantillons)"),
+              label = i18n_plain("Scanner un dossier parent (auto-découverte des échantillons)"),
               title = i18n_plain("Sélectionner le dossier parent contenant UN sous-dossier par échantillon (chaque sous-dossier = triplets 10X)"),
               class = "btn-outline-info w-100",
               icon  = icon("folder-tree")
