@@ -40,6 +40,22 @@ mod_bulk_de_ui <- function(id) {
         tooltip(bsicons::bs_icon("info-circle"),
                 i18n$t("R\u00e9duit les Log2FC artificiellement \u00e9lev\u00e9s sur les g\u00e8nes \u00e0 faible expression (haute variance d'\u00e9chantillonnage). Recommand\u00e9 pour le classement/visualisation ; laissez activ\u00e9 sauf besoin sp\u00e9cifique."))),
 
+    # GEMS PA v1 (fiche 2026-11-04 §PA, D1/D2) — options sur le panneau DE
+    # EXISTANT, pas d'UX nouvelle (pas de nouveau panneau/onglet). Deux
+    # options moteur limma : bloc apparié (duplicateCorrelation) + seuil FC
+    # du test treat. Choices du pair_col remplis côté serveur (mod_bulk_de_
+    # engine.R, observateur condition_col) avec AUTO-DÉTECTION (D2 : auto +
+    # avertissement i18n + override manuel = ce select).
+    selectInput(ns("pair_col"), i18n$t("Colonne d'appariement (blocs)"),
+                choices = stats::setNames("", i18n_plain("Aucun appariement (ind\u00e9pendant)")),
+                selected = ""),
+    tooltip(bsicons::bs_icon("info-circle"),
+            i18n$t("Designs appari\u00e9s/bloqu\u00e9s : chaque bloc (ex: patient) porte un \u00e9chantillon de chaque groupe — analys\u00e9 par duplicateCorrelation au lieu d'un mod\u00e8le \u00ab ind\u00e9pendants \u00bb faux (moteur limma uniquement). La d\u00e9tection automatique pr\u00e9s\u00e9lectionne un candidat quand les m\u00e9tadonn\u00e9es en contiennent un.")),
+    div(style = "display:flex;align-items:center;gap:6px;",
+        numericInput(ns("treat_lfc"), i18n$t("Seuil FC du test TREAT (limma)"), value = 0, min = 0, step = 0.1),
+        tooltip(bsicons::bs_icon("info-circle"),
+                i18n$t("Teste contre un seuil de Fold-Change : seuls les g\u00e8nes dont |Log2FC| d\u00e9passe ce seuil peuvent \u00eatre significatifs (\u00e9limine les \u00ab significatifs triviaux \u00bb). 0 = test classique (eBayes)."))),
+
     # Plan sans r\u00e9plicat (n = p) : d\u00e9tection + contournement attest\u00e9.
     # Rendu c\u00f4t\u00e9 serveur (le diagnostic d\u00e9pend de la colonne condition
     # choisie) — voir mod_bulk_de_run.R::output$no_rep_bypass_ui.

@@ -214,6 +214,29 @@
                       choices = lvls,
                       selected = if (keep) input$group_target else lvls[min(2, length(lvls))])
     if (!keep) shared_rv$de_decl_valid <- FALSE
+    # ── GEMS PA v1 (D2) : auto-détection du bloc apparié ──────────────────────
+    # Candidat = colonne des métadonnées dont chaque niveau porte exactement
+    # 2 échantillons de CONDITIONS DISTINCTES (motif patient contrôle/traité).
+    # AUTO = présélection + avertissement i18n visible (notification) ;
+    # OVERRIDE manuel = le select pair_col (l'opérateur peut repasser à
+    # « aucun appariement »). Recalculée à CHAQUE changement de condition :
+    # le design change intégralement, la détection de l'ère précédente serait
+    # périmée (leçon BULK-6).
+    cat_cols_pa <- names(meta)[vapply(meta, function(x) is.character(x) || is.factor(x), logical(1))]
+    cand <- tryCatch(bulk_detect_pair_col(meta, input$condition_col,
+                                          covariates = input$covariates %||% character(0)),
+                     error = function(e) NULL)
+    pair_choices <- stats::setNames(c("", cat_cols_pa),
+                                    c(.trl("Aucun appariement (indépendant)"), cat_cols_pa))
+    updateSelectInput(session, "pair_col", choices = pair_choices,
+                      selected = if (!is.null(cand)) cand else "")
+    if (!is.null(cand) && !identical(cand, input$pair_col)) {
+      # Interpolation {col} APRÈS traduction (motif .t_fmt) — la clé reste
+      # entière dans translation.json, jamais concaténée avant lookup.
+      msg <- .trl("Design apparié détecté — colonne « {col} » présélectionnée comme bloc (duplicateCorrelation, moteur limma). Modifiable dans « Colonne d'appariement ».")
+      showNotification(gsub("{col}", cand, msg, fixed = TRUE),
+                       id = "pa_pair_detect", type = "warning", duration = 12)
+    }
   })
 
   # BULK-6 : un remplacement de dataset (bulk_obj_epoch : imports, GEO,

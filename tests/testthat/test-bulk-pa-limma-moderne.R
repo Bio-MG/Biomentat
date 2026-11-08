@@ -120,3 +120,46 @@ test_that("PA-5 : check_design_cancor détecte la confusion numérique (canCorPa
   # Covariable catégorielle : hors périmètre (garde catégorielle existante).
   expect_false(isTRUE(check_design_cancor(d$meta, "condition", "patient")$confounded))
 })
+
+# ── Jalon 2 (module) : détection D2 + câblage du panneau DE ─────────────────
+
+test_that("PA-6 : bulk_detect_pair_col trouve le motif patient (D2 auto), et refuse les non-motifs", {
+  d <- .pa_fixture()
+  expect_identical(bulk_detect_pair_col(d$meta, "condition"), "patient")
+  # La colonne de condition elle-même n'est jamais candidate.
+  expect_null(bulk_detect_pair_col(d$meta[, "condition", drop = FALSE], "condition"))
+  # Covariables déclarées : exclues (elles sont déjà dans le design).
+  expect_null(bulk_detect_pair_col(d$meta, "condition", covariates = "patient"))
+  # Un bloc dont les 2 échantillons portent la MÊME condition n'est pas un appariement.
+  d2 <- d$meta
+  d2$badblock <- factor(c("b1", "b1", "b2", "b2", "b3", "b3"))
+  d2$condition <- factor(c("ref", "ref", "target", "target", "ref", "target"),
+                         levels = c("ref", "target"))
+  expect_null(bulk_detect_pair_col(d2, "condition"))
+  # Métadonnées vides / sans colonne condition : NULL honnête, jamais throw.
+  expect_null(bulk_detect_pair_col(data.frame(x = 1), "condition"))
+  expect_null(bulk_detect_pair_col(NULL, "condition"))
+})
+
+test_that("PA-7 : câblage module — widgets UI, core list, ExtendedTask et observateur D2 épinglés", {
+  ui_src   <- paste(readLines(file.path(ts_project_root(), "modules", "bulk_de",
+                                        "mod_bulk_de_ui.R"), warn = FALSE), collapse = "\n")
+  run_src  <- paste(readLines(file.path(ts_project_root(), "modules", "bulk_de",
+                                        "mod_bulk_de_run.R"), warn = FALSE), collapse = "\n")
+  eng_src  <- paste(readLines(file.path(ts_project_root(), "modules", "bulk_de",
+                                        "mod_bulk_de_engine.R"), warn = FALSE), collapse = "\n")
+  # (1) les 2 widgets existent sur le panneau DE existant
+  expect_true(grepl('selectInput(ns("pair_col")', ui_src, fixed = TRUE))
+  expect_true(grepl('numericInput(ns("treat_lfc")', ui_src, fixed = TRUE))
+  # (2) le core list porte les 2 formels → run_de_core (sync + mirai même charge)
+  expect_true(grepl("pair_col = { pc <- input$pair_col", run_src, fixed = TRUE))
+  expect_true(grepl("treat_lfc = { tl <- suppressWarnings(as.numeric(input$treat_lfc", run_src, fixed = TRUE))
+  # (3) l'ExtendedTask et son invoke acheminent les 2 formels (daemon = repli)
+  expect_true(grepl("design_formula, pair_col, treat_lfc) {", run_src, fixed = TRUE))
+  expect_true(grepl("pair_col = pair_col, treat_lfc = treat_lfc),", run_src, fixed = TRUE))
+  expect_true(grepl("core$pair_col, core$treat_lfc)", run_src, fixed = TRUE))
+  # (4) l'observateur D2 : auto-détection + notification i18n + override
+  expect_true(grepl("bulk_detect_pair_col(meta, input$condition_col", eng_src, fixed = TRUE))
+  expect_true(grepl('updateSelectInput(session, "pair_col"', eng_src, fixed = TRUE))
+  expect_true(grepl("{col}", eng_src, fixed = TRUE))
+})

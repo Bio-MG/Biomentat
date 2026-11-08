@@ -327,17 +327,19 @@
   de_drive_task <- ExtendedTask$new(function(counts, meta, engine, condition_col,
                                              group_target, group_ref, covariates,
                                              shrink_lfc, padj_method, fixed_disp,
-                                             design_formula) {
+                                             design_formula, pair_col, treat_lfc) {
     mirai::mirai(
       run_de_core(counts, meta, engine, condition_col, group_target, group_ref,
                   shrink = shrink_lfc, p_adjust_method = padj_method,
                   covariates = covariates, fixed_dispersion = fixed_disp,
-                  design_formula = design_formula),
+                  design_formula = design_formula,
+                  pair_col = pair_col, treat_lfc = treat_lfc),
       counts = counts, meta = meta, engine = engine,
       condition_col = condition_col, group_target = group_target,
       group_ref = group_ref, covariates = covariates, shrink_lfc = shrink_lfc,
       padj_method = padj_method, fixed_disp = fixed_disp,
-      design_formula = design_formula
+      design_formula = design_formula, pair_col = pair_col,
+      treat_lfc = treat_lfc
     )
   })
   # La cellule du job drive en vol — une RÉFÉRENCE, pas une copie : le trigger
@@ -552,7 +554,14 @@
       condition_col = input$condition_col, group_target = input$group_target,
       group_ref = input$group_ref, covariates = covariates_in_use,
       shrink = input$shrink_lfc, p_adjust_method = padj_method,
-      fixed_dispersion = fixed_disp, design_formula = design_str)
+      fixed_dispersion = fixed_disp, design_formula = design_str,
+      # GEMS PA v1 : bloc apparié (duplicateCorrelation) + seuil FC treat —
+      # options sur le panneau DE existant ; "" = aucun appariement ; le
+      # dispatch refuse honnêtement si pair_col est posé hors moteur limma.
+      pair_col = { pc <- input$pair_col %||% ""
+                   if (identical(pc, "") || length(pc) != 1L) NULL else pc },
+      treat_lfc = { tl <- suppressWarnings(as.numeric(input$treat_lfc %||% 0))
+                    if (length(tl) != 1L || is.na(tl) || tl < 0) 0 else tl })
 
     # Pool disponible ? Même doctrine que l'ad-hoc : le repli synchrone est
     # DÉCLARÉ (notification), jamais muet.
@@ -592,7 +601,8 @@
     de_drive_task$invoke(core$counts_matrix, core$metadata, core$engine,
                          core$condition_col, core$group_target, core$group_ref,
                          core$covariates, core$shrink, core$p_adjust_method,
-                         core$fixed_dispersion, core$design_formula)
+                         core$fixed_dispersion, core$design_formula,
+                         core$pair_col, core$treat_lfc)
   })
 
   # ── Observateur de RÉSULTAT : le SEUL endroit où un job soumis peut être ──

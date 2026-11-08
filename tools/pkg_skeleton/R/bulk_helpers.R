@@ -797,6 +797,39 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
 
 
+#' GEMS PA (D2) — détection AUTOMATIQUE d'une colonne d'appariement.
+#'
+#' Un candidat est une colonne (hors condition, hors covariates déclarées,
+#' non numérique) dont CHAQUE niveau porte EXACTEMENT 2 échantillons portant
+#' DES VALEURS DE CONDITION DIFFÉRENTES — le motif d'un design apparié
+#' (patient: contrôle + traité). Retourne le PREMIER candidat dans l'ordre
+#' des colonnes (déterministe), ou NULL (aucun candidat — le module reste
+#' alors sur « aucun appariement »). Fonction PURE, jamais de throw.
+bulk_detect_pair_col <- function(metadata, condition_col, covariates = character(0)) {
+  if (is.null(metadata) || !is.data.frame(metadata) || !ncol(metadata) ||
+      !condition_col %in% colnames(metadata)) return(NULL)
+  cond <- droplevels(factor(metadata[[condition_col]]))
+  if (nlevels(cond) < 2) return(NULL)
+  for (col in colnames(metadata)) {
+    if (identical(col, condition_col)) next
+    if (col %in% covariates) next
+    if (is.numeric(metadata[[col]])) next
+    blk <- factor(metadata[[col]])
+    blk <- blk[!is.na(blk)]
+    tbl <- table(blk)
+    if (nlevels(blk) < 2 || length(tbl) != nlevels(blk) || any(tbl != 2)) next
+    # Chaque bloc doit porter exactement les 2 niveaux de condition distincts.
+    ok <- all(vapply(names(tbl), function(b) {
+      sub <- cond[which(metadata[[col]] == b)]
+      length(unique(as.character(sub))) == 2L
+    }, logical(1)))
+    if (ok) return(col)
+  }
+  NULL
+}
+
+
+
 #' Normalize DE result column names + fill baseMean if missing (edgeR/limma)
 
 .normalize_de_cols <- function(df, counts_for_basemean = NULL) {

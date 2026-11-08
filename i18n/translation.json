@@ -3946,6 +3946,30 @@
       "en": "Add a Folder"
     },
     {
+      "fr": "Colonne d'appariement (blocs)",
+      "en": "Pairing column (blocks)"
+    },
+    {
+      "fr": "Aucun appariement (indépendant)",
+      "en": "No pairing (independent)"
+    },
+    {
+      "fr": "Designs appariés/bloqués : chaque bloc (ex: patient) porte un échantillon de chaque groupe — analysé par duplicateCorrelation au lieu d'un modèle « indépendants » faux (moteur limma uniquement). La détection automatique présélectionne un candidat quand les métadonnées en contiennent un.",
+      "en": "Paired/blocked designs: each block (e.g. patient) carries one sample per group — analysed with duplicateCorrelation instead of a false 'independent' model (limma engine only). Auto-detection pre-selects a candidate when the metadata contains one."
+    },
+    {
+      "fr": "Seuil FC du test TREAT (limma)",
+      "en": "TREAT test FC threshold (limma)"
+    },
+    {
+      "fr": "Teste contre un seuil de Fold-Change : seuls les gènes dont |Log2FC| dépasse ce seuil peuvent être significatifs (élimine les « significatifs triviaux »). 0 = test classique (eBayes).",
+      "en": "Tests against a Fold-Change threshold: only genes whose |Log2FC| exceeds it can be significant (removes 'trivially significant' calls). 0 = classic test (eBayes)."
+    },
+    {
+      "fr": "Design apparié détecté — colonne « {col} » présélectionnée comme bloc (duplicateCorrelation, moteur limma). Modifiable dans « Colonne d'appariement ».",
+      "en": "Paired design detected — column '{col}' pre-selected as block (duplicateCorrelation, limma engine). Changeable in 'Pairing column'."
+    },
+    {
       "fr": "Scanner un dossier parent (auto-découverte des échantillons)",
       "en": "Scan a parent folder (sample auto-discovery)"
     },
