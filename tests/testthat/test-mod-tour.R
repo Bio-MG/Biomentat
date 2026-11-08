@@ -14,7 +14,10 @@
 #         (sendModal / sendInputMessage / sendCustomMessage — jamais la
 #         classe) : start → 1, next → 2 + nav main_nav sur le tab GELÉ du
 #         registre, prev, skip → 0 + removeModal + pose du drapeau (message
-#         tour-mark_done), first_run démarre SEULEMENT si inactif ;
+#         tour-mark_done), first_run auto-start OPT-IN TS_TOUR_AUTOSTART=1
+#         (FIX 2026-11-08 opérateur : OFF par défaut — friction debug/test ;
+#         lancable à la main via bouton sidebar), et démarre SEULEMENT si
+#         inactif ;
 #   (d)   UI : bouton ns("start") + le script embarque la clé localStorage et
 #         les noms interpolés (jamais codés en dur).
 # =============================================================================
@@ -152,12 +155,24 @@ test_that("(c) serveur : start/next/prev/skip/first_run + nav tab gelé + drapea
       expect_true("tour-mark_done" %in% customs,
                   info = "skip pose le drapeau localStorage (message custom)")
 
-      # first_run démarre SEULEMENT si inactif
-      session$setInputs(first_run = TRUE)
+      # FIX 2026-11-08 (opérateur) : first_run auto-start DÉSACTIVÉ par
+      # défaut (modale first-run = friction pendant les cycles debug/test) —
+      # sans TS_TOUR_AUTOSTART, l'input first_run est un no-op honnête.
+      session$setInputs(first_run = 1L)
       session$flushReact()
-      expect_equal(get_index(), 1L, info = "first_run : démarrage auto")
-      session$setInputs(first_run = TRUE)
-      session$flushReact()
+      expect_equal(get_index(), 0L,
+                   info = "first_run : auto-start OFF par défaut (TS_TOUR_AUTOSTART absent)")
+
+      # Opt-in TS_TOUR_AUTOSTART=1 : first_run démarre SEULEMENT si inactif
+      withr::with_envvar(c(TS_TOUR_AUTOSTART = "1"), {
+        session$setInputs(first_run = 2L)
+        session$flushReact()
+      })
+      expect_equal(get_index(), 1L, info = "first_run : démarrage auto (opt-in TS_TOUR_AUTOSTART=1)")
+      withr::with_envvar(c(TS_TOUR_AUTOSTART = "1"), {
+        session$setInputs(first_run = 3L)
+        session$flushReact()
+      })
       expect_equal(get_index(), 1L,
                    info = "first_run IGNORÉ si une visite est déjà en cours")
 

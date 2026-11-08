@@ -202,6 +202,17 @@ mod_tour_server <- function(id,
     })
 
     shiny::observeEvent(input$first_run, {
+      # FIX 2026-11-08 (opérateur) : auto-lancement de la visite DÉSACTIVÉ par
+      # défaut — pendant les cycles debug/test, la modale first-run retarde
+      # chaque session fraîche. Opt-in : TS_TOUR_AUTOSTART=1 rétablit le
+      # démarrage automatique. La visite reste lancable À LA MAIN à tout
+      # moment (bouton sidebar voisin de help_btn, input$start ci-dessus).
+      # localStorage volontairement INTACHÉ dans la branche off : un
+      # navigateur qui n'a jamais pris la visite doit encore pouvoir la
+      # recevoir le jour où l'auto-start est réactivé.
+      if (!identical(Sys.getenv("TS_TOUR_AUTOSTART", unset = "0"), "1")) {
+        return(invisible(NULL))
+      }
       if (rv$index == 0L) tour_show(1L)
     })
 
