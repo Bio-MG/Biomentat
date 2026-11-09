@@ -30,7 +30,8 @@ params:
 `%||%` <- function(a, b) if (is.null(a)) b else a
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
                       fig.width = params$fig_width %||% 9, fig.height = params$fig_height %||% 7,
-                      out.width = "100%")
+                      out.width = "100%",
+                      dev = "ragg", dpi = 300, bg = "white")  # PD (r7) : device/dpi unifies app-wide
 sections <- params$sections %||% character(0)
 
 # i18n Phase 5 : traduction des chaines du rapport. Les cles (chaines FR)
