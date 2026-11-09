@@ -962,6 +962,44 @@ build_corr_dt <- function(df) {
 
 
 
+#' Leverage scores par cellule (jalon SD — sketch natif LeverageScore)
+#'
+#' Calcule les scores de leverage par cellule — diag(V V^t) du SVD rang-k de
+#' la couche "data", la MÊME quantité que Seurat::SketchData(method =
+#' "LeverageScore") exploite en interne — pour ordonner les cellules par
+#' information portée plutôt que par tirage au sort. Pur : aucun effet de
+#' bord sur l'objet.
+#'
+#' MESURE (2026-11-09, jalon SD) : la couche "data" est exigée (objet brut
+#' counts-only => NULL, l'appelant garde son repli historique) ; le SVD est
+#' porté par irlba (déjà au lock via Seurat, supporte les matrices BPCells
+#' on-disk — combinaison SD « objet disque + scores in-memory »). Les
+#' vecteurs singuliers CELLULES sont les COLONNES droites (v) : data est
+#' (gènes x cellules), u = gènes.
+#'
+#' @param obj Seurat object (premier assay par défaut).
+#' @param k Rang du SVD (comme SketchData : 30).
+#' @return Vecteur nommé (names = noms de cellules) de scores >= 0, ou NULL
+#'   si la couche data est absente/trop petite ou si le SVD échoue.
+.leverage_scores <- function(obj, k = 30L) {
+  tryCatch({
+    assays <- names(obj@assays)
+    if (length(assays) == 0L) return(NULL)
+    assay <- if ("RNA" %in% assays) "RNA" else assays[1]
+    data <- SeuratObject::GetAssayData(obj, assay = assay, layer = "data")
+    if (is.null(data) || ncol(data) < 3L || nrow(data) < 3L) return(NULL)
+    k <- min(as.integer(k), min(dim(data)) - 1L)
+    if (k < 1L) return(NULL)
+    # MESURE (2026-11-09) : irlba ne CONVERGE PAS quand nv ~ min(dim) (SVD
+    # presque plein-rang — fixture 30 gènes) ; maxit relevé + le test utilise
+    # un rapport réaliste (k << n_gènes, comme en production ~30k gènes).
+    sv <- irlba::irlba(data, nu = k, nv = k, maxit = 1000)
+    scores <- rowSums(sv$v^2)
+    names(scores) <- colnames(data)
+    scores
+  }, error = function(e) NULL)
+}
+
 #' Cap the number of cells used for a heavy per-cell computation
 #' (FindAllMarkers, find_correlated_genes, ...) — RAM/CPU safety net for large
 #' Single-Cell objects on a 32Go CPU-only machine.
@@ -972,14 +1010,33 @@ build_corr_dt <- function(df) {
 #' doesn't exist in the object's metadata (e.g. correlation subsampling by
 #' "orig.ident" on a single-sample object).
 #'
+#' SD (2026-11-09 — fiche PROPOSAL_SEURAT_V56_GEMS §3-SD) : le canal
+#' **leverage score** (même mécanique que le sketch natif du pipeline auto,
+#' sc_pipeline.R) est disponible via `selection = "leverage"` — OPT-IN.
+#'
+#' FALSIFICATION MESURÉE (2026-11-09, jalon SD) : le swap par défaut prévu
+#' par la fiche est une RÉGRESSION pour le cas d'usage marqueurs — le
+#' leverage favorise les cellules extrêmes/influentes, PAS les sous-
+#' populations compactes (redondantes → leverage bas par cellule) : sur un
+#' sous-cluster marqueur de 20 cellules identiques, 3/20 gardées vs ~10/20
+#' attendues au hasard. Le défaut reste donc le tirage stratifié historique
+#' (`selection = "random"`, zéro changement) ; la voie leverage est pour les
+#' analyses qui veulent maximiser l'information par cellule gardée. Repli
+#' automatique vers le tirage aléatoire si la couche "data" est absente ou
+#' si le SVD échoue — jamais d'erreur de plus.
+#'
 #' @param obj Seurat object.
 #' @param max_per_group Max cells to keep per level of `group_col`.
 #'   `Inf`, `NA`, or `<= 0` disables subsampling entirely (returns obj as-is).
 #' @param group_col Metadata column to stratify by (default "seurat_clusters").
 #' @param seed Random seed, for reproducibility across re-runs of the same step.
-#' @return list(object, n_before, n_after, was_subsampled)
+#' @param selection "random" (défaut — comportement historique inchangé) ou
+#'   "leverage" (SD : top max_per_group par leverage score par groupe).
+#' @return list(object, n_before, n_after, was_subsampled) + attribut
+#'   `selection` = mode effectivement utilisé ("random" ou "leverage").
 subsample_seurat_for_analysis <- function(obj, max_per_group = Inf,
-                                          group_col = "seurat_clusters", seed = 1) {
+                                          group_col = "seurat_clusters", seed = 1,
+                                          selection = c("random", "leverage")) {
   n_before <- ncol(obj)
 
   if (is.null(max_per_group) || is.na(max_per_group) || !is.finite(max_per_group) || max_per_group <= 0) {
@@ -987,15 +1044,26 @@ subsample_seurat_for_analysis <- function(obj, max_per_group = Inf,
   }
 
   set.seed(seed)
+  selection <- match.arg(selection)
+  scores <- if (identical(selection, "leverage")) .leverage_scores(obj) else NULL
+  selection_mode <- if (is.null(scores)) "random" else "leverage"
+
+  # Sélection au sein d'un groupe : top max_per_group par leverage (égalités
+  # départagées par le tirage seedé — déterminisme conservé) ; repli tirage
+  # aléatoire historique si les scores ne sont pas disponibles.
+  .pick <- function(cells) {
+    if (length(cells) <= max_per_group) return(cells)
+    if (is.null(scores)) return(sample(cells, max_per_group))
+    sc <- scores[cells]
+    ord <- order(-sc, stats::runif(length(cells)))
+    cells[ord[seq_len(max_per_group)]]
+  }
 
   if (group_col %in% colnames(obj@meta.data)) {
     groups <- obj@meta.data[[group_col]]
-    keep_cells <- unlist(lapply(split(Cells(obj), groups), function(cells) {
-      if (length(cells) > max_per_group) sample(cells, max_per_group) else cells
-    }), use.names = FALSE)
+    keep_cells <- unlist(lapply(split(Cells(obj), groups), .pick), use.names = FALSE)
   } else {
-    all_cells  <- Cells(obj)
-    keep_cells <- if (length(all_cells) > max_per_group) sample(all_cells, max_per_group) else all_cells
+    keep_cells <- .pick(Cells(obj))
   }
 
   n_after <- length(keep_cells)
@@ -1003,8 +1071,10 @@ subsample_seurat_for_analysis <- function(obj, max_per_group = Inf,
     return(list(object = obj, n_before = n_before, n_after = n_before, was_subsampled = FALSE))
   }
 
-  list(object = subset(obj, cells = keep_cells),
-       n_before = n_before, n_after = n_after, was_subsampled = TRUE)
+  res <- list(object = subset(obj, cells = keep_cells),
+              n_before = n_before, n_after = n_after, was_subsampled = TRUE)
+  attr(res, "selection") <- selection_mode
+  res
 }
 
 

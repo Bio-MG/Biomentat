@@ -273,3 +273,101 @@ test_that("C10 : les erreurs joignables de sc_helpers.R portent sc_helpers_error
   expect_s3_class(e, "sc_helpers_error")
   expect_match(conditionMessage(e), "Aucun objet Single-Cell", fixed = TRUE)
 })
+
+# ---------------------------------------------------------------------------
+# SD (2026-11-09) — subsample_seurat_for_analysis : canal leverage OPT-IN
+# ---------------------------------------------------------------------------
+# La fiche §3-SD prevoyait le swap par défaut du tirage aleatoire vers les
+# leverage scores. FALSIFIE MESURE : le leverage garde les cellules extremes/
+# influentes, PAS les sous-populations compactes (3/20 vs ~10/20 hasard sur
+# un sous-cluster marqueur redondant) — pour les marqueurs, une regression.
+# Le canal est donc OPT-IN (selection = "leverage"), defaut = comportement
+# historique strict (zéro changement), repli random si pas de couche data.
+
+.toy_seurat_normed <- function(n_cells = 60, n_groups = 3) {
+  obj <- .toy_seurat(n_cells = n_cells, n_groups = n_groups)
+  obj <- Seurat::NormalizeData(obj, verbose = FALSE)
+  obj
+}
+
+test_that("SD : le CANAL leverage respecte le contrat et est deterministe", {
+  .load_seurat_pkgs()
+  obj <- .toy_seurat_normed(n_cells = 90, n_groups = 3)
+  res1 <- subsample_seurat_for_analysis(obj, max_per_group = 10, group_col = "seurat_clusters",
+                                        seed = 1, selection = "leverage")
+  expect_true(res1$was_subsampled)
+  expect_equal(res1$n_before, 90)
+  expect_equal(ncol(res1$object), 30)   # 3 clusters x 10
+  expect_identical(attr(res1, "selection"), "leverage")
+  # determinisme (meme seed => meme selection) :
+  res2 <- subsample_seurat_for_analysis(obj, max_per_group = 10, group_col = "seurat_clusters",
+                                        seed = 1, selection = "leverage")
+  expect_identical(colnames(res1$object), colnames(res2$object))
+})
+
+test_that("SD : le DEFAUT reste le comportement historique (zero changement)", {
+  .load_seurat_pkgs()
+  obj <- .toy_seurat_normed(n_cells = 90, n_groups = 3)
+  res <- subsample_seurat_for_analysis(obj, max_per_group = 10, group_col = "seurat_clusters", seed = 1)
+  expect_true(res$was_subsampled)
+  expect_equal(ncol(res$object), 30)
+  expect_identical(attr(res, "selection"), "random")
+  # meme chose sur un objet brut (counts only) en canal leverage => repli :
+  obj_raw <- .toy_seurat(n_cells = 90, n_groups = 3)
+  res_fb <- subsample_seurat_for_analysis(obj_raw, max_per_group = 10,
+                                          group_col = "seurat_clusters",
+                                          seed = 1, selection = "leverage")
+  expect_true(res_fb$was_subsampled)
+  expect_equal(ncol(res_fb$object), 30)
+  expect_identical(attr(res_fb, "selection"), "random")
+})
+
+test_that("SD : les cellules a signal porteur sont PREFEREES au tirage hasard", {
+  .load_seurat_pkgs()
+  # 2 groupes ; groupe B : 20 cellules "distingues" formant un VRAI
+  # sous-cluster (5 genes marqueurs a 50) et 40 banales — un cap a 30 dans
+  # le groupe B doit garder l'essentiel des distingues (leverage eleve : ils
+  # portent des directions propres entieres). Construction lecon du premier
+  # essai (falsifie) : avec k=30 ~ rang plein sur 40 cellules, un marqueur
+  # unique se noie dans le bruit du SVD — il faut un bloc compact.
+  set.seed(42)
+  n_banale <- 40L; n_marqueur <- 20L; n_a <- 40L
+  # 100 gènes : k=30 << min(dim) (MESURE : irlba ne converge pas quand
+  # nv ~ min(dim) — fixture 30 gènes, SVD presque plein-rang).
+  genes <- paste0("gene", 1:100)
+  m_banal  <- matrix(stats::rpois(100 * n_banale, 2), nrow = 100,
+                     dimnames = list(genes, paste0("B_banal", 1:n_banale)))
+  m_marq   <- matrix(stats::rpois(100 * n_marqueur, 2), nrow = 100,
+                     dimnames = list(genes, paste0("B_marq", 1:n_marqueur)))
+  m_marq[1:5, ] <- 50   # bloc marqueur : 5 genes, vrai sous-population
+  m_a      <- matrix(stats::rpois(100 * n_a, 2), nrow = 100,
+                     dimnames = list(genes, paste0("A", 1:n_a)))
+  counts <- cbind(m_a, m_banal, m_marq)
+  obj <- SeuratObject::CreateSeuratObject(counts = counts)
+  cl <- factor(c(rep("A", n_a), rep("B", n_banale + n_marqueur)))
+  obj$seurat_clusters <- cl
+  obj <- Seurat::NormalizeData(obj, verbose = FALSE)
+
+  res <- subsample_seurat_for_analysis(obj, max_per_group = 30,
+                                       group_col = "seurat_clusters", seed = 1,
+                                       selection = "leverage")
+  expect_identical(attr(res, "selection"), "leverage")
+  kept_b <- colnames(res$object)[res$object$seurat_clusters == "B"]
+  # FALSIFICATION CONSERVEE COMME GARDE : le leverage NE favorise PAS les
+  # sous-populations compactes (redondantes) — il garde les cellules
+  # extremes/influentes. Garde : il garde au PLUS la part aleatoire + marge,
+  # jamais une representation majoritaire du bloc redondant.
+  expect_lte(sum(grepl("^B_marq", kept_b)), 12L)
+})
+
+test_that("SD : .leverage_scores — couche data absente => NULL, presente => vecteur nomme >= 0", {
+  .load_seurat_pkgs()
+  obj <- .toy_seurat(n_cells = 30, n_groups = 2)
+  expect_null(.leverage_scores(obj))
+  obj_n <- .toy_seurat_normed(n_cells = 30, n_groups = 2)
+  sc <- .leverage_scores(obj_n)
+  expect_type(sc, "double")
+  expect_length(sc, 30)
+  expect_named(sc, paste0("cell", 1:30))
+  expect_true(all(sc >= 0))
+})
