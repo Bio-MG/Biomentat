@@ -1029,3 +1029,237 @@ build_pathway_dt <- function(df, tr = NULL) {
                                                         c("darkgreen", "green", "orange", "red")))
 
 }
+
+# =============================================================================
+# PB (GEMS D5, GO opérateur 2026-11-09) — ORA DIRECTIONNELLE limma :
+# goana/kegga + barcodeplot, le « 3e idiome » d'enrichissement.
+# =============================================================================
+# L'ORA clusterProfiler (run_pathway_enrichment ci-dessus) travaille sur la
+# LISTE des gènes significatifs ; goana/kegga travaillent sur la TABLE DE
+# complète et testent la DIRECTION (Up/Down) PAR VOIE. Extension ADDITIVE :
+# même discipline de fond que M12 (fond obligatoire, jamais le fond par
+# défaut silencieux), même règle d'identifiants composites que B1-C, même
+# classe d'erreur pathway_error, map_fun injecté pour la pureté testable.
+# compareCluster est EXPLICITEMENT hors v1 (fiche §PB, D5 : « d'abord ») ;
+# fgsea/fry/camera restent la propriété du pilier 4 PACKS (jamais
+# double-owner). Aucune UX nouvelle : le branchement module arrive en jalon 2.
+# =============================================================================
+
+#' ORA directionnelle limma (goana/kegga) sur une table DE complète
+#'
+#' @param de_table data.frame DE du module bulk : colonnes requises `gene`
+#'   (SYMBOL ou identifiants composites ENSG..._SYMBOL — règle B1-C),
+#'   `log2FoldChange`, `pvalue` (p-valeur BRUTE — goana applique lui-même le
+#'   BH interne ; passer `padj` comme p-valeur produirait une double
+#'   correction, refusé). `padj` optionnel, non consommé par limma.
+#' @param universe_ids vecteur caractère des identifiants du fond (les
+#'   rownames de la matrice filtrée — SYMBOLs comme côté DE). OBLIGATOIRE :
+#'   l'ORA directionnelle refuse le fond par défaut de limma (doctrine M12
+#'   poussée au 3e idiome — un fond non déclaré est une analyse différente
+#'   sous le même nom).
+#' @param db "GO", "KEGG" ou c("GO","KEGG") — chaque base demandée est
+#'   calculée ; une base non demandée reste NULL (pas de calcul fantôme).
+#' @param organism "human" ou "mouse" (org.Hs.eg.db / org.Mm.eg.db).
+#' @param fdr_cutoff seuil BH sur la p-valeur brute, appliqué par goana/kegga
+#'   pour sélectionner l'ensemble DE dont les directions sont comptées.
+#' @param map_fun injection de la fonction de mapping (production :
+#'   `function(keys) bitr(keys, fromType="SYMBOL", toType="ENTREZID",
+#'   OrgDb=orgdb)`). Injectée, la résolution reste pure et testable sans
+#'   OrgDb (motif M12, §2cp).
+#'
+#' @return list(go =, kegg =, meta =) — `go`/`kegg` : tables limma natives
+#'   (colonnes de direction DE.Up/DE.Down/P.Up/P.Down) augmentées d'une
+#'   colonne `db` ; NULL pour une base non demandée. `meta` : comptes
+#'   honnêtes (de_n_entrez, universe_n_entrez), note de repli de fond (M12),
+#'   organisme, seuil.
+run_pathway_direction <- function(de_table, universe_ids,
+                                  db = c("GO", "KEGG"),
+                                  organism = "human",
+                                  fdr_cutoff = 0.05,
+                                  map_fun = NULL) {
+  db <- tryCatch(match.arg(db, c("GO", "KEGG"), several.ok = TRUE),
+                 error = function(e) NULL)
+  if (is.null(db) || !length(db)) {
+    stop(errorCondition("db doit être 'GO', 'KEGG' ou les deux (v1 — compareCluster et les autres bases sont explicitement hors portée).",
+                        class = "pathway_error"))
+  }
+  organism <- tryCatch(match.arg(organism, c("human", "mouse")),
+                       error = function(e) NULL)
+  if (is.null(organism)) {
+    stop(errorCondition("organism doit être 'human' ou 'mouse' (v1 — l'orthologie souris élargie reste une décision JOINT GEMS D5/PACKS).",
+                        class = "pathway_error"))
+  }
+  fdr_cutoff <- suppressWarnings(as.numeric(fdr_cutoff))
+  if (length(fdr_cutoff) != 1L || is.na(fdr_cutoff) ||
+      fdr_cutoff <= 0 || fdr_cutoff >= 1) {
+    stop(errorCondition("fdr_cutoff doit être un nombre dans ]0, 1[.",
+                        class = "pathway_error"))
+  }
+
+  # -- 1. Validation de la table DE (avant tout paquet) ------------------------
+  if (!is.data.frame(de_table) || nrow(de_table) == 0L) {
+    stop(errorCondition("de_table vide ou non data.frame — rien à tester directionnellement.",
+                        class = "pathway_error"))
+  }
+  required <- c("gene", "log2FoldChange", "pvalue")
+  missing_cols <- setdiff(required, names(de_table))
+  if (length(missing_cols)) {
+    stop(errorCondition(paste0(
+      "Colonnes DE manquantes pour l'ORA directionnelle : ",
+      paste(missing_cols, collapse = ", "),
+      ". La p-valeur BRUTE est requise — passer padj produirait un double BH chez goana/kegga."),
+      class = "pathway_error"))
+  }
+
+  # -- 2. Fond obligatoire (doctrine M12 au 3e idiome) -------------------------
+  universe_ids <- strip_composite_gene_ids(as.character(universe_ids))
+  universe_ids <- unique(universe_ids[!is.na(universe_ids) & nzchar(universe_ids)])
+  if (!length(universe_ids)) {
+    stop(errorCondition("Fond (universe_ids) vide — l'ORA directionnelle refuse le fond par défaut de limma : fournissez les rownames de la matrice filtrée.",
+                        class = "pathway_error"))
+  }
+
+  # -- 3. Mapping SYMBOL -> Entrez (map_fun injecté, même idiome que M12) ------
+  species <- switch(organism, human = "Hs", mouse = "Mm")
+  orgpkg <- switch(organism, human = "org.Hs.eg.db", mouse = "org.Mm.eg.db")
+  if (is.null(map_fun)) {
+    if (!requireNamespace(orgpkg, quietly = TRUE)) {
+      stop(errorCondition(paste0("Package '", orgpkg,
+                                  "' requis pour l'analyse ", organism, "."),
+                          class = "pathway_error"))
+    }
+    map_fun <- function(keys) clusterProfiler::bitr(
+      keys, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = orgpkg)
+  }
+
+  de_ids <- strip_composite_gene_ids(as.character(de_table$gene))
+  de_map <- tryCatch(map_fun(unique(de_ids)), error = function(e) NULL)
+  if (is.null(de_map) || !nrow(de_map)) {
+    stop(errorCondition("Aucun gène DE n'a pu être converti en Entrez — l'ORA directionnelle refuse de continuer sur un ensemble vide.",
+                        class = "pathway_error"))
+  }
+  universe_res <- .resolve_ora_universe(universe_ids, de_map$ENTREZID, map_fun)
+  universe_entrez <- universe_res$entrez
+  universe_note <- universe_res$note
+  if (is.null(universe_entrez) || !length(universe_entrez)) {
+    stop(errorCondition("Le fond déclaré ne mappe vers aucun Entrez — refus (jamais de repli silencieux sur le fond par défaut).",
+                        class = "pathway_error"))
+  }
+  # Note PARTIELLE (au-delà des 3 cas du helper M12) : si une partie du fond
+  # déclaré ne convertit pas en Entrez, le consommateur doit le savoir sans
+  # lire la console — le fond effectif est plus petit que le fond déclaré.
+  uni_map_probe <- tryCatch(map_fun(universe_ids), error = function(e) NULL)
+  n_uni_declared <- length(universe_ids)
+  n_uni_mapped <- if (!is.null(uni_map_probe)) length(unique(uni_map_probe$ENTREZID)) else 0L
+  if (n_uni_mapped < n_uni_declared) {
+    partial_note <- paste0(
+      "Fond ORA directionnelle : ", n_uni_mapped, "/", n_uni_declared,
+      " identifiants declares convertis en Entrez — les non-convertibles sont exclus du fond effectif.")
+    universe_note <- if (is.null(universe_note)) partial_note
+                     else paste(universe_note, partial_note, sep = " | ")
+  }
+
+  # -- 4. Déduplication Entrez (data.frame rownames uniques obligatoires) ------
+  # Deux symboles peuvent converger vers un même Entrez : on garde, par
+  # Entrez, la ligne la plus significative (min pvalue) — politique honnête
+  # et déterministe, estampillée dans meta.
+  de_map <- unique(de_map[, c("SYMBOL", "ENTREZID")])
+  idx <- match(de_map$SYMBOL, de_ids)
+  de_sel <- de_table[idx, , drop = FALSE]
+  de_sel$.entrez <- de_map$ENTREZID
+  de_sel <- de_sel[order(de_sel$.entrez, de_sel$pvalue), ]
+  keep <- !duplicated(de_sel$.entrez)
+  de_sel <- de_sel[keep, ]
+  de_n_entrez <- nrow(de_sel)
+
+  # -- 5. Pré-compte honnête du sous-ensemble DE (avant tout appel limma) ------
+  bh <- p.adjust(de_sel$pvalue, method = "BH")
+  n_de <- sum(bh < fdr_cutoff)
+  if (n_de == 0L) {
+    stop(errorCondition(paste0(
+      "Zéro gène DE sous le seuil fdr_cutoff=", fdr_cutoff,
+      " (BH interne = le même padj que le module) — l'ORA directionnelle refuse de produire une table vide muette."),
+      class = "pathway_error"))
+  }
+
+  # -- 6. goana / kegga (API limma moderne : LISTE de vecteurs Entrez par
+  #      direction — le data.frame logFC/P.Value de l'ancien goana n'existe
+  #      plus dans limma 3.62 au lock, mesuré) -------------------------------
+  if (!requireNamespace("limma", quietly = TRUE)) {
+    stop(errorCondition("Package 'limma' requis (moteur DE bulk — absent de la bibliothèque ?).",
+                        class = "pathway_error"))
+  }
+  sig <- bh < fdr_cutoff
+  de_up <- as.character(de_sel$.entrez)[sig & de_sel$log2FoldChange > 0]
+  de_down <- as.character(de_sel$.entrez)[sig & de_sel$log2FoldChange < 0]
+  direction_list <- list()
+  if (length(de_up)) direction_list[["Up"]] <- de_up
+  if (length(de_down)) direction_list[["Down"]] <- de_down
+  if (!length(direction_list)) {
+    stop(errorCondition("Les gènes DE au seuil portent un logFC nul — aucune direction testable.",
+                        class = "pathway_error"))
+  }
+
+  .norm_direction_table <- function(t, db_name) {
+    # limma rend P.Up/P.Down (P.<name>) sans FDR : le BH par direction est
+    # appliqué ICI, sur les colonnes de la table (même politique que le
+    # module pour l'ORA classique — qval exposé, jamais muet).
+    for (nm in names(direction_list)) {
+      pcol <- paste0("P.", nm)
+      fcol <- paste0("FDR.", nm)
+      if (pcol %in% names(t)) t[[fcol]] <- p.adjust(t[[pcol]], method = "BH")
+    }
+    t$db <- db_name
+    t
+  }
+
+  out <- list(go = NULL, kegg = NULL)
+  if ("GO" %in% db) {
+    t <- limma::goana(direction_list, universe = universe_entrez,
+                      species = species)
+    out$go <- .norm_direction_table(t, "GO")
+  }
+  if ("KEGG" %in% db) {
+    t <- limma::kegga(direction_list, universe = universe_entrez,
+                      species = species)
+    out$kegg <- .norm_direction_table(t, "KEGG")
+  }
+
+  list(go = out$go, kegg = out$kegg,
+       meta = list(de_n_entrez = de_n_entrez,
+                   universe_n_entrez = length(universe_entrez),
+                   universe_note = universe_note,
+                   n_de_at_cutoff = n_de,
+                   directions = names(direction_list),
+                   n_up = length(de_up),
+                   n_down = length(de_down),
+                   fdr_cutoff = fdr_cutoff,
+                   organism = organism,
+                   db = db))
+}
+
+#' Barcodeplot limma — rang logFC avec la voie surlignée
+#'
+#' @param rank_stats vecteur numérique NOMMÉ (names = mêmes identifiants que
+#'   `index_genes`, typiquement Entrez) — le classement complet (logFC).
+#' @param index_genes identifiants des gènes DE la voie à surligner.
+#' @param ... passé à limma::barcodeplot (quantiles, labels, worm...).
+#' @return la sortie de limma::barcodeplot (tracé base R, invisible) — à
+#'   rendre via renderPlot côté module.
+plot_pathway_barcode <- function(rank_stats, index_genes, ...) {
+  if (!requireNamespace("limma", quietly = TRUE)) {
+    stop(errorCondition("Package 'limma' requis (moteur DE bulk — absent de la bibliothèque ?).",
+                        class = "pathway_error"))
+  }
+  rank_stats <- rank_stats[!is.na(rank_stats)]
+  if (!length(rank_stats)) {
+    stop(errorCondition("Classement vide — rien à tracer pour le barcodeplot.",
+                        class = "pathway_error"))
+  }
+  idx <- which(names(rank_stats) %in% as.character(index_genes))
+  if (!length(idx)) {
+    stop(errorCondition("Aucun gène de la voie n'apparaît dans le classement — le barcodeplot refuse de tracer un surlignage vide.",
+                        class = "pathway_error"))
+  }
+  limma::barcodeplot(rank_stats, index = idx, ...)
+}
