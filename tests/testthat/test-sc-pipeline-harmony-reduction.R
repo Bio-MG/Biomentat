@@ -28,9 +28,13 @@ test_that("FindNeighbors du chemin principal suit clust_red / clust_dims", {
   p <- ts_ast_parse("tools/pkg_skeleton/R/sc_pipeline.R")
 
   calls <- ts_ast_find_all(p, function(x) ts_ast_is_call_to(x, "FindNeighbors"))
-  # Sonde DISCRIMINANTE : deux sites (sketch + chemin principal). Si le compte
-  # change, le test doit le dire plutôt que de tomber juste par hasard.
-  expect_length(calls, 2L)
+  # Sonde DISCRIMINANTE : TROIS sites depuis P1-6a (b0a1686, 2026-11-08) —
+  # sketch + chemin principal auto + cœur du pipeline MANUEL
+  # (run_sc_manual_pipeline_core, corps transposé verbatim : sc_pipeline.R:966).
+  # L'INVARIANT scientifique (le clustering suit l'espace intégré) doit tenir
+  # sur les DEUX chemins non-sketch. Si le compte change encore, le test doit
+  # le dire plutôt que de tomber juste par hasard.
+  expect_length(calls, 3L)
 
   deps   <- vapply(calls, ts_ast_deparse, character(1))
   sketch <- grepl("sketch_params", deps, fixed = TRUE)
@@ -38,7 +42,8 @@ test_that("FindNeighbors du chemin principal suit clust_red / clust_dims", {
 
   # Le chemin SKETCH ne peut pas porter d'intégration (elle force use_sketch
   # à FALSE en amont) : il reste sur la PCA, c'est voulu.
-  main <- calls[[which(!sketch)]]
+  mains <- calls[!sketch]
+  expect_length(mains, 2L)
 
   .arg <- function(call, name) {
     l <- as.list(call)
@@ -48,8 +53,12 @@ test_that("FindNeighbors du chemin principal suit clust_red / clust_dims", {
     ts_ast_deparse(l[[i]])
   }
 
-  expect_identical(.arg(main, "reduction"), "clust_red")
-  expect_identical(.arg(main, "dims"), "1:clust_dims")
+  for (i in seq_along(mains)) {
+    expect_identical(.arg(mains[[i]], "reduction"), "clust_red",
+                     info = sprintf("site non-sketch %d suit l'espace intégré", i))
+    expect_identical(.arg(mains[[i]], "dims"), "1:clust_dims",
+                     info = sprintf("site non-sketch %d suit clust_dims", i))
+  }
 
   # Contrôle de cohérence : UMAP utilisait déjà la même variable (le motif
   # correct existait juste à côté — c'est ce qui rend le défaut crédible).

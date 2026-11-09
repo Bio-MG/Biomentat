@@ -101,7 +101,11 @@ test_that("les 4 sites mesures sont prefixes en Seurat::", {
     # par le jalon DM (23c429c) en `.dm_from_pca(Seurat::Embeddings(obj, "pca"), ...)`
     # — le préfixe Seurat:: EST présent ; l'épingle de forme `t(Embeddings(...`
     # (pré-DM) suit la forme actuelle, l'INTENTION (préfixe) est inchangée.
-    "modules/sc/mod_sc_pipeline.R"      = "Seurat::Embeddings(obj, \"pca\")",
+    # Re-basage (2026-11-09, P1-6a b0a1686) : le site a QUITTÉ le module pour
+    # le cœur du pipeline manuel (run_sc_manual_pipeline_core) — même appel
+    # `.man_dm_from_pca(Seurat::Embeddings(obj, "pca"), ...)`, fichier cible
+    # sc_pipeline.R:996 ; l'INTENTION (préfixe) est inchangée.
+    "tools/pkg_skeleton/R/sc_pipeline.R" = "Seurat::Embeddings(obj, \"pca\")",
     "modules/sc/mod_sc_viz.R"           = "ncol(Seurat::Embeddings(obj, r))"
   )
   for (rel in names(sites)) {
