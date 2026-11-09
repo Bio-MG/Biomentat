@@ -574,6 +574,25 @@ run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT
     if (!is.null(roles_df) && nrow(roles_df) == 0L) roles_df <- NULL
   }
 
+  # CC-2 : RÉTENTION ADDITIVE de l'objet CellChat pour la comparaison
+  # inter-conditions en session (mergeCellChat/rankNet exigent les OBJETS,
+  # pas seulement les tables extraites). Mesure RAM §9.3 (V1X, QC/_cc2_ram_
+  # log.txt) : le gros de l'objet est @data (matrice brute COMPLETE avant
+  # subsetData) — amputé ici au profit de @data.signaling (gènes DB seuls),
+  # les seuls slots que mergeCellChat/rankNet/computeNetSimilarityPairwise
+  # consomment sont @netP/@net/@meta/@DB. Non bloquant : un échec avale-trace
+  # et le run reste simplement hors registre comparatif.
+  ccc_object <- NULL
+  if (ran_cent) {
+    ccc_object <- tryCatch({
+      object@data <- object@data.signaling
+      object
+    }, error = function(e) {
+      ts_log_swallow("sc_communication_engine.cellchat_retention", e)
+      NULL
+    })
+  }
+
   extracted <- .cellchat_engine_extract(object)
 
   # ── MOTEUR EPHEMERE : on retire la reference des la extraction faite ──────
@@ -658,6 +677,12 @@ run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT
   result$cellchat_roles <- roles_df
   result$cellchat_roles_ran <- ran_cent
 
+  # CC-2 : attach ADDITIF de l'objet retenu (D4 — extension additive du
+  # contrat ; champ runtime, JAMAIS sérialisé dans les exports CSV). NULL
+  # quand la chaîne netP n'a pas tourné — le registre comparatif du module
+  # n'enregistre que les runs complets.
+  result$cellchat_object <- ccc_object
+
   .progress("terminé")
   result
 }
@@ -698,6 +723,143 @@ cellchat_analysis_identity <- function(result) {
   )
 }
 
+# ── CC-2 (O34/D3) : communication comparative inter-conditions ──────────────
+# GO D3 = renversement explicite du descope V1X:183 (le descope protégeait le
+# moteur v1, pas une interdiction de fond — fiche CCC 2026-11-03 §4). Périmètre
+# v1 : mergeCellChat + rankNet(mode="comparison") + computeNetSimilarityPairwise.
+# NON-goals : liftCellChat (identités différentes = cas limite, différé CC-3),
+# identifyCommunicationPatterns (CC-3), chord diagrams (descope séparé).
+
+#' Comparaison inter-conditions de 2..N objets CellChat de session (CC-2)
+#'
+#' Consomme les objets RETENUS par run_cellchat() (champ `cellchat_object`,
+#' amputés de @data — voir la rétention) : le registre de session du module
+#' Communication ne passe ici que des objets dont `netP` est calculé.
+#'
+#' @param object.list liste nommée de 2..N objets CellChat (même session).
+#' @param labels noms affichables des conditions (défaut : names).
+#' @return liste : `flow_table` (data.frame pathway × conditions — flux
+#'   d'information weight par voie + parts relatives `rel_<label>`, calculée
+#'   depuis @netP$prob — substitution mesurée de la table rankNet vide en
+#'   2.2.0.9001), `similarity` (matrice symétrique NxN de
+#'   computeNetSimilarityPairwise sur l'objet fusionné, ou NULL si sautée —
+#'   réseau dégénéré — ou en échec tracé), `merged` (objet fusionné pour les
+#'   vues futures), `labels`, `warnings` (échecs/sauts non bloquants tracés).
+#'   Erreurs bloquantes = classes `cellchat_engine_error` (états
+#'   `insufficient_objects`, `invalid_input`, `identity_mismatch`,
+#'   `no_common_pathways`).
+run_ccc_comparison <- function(object.list, labels = names(object.list)) {
+  if (!is.list(object.list) || length(object.list) < 2L) {
+    .cellchat_engine_stop(
+      "insufficient_objects",
+      paste0("Comparaison CCC : au moins 2 objets CellChat de session sont ",
+             "requis pour une comparaison inter-conditions (registre vide ",
+             "ou singleton).")
+    )
+  }
+  if (is.null(labels) || length(labels) != length(object.list)) {
+    labels <- if (is.null(names(object.list))) sprintf("cond%d", seq_along(object.list))
+              else names(object.list)
+  }
+  # Chaque objet doit porter un netP calculé (le produit de la chaîne complète).
+  bad <- vapply(object.list, function(o) {
+    !isS4(o) || !requireNamespace("CellChat", quietly = TRUE) ||
+      length(methods::slot(o, "netP")$pathways %||% character(0)) == 0L
+  }, logical(1))
+  if (any(bad)) {
+    .cellchat_engine_stop(
+      "invalid_input",
+      sprintf("Objet(s) sans voies significatives (netP) : %s — seuls les runs CellChat complets participent à la comparaison.",
+              paste(names(object.list)[bad], collapse = ", "))
+    )
+  }
+  # Identités strictement identiques (v1) : mergeCellChat l'exige — des
+  # groupes différents = cas limite liftCellChat, différé CC-3 (fiche §CC-2).
+  grp_sig <- vapply(object.list, function(o) {
+    paste(sort(unique(as.character(methods::slot(o, "meta")$labels))), collapse = ",")
+  }, character(1))
+  if (length(unique(grp_sig)) > 1L) {
+    .cellchat_engine_stop(
+      "identity_mismatch",
+      paste0("Les groupes d'identités diffèrent entre les objets (",
+             paste(grp_sig, collapse = " | "),
+             ") — liftCellChat est différé (CC-3) : alignez les identités et relancez.")
+    )
+  }
+
+  warns <- character(0)
+  merged <- tryCatch(
+    CellChat::mergeCellChat(object.list, add.names = labels),
+    error = function(e) { warns <<- c(warns, paste("mergeCellChat:", conditionMessage(e))); NULL }
+  )
+  # ⚠️ SUBSTITUTIONS MESURÉES (CellChat 2.2.0.9001 épinglé, 2026-11-09) :
+  # (1) rankNet(mode="comparison", return.data=TRUE) sur l'objet fusionné
+  #     renvoie {signaling.contribution, gg.obj} avec une table VIDE (0×0
+  #     mesuré sur fixture) — la gemme ne livre pas sa table dans cette
+  #     version. La MÊME quantité (flux d'information par voie, mode weight)
+  #     est recalculée directement depuis @netP$prob de chaque objet :
+  #     somme des poids de la voie = ce que rankNet trace.
+  # (2) computeNetSimilarityPairwise exige l'objet FUSIONNÉ (« @ applied to
+  #     list » sinon, mesuré) ET HANG/CRAche la session R (mesuré sur fixture
+  #     ET panel DB réel, même ≥ 5 voies) — DÉFAUT sauté, opt-in
+  #     TS_CCC_SIMILARITY=1 (voir 2bis plus bas).
+  pws <- Reduce(intersect, lapply(object.list, function(o)
+    methods::slot(o, "netP")$pathways %||% character(0)))
+  if (length(pws) == 0L) {
+    .cellchat_engine_stop(
+      "no_common_pathways",
+      paste0("Aucune voie de signalisation commune entre les objets (",
+             paste(vapply(object.list, function(o)
+               as.character(length(methods::slot(o, "netP")$pathways %||% character(0))),
+               character(1)), collapse = ", "),
+             " voies respectives) — la comparaison comparative exige un socle commun.")
+    )
+  }
+  flow <- as.data.frame(vapply(object.list, function(o) {
+    pr <- methods::slot(o, "netP")$prob
+    vapply(pws, function(pw) {
+      p3 <- pr[, , pw]
+      if (is.null(dim(p3))) p3 <- matrix(p3, nrow = 1L, ncol = 1L)
+      sum(p3, na.rm = TRUE)
+    }, numeric(1))
+  }, numeric(length(pws))))
+  colnames(flow) <- as.character(labels)
+  flow$pathway <- pws
+  flow <- flow[, c("pathway", as.character(labels)), drop = FALSE]
+  for (l in as.character(labels)) {
+    tot <- sum(flow[[l]], na.rm = TRUE)
+    flow[[paste0("rel_", l)]] <- if (is.finite(tot) && tot > 0) flow[[l]] / tot else NA_real_
+  }
+  rownames(flow) <- NULL
+
+  # (2bis) MESURE FINALE (2026-11-09) : computeNetSimilarityPairwise(merged)
+  # HANG/CRAche la session R même sur 8 voies communes (fixture ET panel DB
+  # réel) — inutilisable en session vivante. DÉFAUT : sautée (raison tracée
+  # dans warnings) ; opt-in EXPLICITE TS_CCC_SIMILARITY=1 pour l'opérateur
+  # qui l'essaie à ses risques (motif TS_* du dépôt). Réévaluation : CC-3.
+  similarity <- NULL
+  if (!identical(Sys.getenv("TS_CCC_SIMILARITY", unset = "0"), "1")) {
+    warns <- c(warns, paste0("computeNetSimilarityPairwise: sautée — hang/crash ",
+                             "session mesuré sur la version épinglée (2.2.0.9001). ",
+                             "Opt-in : TS_CCC_SIMILARITY=1 (réévaluation CC-3)."))
+  } else if (!is.null(merged)) {
+    similarity <- tryCatch(
+      CellChat::computeNetSimilarityPairwise(merged),
+      error = function(e) {
+        warns <<- c(warns, paste("computeNetSimilarityPairwise:", conditionMessage(e)))
+        NULL
+      }
+    )
+  }
+  list(
+    labels     = as.character(labels),
+    merged     = merged,
+    flow_table = flow,
+    similarity = similarity,
+    warnings   = warns
+  )
+}
+
 #' Resume court du run (affichage UI / rapport)
 cellchat_engine_summary <- function(result) {
   eng <- result$engine %||% list()
@@ -727,6 +889,8 @@ cellchat_engine_public_api <- function() {
     "cellchat_analysis_identity", "cellchat_engine_available",
     "cellchat_engine_error_state", "cellchat_engine_public_api",
     "cellchat_engine_states", "cellchat_engine_summary",
+    # CC-2 (O34/D3, re-basé 2026-11-09) : comparaison inter-conditions.
+    "run_ccc_comparison",
     "run_cellchat"
   )
 }

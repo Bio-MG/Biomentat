@@ -83,6 +83,7 @@ test_that("2G : les textes d'origine sont préservés VERBATIM (coordination 3D 
 
 .B4_CCC_VALUES <- c("ccc_tab_interactions", "ccc_tab_table_filtres", "ccc_tab_dotplot",
                     "ccc_tab_heatmap", "ccc_tab_reseau", "ccc_tab_centralite",
+  "ccc_tab_comparaison",
                     "ccc_tab_spatial", "ccc_tab_trajectoire", "ccc_tab_velocite",
                     "ccc_tab_perturbation", "ccc_tab_schema", "ccc_tab_harmonisation",
                     "ccc_tab_qc_import", "ccc_tab_limites")
@@ -135,7 +136,7 @@ test_that("2F/2L : .comm_drawer_groups (2 jumelles) = 4 groupes, 14 panneaux, va
   expect_identical(length(grp), 4L)
   vals <- unlist(lapply(grp, function(g) vapply(g, function(p) p$value, character(1))))
   labs <- unlist(lapply(grp, function(g) vapply(g, function(p) p$label, character(1))))
-  expect_identical(length(vals), 14L)
+  expect_identical(length(vals), 15L)  # CC-2 (2026-11-09) : onglet Comparaison
   expect_identical(anyDuplicated(vals), 0L)
   expect_setequal(vals, .B4_CCC_VALUES)
   # Chaque label a une occurrence nav_panel i18n$t("<label>") dans le navset :

@@ -295,8 +295,13 @@ test_that("a real run produces a canonical result with no CellChat object", {
   expect_false(isTRUE(res$provenance$import_only))
   expect_identical(res$provenance$method, "cellchat")
   expect_identical(res$analysis_id, "sc-communication-engine")
-  # moteur ephemeral : aucun champ du resultat ne porte la classe CellChat
-  classes <- unique(vapply(res, function(x) class(x)[1L], character(1)))
+  # moteur ephemeral : aucun champ du resultat ne porte la classe CellChat.
+  # Re-basé 2026-11-09 (CC-2, O34/D3) : le champ additif `cellchat_object`
+  # RETIENT volontairement l'objet S4 (amputé de @data) pour la comparaison
+  # inter-conditions — il est exempté de la doctrine d'éphémérité, tous les
+  # AUTRES champs restent sans classe CellChat (contrat §CC-2).
+  classes <- unique(vapply(res[names(res) != "cellchat_object"],
+                           function(x) class(x)[1L], character(1)))
   expect_false(any(grepl("^CellChat", classes)))
   # la graine et la base sont tracees
   expect_identical(res$engine$seed, 1L)

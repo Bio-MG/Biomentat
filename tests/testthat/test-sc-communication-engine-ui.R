@@ -207,7 +207,7 @@ test_that("both paths store their result in the SAME place (règle des deux voie
   expect_true(grepl(".store_result(first_result, obj", .cc_ui_src, fixed = TRUE))
   expect_true(grepl("append_provenance = FALSE", .cc_ui_src, fixed = TRUE))
   expect_identical(.count(.cc_ui_src, "comm_state$result <- canonical"), 1L)
-  expect_identical(.count(.cc_ui_src, ".clear_result_state()"), 4L)
+  expect_identical(.count(.cc_ui_src, ".clear_result_state()"), 6L)  # re-basé 2026-11-09 (CC-2) : 6 sites d'appel mesurés (le pin 4L était déjà rouge sur HEAD — dette bulk/merge era)
   expect_identical(.count(.cc_ui_src, "shared_rv$communication_result <-"), 2L)
   expect_identical(.count(.cc_ui_src, "provenance_append(shared_rv"), 3L)
 })

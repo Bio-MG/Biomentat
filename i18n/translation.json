@@ -3946,6 +3946,58 @@
       "en": "Add a Folder"
     },
     {
+      "fr": "Comparaison",
+      "en": "Comparison"
+    },
+    {
+      "fr": "Comparaison inter-conditions (CC-2) : au moins 2 runs CellChat complets de cette session sont requis. Les objets retenus sont amputés de la matrice brute (@data) — les vues comparatives n'en dépendent pas.",
+      "en": "Inter-condition comparison (CC-2): at least 2 complete CellChat runs from this session are required. Retained objects are stripped of the raw matrix (@data) — comparative views do not depend on it."
+    },
+    {
+      "fr": "Lancer la comparaison",
+      "en": "Run comparison"
+    },
+    {
+      "fr": "Table rankNet — flux d'information relatif par voie",
+      "en": "rankNet table — relative information flow per pathway"
+    },
+    {
+      "fr": "Matrice de similarité des réseaux (computeNetSimilarityPairwise)",
+      "en": "Network similarity matrix (computeNetSimilarityPairwise)"
+    },
+    {
+      "fr": "Comparaison indisponible : au moins 2 runs CellChat (moteur) complets de cette session sont requis. Lancez le calcul CellChat sur deux objets (ex: contrôle puis traité) — chaque run complet alimente le registre.",
+      "en": "Comparison unavailable: at least 2 complete CellChat (engine) runs from this session are required. Run CellChat on two objects (e.g. control then treated) — each complete run feeds the registry."
+    },
+    {
+      "fr": "Objets à comparer (≥ 2)",
+      "en": "Objects to compare (>= 2)"
+    },
+    {
+      "fr": "Sélectionnez au moins 2 runs dans le registre de comparaison.",
+      "en": "Select at least 2 runs from the comparison registry."
+    },
+    {
+      "fr": "Erreur comparaison CCC :",
+      "en": "CCC comparison error:"
+    },
+    {
+      "fr": "Comparaison CCC terminée.",
+      "en": "CCC comparison done."
+    },
+    {
+      "fr": "Table rankNet indisponible.",
+      "en": "rankNet table unavailable."
+    },
+    {
+      "fr": "Matrice de similarité indisponible (calcul refusé ou non exécuté).",
+      "en": "Similarity matrix unavailable (computation refused or not run)."
+    },
+    {
+      "fr": "Run",
+      "en": "Run"
+    },
+    {
       "fr": "Colonne d'appariement (blocs)",
       "en": "Pairing column (blocks)"
     },
@@ -8968,10 +9020,6 @@
     {
       "fr": "Contraste commun",
       "en": "Common contrast"
-    },
-    {
-      "fr": "Lancer la comparaison",
-      "en": "Run comparison"
     },
     {
       "fr": "Comparaison impossible : %s",

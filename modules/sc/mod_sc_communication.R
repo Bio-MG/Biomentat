@@ -211,7 +211,8 @@ mod_sc_communication_output_ui <- function(id) {
       list(value = "ccc_tab_dotplot", label = "DotPlot"),
       list(value = "ccc_tab_heatmap", label = "Heatmap pathways"),
       list(value = "ccc_tab_reseau", label = "Réseau"),
-      list(value = "ccc_tab_centralite", label = "Centralité")),
+      list(value = "ccc_tab_centralite", label = "Centralité"),
+      list(value = "ccc_tab_comparaison", label = "Comparaison")),
     "Contextes multi-modaux" = list(
       list(value = "ccc_tab_spatial", label = "Contexte spatial"),
       list(value = "ccc_tab_trajectoire", label = "Contexte trajectoire"),
@@ -316,7 +317,21 @@ mod_sc_communication_output_ui <- function(id) {
                 DT::dataTableOutput(ns("comm_centrality"), height = "420px"),
                 # CC-1 : dot plot des rôles (voie × groupe) — affiché quand les
                 # rôles CellChat du moteur sont présents, message i18n sinon.
-                plotOutput(ns("comm_centrality_plot"), height = "420px"))
+                plotOutput(ns("comm_centrality_plot"), height = "420px")),
+      # CC-2 (O34/D3) : comparaison inter-conditions des runs CellChat de
+      # session (mergeCellChat + rankNet + similarité). Conditionnée à ≥ 2
+      # runs complets dans le registre (message i18n propre sinon) — fiche
+      # CCC 2026-11-03 §CC-2, voie drawer D2.
+      nav_panel(i18n$t("Comparaison"), value = "ccc_tab_comparaison",
+                div(class = "small text-muted m-2",
+                    i18n$t("Comparaison inter-conditions (CC-2) : au moins 2 runs CellChat complets de cette session sont requis. Les objets retenus sont amputés de la matrice brute (@data) — les vues comparatives n'en dépendent pas.")),
+                uiOutput(ns("ccc_comp_selector_ui")),
+                actionButton(ns("btn_ccc_compare"), i18n$t("Lancer la comparaison"),
+                             class = "btn-primary btn-sm m-2", icon = icon("scale-balanced")),
+                h6(i18n$t("Table rankNet — flux d'information relatif par voie"), class = "m-2 text-muted"),
+                DT::dataTableOutput(ns("ccc_comp_ranknet"), height = "360px"),
+                h6(i18n$t("Matrice de similarité des réseaux (computeNetSimilarityPairwise)"), class = "m-2 text-muted"),
+                DT::dataTableOutput(ns("ccc_comp_similarity"), height = "260px"))
       ),
       nav_menu(i18n$t("Contextes multi-modaux"),
       # ── Contextes V1.x (roadmap CCC avancée : contrainte/ordre/contexte —
@@ -468,7 +483,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         list(value = "ccc_tab_dotplot", label = "DotPlot"),
         list(value = "ccc_tab_heatmap", label = "Heatmap pathways"),
         list(value = "ccc_tab_reseau", label = "Réseau"),
-        list(value = "ccc_tab_centralite", label = "Centralité")),
+        list(value = "ccc_tab_centralite", label = "Centralité"),
+        list(value = "ccc_tab_comparaison", label = "Comparaison")),
       "Contextes multi-modaux" = list(
         list(value = "ccc_tab_spatial", label = "Contexte spatial"),
         list(value = "ccc_tab_trajectoire", label = "Contexte trajectoire"),
@@ -501,7 +517,13 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       object_fingerprint = NULL,
       collection = NULL,
       active_sample = NULL,
-      context_cells = NULL
+      context_cells = NULL,
+      # CC-2 : registre comparatif de session — les objets CellChat retenus
+      # par le moteur (champ cellchat_object) empilés par run complet, avec
+      # un libellé affichable ; + le dernier résultat comparatif (rankNet/
+      # similarité). Session-scoped : purgés avec l'état de résultat.
+      ccc_registry = NULL,
+      ccc_comparison = NULL
     )
     comm_status_rv <- reactiveVal(.tr("En attente d'import de resultats de communication..."))
 
@@ -647,6 +669,11 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       comm_state$collection <- NULL
       comm_state$active_sample <- NULL
       comm_state$context_cells <- NULL
+      # CC-2 : le registre comparatif vit dans le MÊME contexte que le run
+      # (un nouveau jeu de données invalide la comparaison en cours) — purgé
+      # avec le reste, jamais conservé au-delà du contexte.
+      comm_state$ccc_registry <- NULL
+      comm_state$ccc_comparison <- NULL
       shared_rv$communication_result <- NULL
       shared_rv$communication_collection <- NULL
       shared_rv$active_communication_sample <- NULL
@@ -798,6 +825,21 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       comm_state$collection <- collection
       comm_state$active_sample <- active_sample
       comm_state$context_cells <- context_cells
+      # CC-2 (O34/D3) : enregistrement au registre comparatif — runs CellChat
+      # complets seulement (objet retenu présent, netP calculé). Le libellé
+      # porte l'ordre, l'heure et le nombre de voies ; l'override manuel
+      # n'existe pas en v1 (aucune UX nouvelle au-delà du panneau).
+      if (identical(canonical$source_method, "cellchat") &&
+          !is.null(canonical$cellchat_object)) {
+        reg <- comm_state$ccc_registry %||% list()
+        idx <- length(reg) + 1L
+        lbl <- sprintf("%s %d (%s) — %s voies",
+                       .tr("Run"), idx, format(Sys.time(), "%H:%M"),
+                       format(canonical$engine$n_pathways_significant %||% 0L))
+        reg[[lbl]] <- list(label = lbl, object = canonical$cellchat_object,
+                           ts = Sys.time())
+        comm_state$ccc_registry <- reg
+      }
       shared_rv$communication_result <- canonical
       shared_rv$communication_collection <- collection
       shared_rv$active_communication_sample <- active_sample
@@ -1386,6 +1428,77 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       } else {
         .tr("Roles CellChat indisponibles (voie import ou centralite non calculee) — vue derivee seule.")
       }
+    })
+
+    # ── CC-2 (O34/D3) : comparaison inter-conditions — consommateur du ──────
+    # registre de session (objets retenus par le moteur). rankNet +
+    # computeNetSimilarityPairwise tournent SYNCHRONES sur les slots netP
+    # (léger — la mesure RAM §9.3 documente la surface) ; le registre exige
+    # ≥ 2 runs complets, message i18n propre sinon (fiche §CC-2). Les DT
+    # portent l'export CSV natif via ts_datatable(filename_base=) — D6 :
+    # helper existant, aucune route drive nouvelle.
+    output$ccc_comp_selector_ui <- renderUI({
+      reg <- comm_state$ccc_registry
+      if (is.null(reg) || length(reg) < 2L) {
+        return(div(class = "small text-muted m-2",
+                   .tr("Comparaison indisponible : au moins 2 runs CellChat (moteur) complets de cette session sont requis. Lancez le calcul CellChat sur deux objets (ex: contrôle puis traité) — chaque run complet alimente le registre.")))
+      }
+      lbls <- names(reg)
+      shiny::selectInput(session$ns("ccc_comp_pick"),
+                         .tr("Objets à comparer (≥ 2)"),
+                         choices = lbls,
+                         selected = utils::tail(lbls, 2L),
+                         multiple = TRUE)
+    })
+
+    observeEvent(input$btn_ccc_compare, {
+      reg <- comm_state$ccc_registry
+      pick <- input$ccc_comp_pick %||% character(0)
+      if (is.null(reg) || length(pick) < 2L) {
+        showNotification(.tr("Sélectionnez au moins 2 runs dans le registre de comparaison."),
+                         type = "warning", duration = 8)
+        return()
+      }
+      objs <- lapply(pick, function(l) reg[[l]]$object)
+      names(objs) <- pick
+      res <- tryCatch(run_ccc_comparison(objs, labels = pick), error = function(e) e)
+      if (inherits(res, "error")) {
+        st <- cellchat_engine_error_state(res)
+        detail <- if (is.na(st)) conditionMessage(res) else
+          paste0(conditionMessage(res), " [etat : ", st, "]")
+        showNotification(paste(.tr("Erreur comparaison CCC :"), detail),
+                         type = "error", duration = 10)
+        return()
+      }
+      comm_state$ccc_comparison <- res
+      showNotification(.tr("Comparaison CCC terminée."), type = "message", duration = 4)
+    })
+
+    output$ccc_comp_ranknet <- DT::renderDataTable({
+      cmp <- comm_state$ccc_comparison
+      if (is.null(cmp) || is.null(cmp$flow_table)) {
+        return(ts_datatable(data.frame(info = .tr("Table rankNet indisponible.")),
+                            filename_base = "sc_comm_ccc_ranknet", filter = "none"))
+      }
+      # Table comparative = flux d'information par voie calculé depuis
+      # @netP$prob (substitution mesurée de la table rankNet vide en
+      # CellChat 2.2.0.9001 — voir run_ccc_comparison).
+      ts_datatable(cmp$flow_table, page_length = 15L,
+                   filename_base = "sc_comm_ccc_ranknet",
+                   filter = "none", scroll_x = TRUE)
+    })
+
+    output$ccc_comp_similarity <- DT::renderDataTable({
+      cmp <- comm_state$ccc_comparison
+      if (is.null(cmp) || is.null(cmp$similarity)) {
+        return(ts_datatable(data.frame(info = .tr("Matrice de similarité indisponible (calcul refusé ou non exécuté).")),
+                            filename_base = "sc_comm_ccc_similarity", filter = "none"))
+      }
+      df <- as.data.frame(round(cmp$similarity, 3))
+      df$condition <- rownames(df)
+      ts_datatable(df[, c("condition", setdiff(colnames(df), "condition")), drop = FALSE],
+                   page_length = 10L, filename_base = "sc_comm_ccc_similarity",
+                   filter = "none", scroll_x = TRUE)
     })
 
     output$comm_schema <- DT::renderDataTable({

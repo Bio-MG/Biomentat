@@ -77,7 +77,7 @@ Le workflow Single-Cell est nativement multi-échantillons (ex: Contrôle vs Tra
 - **Annotation et exploration** : annotation automatique des types cellulaires via SingleR (références celldex), recherche de marqueurs (`FindAllMarkers`), corrélation génique, analyse de voies et visualisations variées (embeddings, FeaturePlots, violons, DotPlots, heatmaps, vues ridge/empilées).
 - **Rareté par population (panneau 2b)** : lecture descriptive, mono-condition, de la rareté des populations annotées (parts et effectifs par échantillon) — aucune comparaison inter-conditions, qui passerait par la porte « Abondance différentielle ».
 - **Vitesse ARN** : import strict de données de vélocité pré-préparées (matrices spliced/unspliced et résultats/vecteurs compatibles) alignées sur l'objet Seurat. L'application effectue des contrôles de cohérence multi-états, fournit des visualisations phase-portrait et vectorielles, et exporte PNG/PDF/CSV. Elle visualise des résultats validés sans recalculer silencieusement un modèle de vélocité. L'inférence `scVelo` est disponible en **opt-in explicite** (bannière dédiée) comme seule voie de calcul de vitesse — jamais dans le pipeline automatique.
-- **Communication cellule-cellule (panneau 8b)** : import de résultats externes (table/objet CellChat, means+p-values CellPhoneDB, rangs agrégés LIANA) **ou calcul natif dans l'application** via les moteurs intégrés (moteur CellChat épinglé ; moteur LIANA en rangs agrégés — aucun score reconstitué). Table canonique à 12 champs, appariement exact des identités, QC, vues exploratoires (dotplot, heatmap de pathways, réseau circulaire), centralité descriptive, filtres avec provenance. Vues de contexte **consommatrices pures** (aucun recalcul) : contexte spatial, contexte trajectoire, contexte vélocité, perturbation in silico.
+- **Communication cellule-cellule (panneau 8b)** : import de résultats externes (table/objet CellChat, means+p-values CellPhoneDB, rangs agrégés LIANA) **ou calcul natif dans l'application** via les moteurs intégrés (moteur CellChat épinglé ; moteur LIANA en rangs agrégés — aucun score reconstitué). Table canonique à 12 champs, appariement exact des identités, QC, vues exploratoires (dotplot, heatmap de pathways, réseau circulaire), centralité descriptive (rôles de signalisation émetteur / récepteur / médiateur), filtres avec provenance. Vues de contexte **consommatrices pures** (aucun recalcul) : contexte spatial, contexte trajectoire, contexte vélocité, perturbation in silico.
 - **Abondance différentielle (panneaux 8c–8f)** :
 > Prérequis : les analyses d'abondance différentielle exigent des métadonnées identifiant l'unité de réplication biologique (ex. sample_id, donor_id, patient_id) et une condition expérimentale. Un cluster de cellules seul n'est pas un réplica biologique.
   - Validation du design expérimental qui **bloque la pseudo-réplication** (les cellules ne sont jamais traitées comme des réplicas biologiques ; planchers sur réplicas par condition, cellules par échantillon, etc.).
@@ -96,7 +96,7 @@ Le workflow Single-Cell est nativement multi-échantillons (ex: Contrôle vs Tra
 - **Import intelligent** : prise en charge de matrices de comptages bruts fusionnées ou de fichiers de comptages par échantillon, avec alignement automatique des métadonnées et résolution des doublons de gènes.
 - **Prise en charge de GEO** : parsing hors-ligne de fichiers GEO `series_matrix.txt`, sans accès réseau ni dépendance à `GEOquery`.
 - **QC exploratoire** : filtrage, transformation stabilisant la variance (VST), PCA, scree plots et heatmaps de corrélation entre échantillons.
-- **Expression différentielle** : workflows propulsés par DESeq2, edgeR et limma-voom.
+- **Expression différentielle** : workflows propulsés par DESeq2, edgeR et limma-voom, plus un moteur **limma moderne** pour les plans appariés ou bloqués (corrélation intra-bloc via `duplicateCorrelation` + pondération de qualité des échantillons via `voomWithQualityWeights`), avec détection automatique de la colonne d'appariement (override manuel possible) et seuil optionnel de différence minimale `treat.lfc`.
 > DESeq2, edgeR et limma-voom sont fournis comme moteurs distincts. Les comparer aide à explorer la robustesse, mais les résultats doivent être interprétés avec un design, des filtres, des facteurs de normalisation et des contrastes clairement documentés.
 - **Garde-fous de design** : contrôles proactifs des covariables confondues, des valeurs manquantes invalidant le modèle et des covariables ne présentant qu’un seul niveau observé.
 - **Gestion des contrastes** : contrastes standards, définis par l’utilisateur et pairwise, avec comparaison multi-méthodes et exploration par consensus de rangs.
@@ -153,7 +153,7 @@ L'état inter-modules passe par le `reactiveValues` partagé (`global_data`) ; l
 Pour le développement et l'audit, Biomentat embarque un **serveur MCP local** (Model Context Protocol) sur stdio — `scripts/mcp_server.R` — qui permet à un agent IA (ZCode, Claude Desktop, VS Code…) d'observer et, de façon strictement contrôlée, de piloter une session **vivante** de l'application :
 
 - **Transport** : JSON-RPC 2.0 natif sur stdio (`jsonlite` uniquement), lancé depuis la racine du projet avec `Rscript --no-init-file scripts/mcp_server.R` — le drapeau est obligatoire (le `.Rprofile` du projet écrirait sinon sur stdout et corromprait le transport). Diagnostic : `Rscript --no-init-file scripts/mcp_server.R --check`.
-- **11 outils, dont 5 en lecture seule** (identité serveur `biomentat-drive`) : lecture seule (`transcripto_drive_status`, `transcripto_drive_read_result`, `transcripto_drive_read` — lecture bornée de l'artefact exporté courant, `transcripto_drive_state` — digest passif de `state.json`, `transcripto_drive_snapshot` — photo instantanée), armement contrôlé (`transcripto_drive_set_armed`), écritures contrôlées (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`, `transcripto_drive_import` — import de données vers un module d'import).
+- **12 outils, dont 6 en lecture seule** (identité serveur `biomentat-drive`) : lecture seule (`transcripto_drive_status`, `transcripto_drive_read_result`, `transcripto_drive_read` — lecture bornée de l'artefact exporté courant, `transcripto_drive_state` — digest passif de `state.json`, `transcripto_drive_snapshot` — photo instantanée, `transcripto_drive_datasets` — listing du répertoire de datasets), armement contrôlé (`transcripto_drive_set_armed`), écritures contrôlées (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`, `transcripto_drive_import` — import de données vers un module d'import).
 - **Toute écriture passe par un dépôt de fichiers `tools/_drive/*.json`** (file-drop) sous une allowlist gelée de modules, boutons et entrées — le serveur ne démarre jamais l'application et n'exécute jamais d'analyse lui-même. Les exports lisibles par l'agent sont limités aux **13 routes déclarées** (`TS_DRIVE_EXPORT_ROUTES`).
 - **Deux modes de visibilité, un seul protocole** : `headless` ou `visible` (vrai onglet navigateur) — seul le client change, le contrat IPC reste identique.
 - Gabarits clients dans `mcp.examples/` (formats vérifiés pour les lanceurs actifs ; répertoire local, non suivi par git) ; plan et documentation détaillée dans `docs/` (local, non suivi).
@@ -367,7 +367,7 @@ La reproductibilité et la validité scientifique dépendent également :
 
 ## Qualité logicielle
 
-- **Tests** : suite `testthat` + e2e (dernier relevé FULL 2026-10-28, `QC/full_suite_results.txt` : **15 423 PASS / 0 ERROR / 1 SKIP** sur **218 fichiers** ; les 2 FAIL du relevé — `test-pkg-skeleton.R` — sont re-mesurés verts sur HEAD au probe chirurgical ; l'unique SKIP est le smoke GEO live, réseau). Pendant le développement : tests ciblés du périmètre modifié + gardes ; suite complète en fin de version.
+- **Tests** : suite `testthat` + e2e (dernier relevé FULL 2026-11-05, `QC/full_suite_results.txt` : **18 398 PASS / 0 ERROR / 10 SKIP** sur **257 fichiers**). Pendant le développement : tests ciblés du périmètre modifié + gardes ; suite complète en fin de version.
 - **E2E opaque-box (4 tiers)** : `tests/e2e/` — 18 fichiers exécutés via `tests/e2e/runner.R` (headless, détection de capacités) ; 614 assertions, 0 FAIL / 0 SKIP (double run vert 2026-10-27).
 - **Garde anti-duplication** : `tools/check_duplication.R` (relevé 0 erreur / 3 avert. au 2026-10-28 — `docs/STATUS.md` §0 ; non re-mesuré depuis les vagues du soir).
 - **Garde de conventions** : `tools/check_conventions.R` (règles C1–C17 + C9b, 0 erreur obligatoire).
@@ -385,10 +385,12 @@ La reproductibilité et la validité scientifique dépendent également :
 - [x] Vague Bulk V2 : ComBat-seq, scores de voies & signatures cellulaires (GSVA/ssGSEA/PLAGE/z-score), WGCNA, survie KM/Cox, clustering de profils, dose-réponse, réseau PCSF, réseau d'enrichissement interactif.
 - [x] Multi-jeux : enregistrement, comparaison et fusion de jeux bulk, pont pseudobulk, double jeu SC.
 - [x] Communication cellule-cellule : moteurs natifs CellChat & LIANA (calcul dans l'app) + vues de contexte (spatial, trajectoire, vélocité, perturbation in silico).
+- [x] Rôles de signalisation (émetteur / récepteur / médiateur) par centralité CellChat native, avec vue dédiée et export CSV.
 - [x] Rareté par population (analyse descriptive mono-condition).
-- [x] Serveur MCP local (11 outils) + protocole drive de pilotage contrôlé d'une session vivante par un agent ; contrat d'ingestion `biomentat-exchange/v1` (CLI de validation headless).
+- [x] Serveur MCP local (12 outils) + protocole drive de pilotage contrôlé d'une session vivante par un agent ; contrat d'ingestion `biomentat-exchange/v1` (CLI de validation headless).
 - [x] Détection des doublets & QC ARN ambiant (scDblFinder) dans le pipeline single-cell.
 - [x] Exécution asynchrone (ExtendedTask/mirai) pour la DE bulk et le pipeline auto single-cell.
+- [x] Moteur limma moderne pour les plans bulk appariés/bloqués (`duplicateCorrelation` + `voomWithQualityWeights`, seuil `treat.lfc` optionnel).
 - [ ] Choix élargis d'intégration single-cell au-delà de Harmony.
 - [ ] Extension continue des workflows spatiaux et des analyses fondées sur des références.
 
@@ -480,7 +482,7 @@ The Single-Cell workflow is natively multi-sample (e.g. Control vs Treatment, Da
 - **Annotation & exploration**: Automatic cell-type annotation via SingleR (celldex references), marker discovery (`FindAllMarkers`), gene correlation, pathway analysis, and diverse visualizations (embeddings, feature plots, violins, dot plots, heatmaps, ridge/stacked views).
 - **Population rarity (panel 2b)**: descriptive, single-condition reading of annotated-population rarity (shares and counts per sample) — no cross-condition comparison, which goes through the "Cell abundance" DA gate.
 - **RNA velocity**: strict import of pre-prepared velocity data (spliced/unspliced matrices and compatible results/vectors) aligned to the Seurat object. The app performs multi-state consistency checks, provides phase-portrait and vector visualizations, and exports PNG/PDF/CSV. It visualizes validated results without silently re-computing a velocity model. scVelo inference is available as an **explicit opt-in** (dedicated banner) — the only velocity-computation path, never part of the automatic pipeline.
-- **Cell–cell communication (panel 8b)**: import of external results (CellChat table / object, CellPhoneDB means+p-values, aggregated LIANA ranks) **or native in-app computation** through built-in engines (pinned CellChat engine; LIANA engine on aggregated ranks — no reconstituted scores). Canonical 12-field table, exact identity matching, QC, exploratory views (dotplot, pathway heatmap, circular network), descriptive centrality, filters with provenance. **Pure-consumer** context views (no recomputation): spatial context, trajectory context, velocity context, in-silico perturbation.
+- **Cell–cell communication (panel 8b)**: import of external results (CellChat table / object, CellPhoneDB means+p-values, aggregated LIANA ranks) **or native in-app computation** through built-in engines (pinned CellChat engine; LIANA engine on aggregated ranks — no reconstituted scores). Canonical 12-field table, exact identity matching, QC, exploratory views (dotplot, pathway heatmap, circular network), descriptive centrality (sender / receiver / mediator signaling roles), filters with provenance. **Pure-consumer** context views (no recomputation): spatial context, trajectory context, velocity context, in-silico perturbation.
 - **Differential abundance (panels 8c–8f)**:
 > Prerequisite: differential abundance analyses require metadata identifying the biological replication unit (e.g. sample_id, donor_id, patient_id) and an experimental condition. A cell cluster alone is not a biological replicate.
   - Experimental-design validation that **blocks pseudoreplication** (cells are never treated as biological replicates; hard floors on replicates per condition, cells per sample, etc.).
@@ -498,7 +500,7 @@ The Single-Cell workflow is natively multi-sample (e.g. Control vs Treatment, Da
 - **Smart import**: Handles merged raw count matrices or per-sample count files, with automated metadata alignment and gene duplicate resolution.
 - **GEO support**: Offline parsing of GEO `series_matrix.txt` files without requiring network access or `GEOquery`.
 - **Exploratory QC**: Filtering, variance-stabilizing transformation (VST), PCA, scree plots, and sample-correlation heatmaps.
-- **Differential expression**: Workflows powered by DESeq2, edgeR, and limma-voom.
+- **Differential expression**: Workflows powered by DESeq2, edgeR, and limma-voom, plus a **modern limma** engine for paired or blocked designs (intra-block correlation via `duplicateCorrelation` + sample quality weights via `voomWithQualityWeights`), with automatic pairing-column detection (manual override available) and an optional `treat.lfc` minimal fold-change threshold.
 > DESeq2, edgeR, and limma-voom are provided as distinct engines. Comparing them is useful for exploring robustness, but results must be interpreted with a clearly documented design, filters, normalization factors, and contrasts.
 - **Design safeguards**: Proactive checks for confounding covariates, missing covariate values that invalidate the model, and covariates with only one observed level.
 - **Contrast management**: Standard, user-defined, and pairwise contrasts, alongside multi-method comparison and rank-consensus exploration.
@@ -554,7 +556,7 @@ Cross-module state flows through the shared `reactiveValues` (`global_data`); he
 For development and audit purposes, Biomentat ships a **local MCP server** (Model Context Protocol) over stdio — `scripts/mcp_server.R` — that lets an AI agent (ZCode, Claude Desktop, VS Code…) observe and, under strict control, drive a **live** session of the app:
 
 - **Transport**: native JSON-RPC 2.0 over stdio (`jsonlite` only), launched from the repository root with `Rscript --no-init-file scripts/mcp_server.R` — the flag is mandatory (the project `.Rprofile` would otherwise write to stdout and corrupt the transport). Diagnostic: `Rscript --no-init-file scripts/mcp_server.R --check`.
-- **11 tools, 5 of them read-only** (server identity `biomentat-drive`): read-only (`transcripto_drive_status`, `transcripto_drive_read_result`, `transcripto_drive_read` — bounded read of the current exported artefact, `transcripto_drive_state` — passive `state.json` digest, `transcripto_drive_snapshot` — instant snapshot), controlled arming (`transcripto_drive_set_armed`), controlled writes (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`, `transcripto_drive_import` — data import into an importer module).
+- **12 tools, 6 of them read-only** (server identity `biomentat-drive`): read-only (`transcripto_drive_status`, `transcripto_drive_read_result`, `transcripto_drive_read` — bounded read of the current exported artefact, `transcripto_drive_state` — passive `state.json` digest, `transcripto_drive_snapshot` — instant snapshot, `transcripto_drive_datasets` — dataset-directory listing), controlled arming (`transcripto_drive_set_armed`), controlled writes (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`, `transcripto_drive_import` — data import into an importer module).
 - **Every write goes through `tools/_drive/*.json` file drops** under a frozen allowlist of modules, buttons, and inputs — the server never starts the app and never runs analysis code itself. Agent-readable exports are limited to the **13 declared routes** (`TS_DRIVE_EXPORT_ROUTES`).
 - **Two visibility modes, one protocol**: `headless` or `visible` (a real browser tab) — only the client changes, the IPC contract stays identical.
 - Client templates in `mcp.examples/` (formats verified for the active launchers; local directory, not tracked by git); plan and detailed documentation in `docs/` (local, not tracked).
@@ -721,7 +723,7 @@ However, true reproducibility and scientific validity also depend on:
 
 ## Software quality
 
-- **Tests**: `testthat` suite + e2e (latest full run 2026-10-28, `QC/full_suite_results.txt`: **15,423 PASS / 0 ERROR / 1 SKIP** across **218 files**; the 2 FAILs in that record — `test-pkg-skeleton.R` — re-measured green on HEAD via the surgical probe; the single SKIP is the live-network GEO smoke test). During development: targeted tests for the changed scope + gates; full suite at version end.
+- **Tests**: `testthat` suite + e2e (latest full run 2026-11-05, `QC/full_suite_results.txt`: **18,398 PASS / 0 ERROR / 10 SKIP** across **257 files**). During development: targeted tests for the changed scope + gates; full suite at version end.
 - **4-tier opaque-box e2e**: `tests/e2e/` — 18 files run via `tests/e2e/runner.R` (headless, capability detection); 614 assertions, 0 FAIL / 0 SKIP (double green run 2026-10-27).
 - **Duplication gate**: `tools/check_duplication.R` (recorded 0 errors / 3 warnings as of 2026-10-28 — `docs/STATUS.md` §0; not re-measured since the evening waves).
 - **Conventions gate**: `tools/check_conventions.R` (rules C1–C17 + C9b, 0 errors mandatory).
@@ -739,10 +741,12 @@ However, true reproducibility and scientific validity also depend on:
 - [x] Bulk V2 wave: ComBat-seq, pathway scores & cell signatures (GSVA/ssGSEA/PLAGE/z-score), WGCNA, KM/Cox survival, profile clustering, dose-response, PCSF network, interactive enrichment network.
 - [x] Multi-dataset: registration, comparison, and merge of bulk datasets, pseudobulk bridge, SC dual dataset.
 - [x] Cell–cell communication: native CellChat & LIANA engines (in-app computation) + context views (spatial, trajectory, velocity, in-silico perturbation).
+- [x] Signaling roles (sender / receiver / mediator) via native CellChat centrality, with a dedicated view and CSV export.
 - [x] Population rarity (descriptive single-condition analysis).
-- [x] Local MCP server (11 tools) + drive protocol for controlled agent-driven live-session control; `biomentat-exchange/v1` ingestion contract (headless validation CLI).
+- [x] Local MCP server (12 tools) + drive protocol for controlled agent-driven live-session control; `biomentat-exchange/v1` ingestion contract (headless validation CLI).
 - [x] Doublet detection & ambient-RNA QC (scDblFinder) in the single-cell pipeline.
 - [x] Asynchronous execution (ExtendedTask/mirai) for bulk DE and the single-cell auto pipeline.
+- [x] Modern limma engine for paired/blocked bulk designs (`duplicateCorrelation` + `voomWithQualityWeights`, optional `treat.lfc` threshold).
 - [ ] Expanded single-cell integration choices beyond Harmony.
 - [ ] Continued expansion of spatial workflows and reference-based analyses.
 
