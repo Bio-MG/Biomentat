@@ -407,7 +407,7 @@ offline suite as it stood. Each now has a durable test.
 
 **Validated on a REAL session** (port 7790, `chromote` client, a dataset
 directory outside the repository (local data root, e.g.
-`<racine de données locale>/Données/bulk/GSE164073_Eye_count_matrix.csv`,
+`<racine de données locale>/datasets/01_bulk/GSE164073_eye/GSE164073_Eye_count_matrix.csv`,
 made reachable via `TRANSCRIPTO_DRIVE_DATA_DIR`), which is a
 DIRECTORY holding the counts CSV and the metadata CSV):
 
@@ -686,7 +686,7 @@ alphanumeric run** (its token heuristic). Messages are worded to survive it.
 Steps 6 and 7 of the staged workflow: design & contrast inputs, then the DE
 action. **One fresh session** (fresh app process, drop dir deleted first),
 `seq` 1 → 10, all `ack_seq` matched, dataset
-`<racine de données locale>/Données/bulk/GSE164073_Eye_count_matrix.csv`
+`<racine de données locale>/datasets/01_bulk/GSE164073_eye/GSE164073_Eye_count_matrix.csv`
 (outside the repository; made reachable via `TRANSCRIPTO_DRIVE_DATA_DIR`)
 (17 925 genes × 18 samples, 9 mock / 9 CoV2), engine **DESeq2**.
 
