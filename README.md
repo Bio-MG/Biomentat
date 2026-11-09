@@ -110,7 +110,7 @@ Le workflow Single-Cell est nativement multi-échantillons (ex: Contrôle vs Tra
 - **Réseau PCSF (3g)** : interactome dérivé des voies Reactome par une heuristique Prize-Collecting Steiner Forest — un relais est un co-membre de voie prédit, **pas** une interaction PPI mesurée.
 - **Réseau d'enrichissement** : vue réseau interactive (igraph/plotly) des voies enrichies, disponible dans les modules bulk **et** single-cell.
 - **Multi-jeux** : enregistrement de jeux bulk nommés (import, pseudobulk, fusion), comparaison multi-jeux (volcanos à échelle partagée, recouvrement de DEGs, concordance de direction) et fusion de jeux (intersection exacte des gènes, ComBat-seq optionnel avec batch = jeu d'origine).
-- **Visualisation et enrichissement** : volcano plots, MA plots, heatmaps, comparaisons Venn/UpSet multi-contrastes et analyse de voies ORA/GSEA.
+- **Visualisation et enrichissement** : volcano plots, MA plots, heatmaps, comparaisons Venn/UpSet multi-contrastes et analyse de voies ORA/GSEA — plus une **ORA directionnelle** (limma `goana`/`kegga`) qui teste la direction Up/Down **par voie** sur la table DE complète (fond obligatoire déclaré, barcodeplot limma par voie).
 - *Note scientifique* : les résultats d’analyse de voies doivent être interprétés au regard de l’univers de fond choisi et du mapping des identifiants. Le consensus de rangs multi-méthodes est une aide exploratoire, pas une méta-analyse formelle.
 
 ### Transcriptomique spatiale
@@ -367,7 +367,7 @@ La reproductibilité et la validité scientifique dépendent également :
 
 ## Qualité logicielle
 
-- **Tests** : suite `testthat` + e2e (dernier relevé FULL 2026-11-05, `QC/full_suite_results.txt` : **18 398 PASS / 0 ERROR / 10 SKIP** sur **257 fichiers**). Pendant le développement : tests ciblés du périmètre modifié + gardes ; suite complète en fin de version.
+- **Tests** : suite `testthat` + e2e (dernier relevé FULL 2026-11-09, `QC/full_suite_results.txt` : **18 655 PASS / 0 ERROR / 11 SKIP** sur **263 fichiers**). Pendant le développement : tests ciblés du périmètre modifié + gardes ; suite complète en fin de version.
 - **E2E opaque-box (4 tiers)** : `tests/e2e/` — 18 fichiers exécutés via `tests/e2e/runner.R` (headless, détection de capacités) ; 614 assertions, 0 FAIL / 0 SKIP (double run vert 2026-10-27).
 - **Garde anti-duplication** : `tools/check_duplication.R` (relevé 0 erreur / 3 avert. au 2026-10-28 — `docs/STATUS.md` §0 ; non re-mesuré depuis les vagues du soir).
 - **Garde de conventions** : `tools/check_conventions.R` (règles C1–C17 + C9b, 0 erreur obligatoire).
@@ -391,7 +391,9 @@ La reproductibilité et la validité scientifique dépendent également :
 - [x] Détection des doublets & QC ARN ambiant (scDblFinder) dans le pipeline single-cell.
 - [x] Exécution asynchrone (ExtendedTask/mirai) pour la DE bulk et le pipeline auto single-cell.
 - [x] Moteur limma moderne pour les plans bulk appariés/bloqués (`duplicateCorrelation` + `voomWithQualityWeights`, seuil `treat.lfc` optionnel).
-- [ ] Choix élargis d'intégration single-cell au-delà de Harmony.
+- [x] ORA directionnelle goana/kegga (table DE complète, Up/Down par voie) + barcodeplot par voie.
+- [x] Intégrations single-cell natives v5 au-delà d'Harmony : rPCA et CCA (`IntegrateLayers`).
+- [ ] Choix élargis d'intégration single-cell (au-delà de Harmony / rPCA / CCA).
 - [ ] Extension continue des workflows spatiaux et des analyses fondées sur des références.
 
 ## Contribuer
@@ -514,7 +516,7 @@ The Single-Cell workflow is natively multi-sample (e.g. Control vs Treatment, Da
 - **PCSF network (3g)**: interactome derived from Reactome pathways via a Prize-Collecting Steiner Forest heuristic — a relay is a predicted pathway co-member, **not** a measured PPI interaction.
 - **Enrichment network**: interactive network view (igraph/plotly) of enriched pathways, available in both bulk **and** single-cell modules.
 - **Multi-dataset**: registration of named bulk datasets (import, pseudobulk, merge), multi-dataset comparison (shared-scale volcanos, DEG overlap, direction concordance), and dataset merge (exact gene intersection, optional ComBat-seq with batch = dataset of origin).
-- **Visualization & enrichment**: Volcano plots, MA plots, heatmaps, multi-contrast Venn/UpSet comparisons, and ORA/GSEA pathway analysis.
+- **Visualization & enrichment**: Volcano plots, MA plots, heatmaps, multi-contrast Venn/UpSet comparisons, and ORA/GSEA pathway analysis — plus a **directional ORA** (limma `goana`/`kegga`) testing the Up/Down direction **per pathway** over the full DE table (mandatory declared background, per-pathway limma barcodeplot).
 - *Scientific note*: Pathway analysis results should be interpreted in the context of the chosen background universe and identifier mapping. Multi-method rank consensus is an exploratory aid, not a formal meta-analysis.
 
 ### Spatial transcriptomics
@@ -723,7 +725,7 @@ However, true reproducibility and scientific validity also depend on:
 
 ## Software quality
 
-- **Tests**: `testthat` suite + e2e (latest full run 2026-11-05, `QC/full_suite_results.txt`: **18,398 PASS / 0 ERROR / 10 SKIP** across **257 files**). During development: targeted tests for the changed scope + gates; full suite at version end.
+- **Tests**: `testthat` suite + e2e (latest full run 2026-11-09, `QC/full_suite_results.txt`: **18,655 PASS / 0 ERROR / 11 SKIP** across **263 files**). During development: targeted tests for the changed scope + gates; full suite at version end.
 - **4-tier opaque-box e2e**: `tests/e2e/` — 18 files run via `tests/e2e/runner.R` (headless, capability detection); 614 assertions, 0 FAIL / 0 SKIP (double green run 2026-10-27).
 - **Duplication gate**: `tools/check_duplication.R` (recorded 0 errors / 3 warnings as of 2026-10-28 — `docs/STATUS.md` §0; not re-measured since the evening waves).
 - **Conventions gate**: `tools/check_conventions.R` (rules C1–C17 + C9b, 0 errors mandatory).
@@ -747,7 +749,9 @@ However, true reproducibility and scientific validity also depend on:
 - [x] Doublet detection & ambient-RNA QC (scDblFinder) in the single-cell pipeline.
 - [x] Asynchronous execution (ExtendedTask/mirai) for bulk DE and the single-cell auto pipeline.
 - [x] Modern limma engine for paired/blocked bulk designs (`duplicateCorrelation` + `voomWithQualityWeights`, optional `treat.lfc` threshold).
-- [ ] Expanded single-cell integration choices beyond Harmony.
+- [x] Directional ORA goana/kegga (full DE table, Up/Down per pathway) + per-pathway barcodeplot.
+- [x] Native v5 single-cell integrations beyond Harmony: rPCA and CCA (`IntegrateLayers`).
+- [ ] Expanded single-cell integration choices (beyond Harmony / rPCA / CCA).
 - [ ] Continued expansion of spatial workflows and reference-based analyses.
 
 ## Contributing
