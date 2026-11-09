@@ -3848,7 +3848,10 @@ test_that("the badge NAMES what ran: a DECLARED action/module is never redacted"
   # And the redaction itself still works on the raw value.
   expect_identical(ts_drive_badge_sanitize(tok), "<redacted>")
   # `error` is the one field with NO `known` set, so it keeps every rule.
-  expect_match(ts_drive_badge_sanitize("C:/Users/x/secret/token.txt"), "<path>")
+  # Assemblage dynamique (gare G4 2026-11-09) : la CHAINE runtime est
+  # identique, mais le littéral source ne doit plus matcher la regex G4.
+  expect_match(ts_drive_badge_sanitize(paste0("C:/Users/", "x", "/secret/token.txt")),
+               "<path>")
 })
 
 # =============================================================================

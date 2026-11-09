@@ -3,7 +3,7 @@
   "armed": true,
   "pid": 19532,
   "port": "7789",
-  "root": "D:/Data_science/SHINYAPP test (git work)/SHINYAPP test",
+  "root": "D:/workspace/biomentat",
   "session_token": "fxalive1",
   "viewer": "headless",
   "last_seq": 4,

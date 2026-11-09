@@ -109,7 +109,15 @@
   cat(sprintf("[%s] ", .bd_now()), ..., "\n", sep = "", file = path, append = TRUE)
 }
 
-.bd_rscript <- function() "D:/Data_science/R-4.4.2/bin/x64/Rscript.exe"
+# Résolution dynamique (gare G4 2026-11-09 : plus de chemin local en dur —
+# le littéral viole verify_release_gates G4 et meurt sur toute autre machine).
+.bd_rscript <- function() {
+  cand <- file.path(R.home("bin"), "x64", "Rscript.exe")
+  if (!file.exists(cand)) cand <- file.path(R.home("bin"), "Rscript.exe")
+  if (!file.exists(cand)) cand <- unname(Sys.which("Rscript"))
+  if (!nzchar(cand)) cand <- "Rscript"
+  cand
+}
 
 .bd_r_population <- function() {
   out <- suppressWarnings(tryCatch(

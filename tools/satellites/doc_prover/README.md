@@ -114,7 +114,7 @@ evidence_note}`. `line` est l'ancre **dans le runbook**. Un verdict :
    *JOB IN FLIGHT*, **jamais** « DEAD »).
 
    ```bash
-   "D:/Data_science/R-4.4.2/bin/x64/Rscript.exe" -e "Sys.setlocale('LC_ALL','French_France.65001'); testthat::test_file('tests/testthat/test-doc-prover.R', stop_on_failure = FALSE)"
+   "<R_HOME>/bin/x64/Rscript.exe" -e "Sys.setlocale('LC_ALL','French_France.65001'); testthat::test_file('tests/testthat/test-doc-prover.R', stop_on_failure = FALSE)"
    ```
 
 2. **Une ancre du runbook a dérivé ?** Modifier le runbook (ou déplacer une

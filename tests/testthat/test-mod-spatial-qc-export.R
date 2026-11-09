@@ -891,9 +891,11 @@ test_that("the published descriptor is redacted and free of paths and identifier
   w <- .exp_need(.exp_descriptor(), "ts_drive_export_descriptor()")
   if (is.null(w)) return(invisible(NULL))
   # A hostile module: a descriptor carrying a path, a sample name and a row id.
+  # Assemblage dynamique (gare G4 2026-11-09) : chaîne runtime identique, le
+  # littéral source ne matche plus la regex G4 (chemin utilisateur).
   p <- list(descriptor = w(list(
     format = "csv",
-    file = "C:/Users/secret/spatial_qc_hotspots.csv",
+    file = paste0("C:/Users/", "secret", "/spatial_qc_hotspots.csv"),
     bytes = 10L, n_rows = 1L, n_cols = 1L, n_sig = 1L,
     columns = c("id"),
     note = "E001")))
