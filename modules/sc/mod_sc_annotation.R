@@ -203,6 +203,19 @@ mod_sc_annotation_ui <- function(id) {
     actionButton(ns("run_annot"),i18n$t("Annoter avec SingleR"),
                  class="btn-warning w-100",icon=icon("user-tag")),
     hr(),
+    # ── SE (2026-11-09) : reference mapping MapQuery (fiche §3-SE) ───────────
+    # Référence = objet SC annoté DÉJÀ PRÉSENT dans la session (registre
+    # sc_datasets) — pas d'Azimuth, pas de téléchargement (non-goals fiche).
+    div(class="small text-muted", style="border-left:3px solid #3498db;padding-left:6px;",
+        tags$b(i18n$t("Reference mapping (MapQuery)")), tags$br(),
+        i18n$t("Transfère les étiquettes d'un objet annoté de la session vers l'objet actif (FindTransferAnchors + MapQuery, voie native Seurat 5).")),
+    selectInput(ns("mq_ref"), i18n$t("Objet de référence (session)"), choices = character(0)),
+    selectInput(ns("mq_label"), i18n$t("Colonne d'étiquettes"), choices = character(0)),
+    numericInput(ns("mq_dims"), i18n$t("Dimensions PCA"), value = 30, min = 2, max = 100),
+    actionButton(ns("run_mapquery"), i18n$t("Transférer les étiquettes (MapQuery)"),
+                 class="btn-info w-100", icon=icon("diagram-project")),
+    div(class="small text-muted", textOutput(ns("mq_status"))),
+    hr(),
     # Step-3.7: readability toggle for the UMAP plot (label + repel), independent
     # of re-running SingleR — purely a display setting for output$annot_umap_plot.
     checkboxInput(ns("annot_show_labels"),
@@ -215,16 +228,28 @@ mod_sc_annotation_ui <- function(id) {
 
 mod_sc_annotation_output_ui <- function(id) {
   ns <- NS(id)
-  card(
-    full_screen=TRUE,
-    card_header(div(style="display:flex;justify-content:space-between;align-items:center;",
-                    h5(i18n$t("Annotation Automatique (SingleR)"),class="mb-0"),
-                    downloadButton(ns("dl_annotation"),"Export CSV",class="btn-sm btn-info"))),
-    layout_columns(col_widths=c(12),
-      card(card_header(i18n$t("UMAP — types cellulaires predits")),
-           plotOutput(ns("annot_umap_plot"),height="380px")),
-      card(card_header(i18n$t("Table — distribution par cluster")),
-           DTOutput(ns("annot_table"))))
+  tagList(
+    card(
+      full_screen=TRUE,
+      card_header(div(style="display:flex;justify-content:space-between;align-items:center;",
+                      h5(i18n$t("Annotation Automatique (SingleR)"),class="mb-0"),
+                      downloadButton(ns("dl_annotation"),"Export CSV",class="btn-sm btn-info"))),
+      layout_columns(col_widths=c(12),
+        card(card_header(i18n$t("UMAP — types cellulaires predits")),
+             plotOutput(ns("annot_umap_plot"),height="380px")),
+        card(card_header(i18n$t("Table — distribution par cluster")),
+             DTOutput(ns("annot_table"))))
+    ),
+    # ── SE (2026-11-09) : sorties MapQuery ─────────────────────────────────
+    card(
+      full_screen=TRUE,
+      card_header(h5(i18n$t("Reference mapping (MapQuery)"), class="mb-0")),
+      layout_columns(col_widths=c(12),
+        card(card_header(i18n$t("Query projetée sur l'UMAP de référence (ref.umap)")),
+             plotOutput(ns("mq_umap_plot"), height="380px")),
+        card(card_header(i18n$t("Scores de confiance (max par cellule)")),
+             plotOutput(ns("mq_score_plot"), height="380px")))
+    )
   )
 }
 
@@ -310,6 +335,114 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
     })
 
     output$annot_status <- renderText({ annot_status_rv() })
+
+    # ── SE (2026-11-09) : reference mapping MapQuery ────────────────────────
+    # Référence = un objet du registre session (global_data$sc_datasets) ;
+    # query = l'objet actif (global_data$sc_obj). Le moteur sc_map_query()
+    # (sc_helpers.R, rehearsal 2026-11-09) porte les gardes et la mécanique.
+    mq_status_rv <- reactiveVal("")
+
+    observeEvent(global_data$sc_datasets, {
+      updateSelectInput(session, "mq_ref",
+                        choices = names(global_data$sc_datasets %||% list()))
+    }, ignoreInit = FALSE)
+
+    observe({
+      ref_name <- input$mq_ref
+      req(ref_name)
+      ref <- global_data$sc_datasets[[ref_name]]
+      req(inherits(ref, "Seurat"))
+      cols <- colnames(ref@meta.data)
+      ok <- vapply(cols, function(cn) {
+        v <- ref@meta.data[[cn]]
+        if (!(is.character(v) || is.factor(v) || is.logical(v))) return(FALSE)
+        n <- length(unique(v[!is.na(v)]))
+        n >= 2L && n <= 200L
+      }, logical(1))
+      updateSelectInput(session, "mq_label", choices = cols[ok])
+    })
+
+    .mq_umap_name <- function(obj) {
+      cands <- grep("^ref\\..*umap", names(obj@reductions), value = TRUE, ignore.case = TRUE)
+      if (length(cands) == 0L) NULL else cands[1]
+    }
+
+    observeEvent(input$run_mapquery, ignoreInit = TRUE, {
+      req(global_data$sc_obj, input$mq_ref, input$mq_label)
+      ref_obj <- global_data$sc_datasets[[input$mq_ref]]
+      query_obj <- isolate(global_data$sc_obj)
+      if (!inherits(ref_obj, "Seurat")) {
+        showNotification(.tr("Erreur: objet de référence introuvable dans la session."), type = "error", duration = 8)
+        return()
+      }
+      if (identical(ref_obj, query_obj)) {
+        showNotification(.tr("Erreur: l'objet de référence et l'objet actif sont le même objet — chargez/activez un second dataset."), type = "error", duration = 10)
+        return()
+      }
+      p <- shiny::Progress$new(); on.exit(p$close())
+      p$set(message = .tr("Reference mapping (MapQuery)..."), value = 0.1)
+      tryCatch({
+        p$set(0.4, .tr("Ancres + transfert..."))
+        res <- withCallingHandlers(
+          sc_map_query(reference = ref_obj, query = query_obj,
+                       label_col = input$mq_label,
+                       dims = input$mq_dims %||% 30L),
+          warning = function(w) {
+            showNotification(conditionMessage(w), type = "warning", duration = 8)
+            invokeRestart("muffleWarning")
+          }
+        )
+        p$set(0.9, .tr("Mise à jour de l'objet..."))
+        global_data$sc_obj <- res$query
+        shared_rv$active_tab <- "tab_viz"
+        mq_status_rv(sprintf("✓ %s ← %s [%s] — %d cellules, %d dims PCA",
+                             res$n_query, input$mq_ref, res$label_col,
+                             res$n_ref, res$dims_used))
+        showNotification(paste("✓ MapQuery :", res$n_query, "cellules annotées depuis",
+                               input$mq_ref, "—", res$label_col),
+                         type = "message", duration = 6)
+      }, error = function(e) {
+        mq_status_rv(paste(.tr("Erreur:"), e$message))
+        showNotification(paste(.tr_plain("Erreur MapQuery:"), e$message), type = "error", duration = 12)
+      })
+    })
+
+    mq_umap_name_rv <- reactive({
+      req(global_data$sc_obj)
+      .mq_umap_name(global_data$sc_obj)
+    })
+
+    output$mq_umap_plot <- renderPlot({
+      obj <- global_data$sc_obj
+      req(inherits(obj, "Seurat"))
+      mq_cols <- grep("^predicted\\.", colnames(obj@meta.data), value = TRUE)
+      mq_cols <- setdiff(mq_cols, grep("\\.score$", mq_cols))
+      umap_name <- .mq_umap_name(obj)
+      validate(need(length(mq_cols) > 0 && !is.null(umap_name),
+                    .tr("Aucun transfert MapQuery — lancez 'Transférer les étiquettes (MapQuery)'.")))
+      col_use <- tail(mq_cols, 1)
+      pal_scale <- sc_discrete_scale(shared_rv$sc_palette %||% "default", shared_rv$sc_manual_colors)
+      p_mq <- DimPlot(obj, reduction = umap_name, group.by = col_use, label = TRUE, repel = TRUE, pt.size = 0.5) +
+        labs(title = paste("MapQuery:", col_use)) + theme_minimal() +
+        theme(plot.title = element_text(face = "bold", size = 13))
+      if (!is.null(pal_scale)) p_mq <- suppressWarnings(p_mq + pal_scale)
+      p_mq
+    })
+
+    output$mq_score_plot <- renderPlot({
+      obj <- global_data$sc_obj
+      req(inherits(obj, "Seurat"))
+      score_cols <- grep("^predicted\\..*\\.score$", colnames(obj@meta.data), value = TRUE)
+      score_cols <- score_cols[vapply(score_cols, function(cn) is.numeric(obj@meta.data[[cn]]), logical(1))]
+      validate(need(length(score_cols) > 0,
+                    .tr("Aucun score MapQuery — lancez 'Transférer les étiquettes (MapQuery)'.")))
+      col_use <- tail(score_cols, 1)
+      VlnPlot(obj, features = col_use, pt.size = 0) +
+        theme_minimal() + labs(title = paste("MapQuery —", col_use)) +
+        theme(plot.title = element_text(face = "bold", size = 13))
+    })
+
+    output$mq_status <- renderText({ mq_status_rv() })
 
     output$annot_umap_plot <- renderPlot({
       req(global_data$sc_obj)

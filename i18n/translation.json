@@ -12864,6 +12864,15 @@
     {
       "fr": "Lecture stricte des couches spliced/unspliced (+ ambiguous si present). Aucune inference ; les symboles de gC(nes dupliquC)s sont rendus uniques (avertissement affichC)).",
       "en": "Strict reading of the spliced/unspliced layers (+ ambiguous when present). No inference; duplicated gene symbols are made unique (warning shown)."
-    }
+    },
+    {"fr": "Reference mapping (MapQuery)", "en": "Reference mapping (MapQuery)"},
+    {"fr": "Transfère les étiquettes d'un objet annoté de la session vers l'objet actif (FindTransferAnchors + MapQuery, voie native Seurat 5).", "en": "Transfer labels from an annotated session object to the active object (FindTransferAnchors + MapQuery, native Seurat 5 path)."},
+    {"fr": "Objet de référence (session)", "en": "Reference object (session)"},
+    {"fr": "Colonne d'étiquettes", "en": "Label column"},
+    {"fr": "Transférer les étiquettes (MapQuery)", "en": "Transfer labels (MapQuery)"},
+    {"fr": "Query projetée sur l'UMAP de référence (ref.umap)", "en": "Query projected onto the reference UMAP (ref.umap)"},
+    {"fr": "Scores de confiance (max par cellule)", "en": "Confidence scores (max per cell)"},
+    {"fr": "Erreur: objet de référence introuvable dans la session.", "en": "Error: reference object not found in the session."},
+    {"fr": "Erreur: l'objet de référence et l'objet actif sont le même objet — chargez/activez un second dataset.", "en": "Error: the reference object and the active object are the same — load/activate a second dataset."}
   ]
 }

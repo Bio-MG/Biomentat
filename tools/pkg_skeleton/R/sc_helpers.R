@@ -1079,6 +1079,113 @@ subsample_seurat_for_analysis <- function(obj, max_per_group = Inf,
 
 
 
+#' Reference mapping Seurat v5 (jalon SE — MapQuery, fiche §3-SE)
+#'
+#' Transfère les étiquettes d'un objet SC annoté DE LA SESSION (pas d'Azimuth,
+#' pas de téléchargement — non-goals fiche) vers un objet query, via la voie
+#' native v5 : `FindTransferAnchors(reference.reduction = "pca")` →
+#' `MapQuery(refdata = list(<label_col> = ...), reduction.model = ...)`.
+#' Coexiste avec SingleR (cross-validation, pas de remplacement).
+#'
+#' MESURE (rehearsal 2026-11-09, Seurat 5.6) : les colonnes produites sont
+#' `predicted.<label_col>` + `predicted.<label_col>.score` (nommées d'après
+#' l'entrée refdata — PAS `predicted.id` de la vignette v4) et les réductions
+#' projetées `ref.pca` / `ref.umap`. Le modèle UMAP de référence est POSÉ ICI
+#' sous `umap.map` (`RunUMAP(return.model = TRUE)`) : un objet session a un
+#' UMAP projeté sans modèle, inutilisable par MapQuery — pas d'heuristique de
+#' détection, toujours reconstructible.
+#'
+#' @param reference Seurat object annoté (pca + colonne `label_col`).
+#' @param query Seurat object à annoter.
+#' @param label_col Colonne metadata du porteur d'étiquettes (character/factor).
+#' @param dims Dimensions PCA pour les ancres (clampées au disponible, avec
+#'   message ; les objets session portent souvent 20-30 dims).
+#' @param seed Seed pour l'UMAP modèle de la référence.
+#' @return list(query = objet enrichi (metadata predicted.<label_col>,
+#'   predicted.<label_col>.score, réduction ref.umap), label_col, n_ref,
+#'   n_query, dims_used, predicted_col, score_col).
+sc_map_query <- function(reference, query, label_col, dims = 30L, seed = 1) {
+  .err <- function(msg) stop(errorCondition(msg, class = "sc_helpers_error"))
+  if (!is.data.frame(reference@meta.data) || !is.data.frame(query@meta.data)) {
+    .err("sc_map_query : reference et query doivent être des objets Seurat.")
+  }
+  if (!label_col %in% colnames(reference@meta.data)) {
+    .err(sprintf(paste0("sc_map_query : la colonne '%s' est absente de la référence. ",
+                        "Colonnes disponibles : %s."),
+                 label_col, paste(utils::head(colnames(reference@meta.data), 12), collapse = ", ")))
+  }
+  ref_labels <- reference@meta.data[[label_col]]
+  if (sum(!is.na(ref_labels)) == 0L) {
+    .err(sprintf("sc_map_query : la colonne '%s' de la référence est entièrement NA.", label_col))
+  }
+  dims <- as.integer(dims)
+  if (length(dims) != 1L || is.na(dims) || dims < 2) {
+    .err("sc_map_query : dims doit être un entier >= 2.")
+  }
+
+  common <- intersect(rownames(reference), rownames(query))
+  if (length(common) < 10L) {
+    .err(sprintf(paste0("sc_map_query : seulement %d gène(s) commun(s) entre la référence et la query ",
+                        "(min. 10). Vérifiez que les deux objets partagent le même identifiant de gènes ",
+                        "(symboles vs ENSG — le remappage d'import est disponible)."),
+                 length(common)))
+  }
+  if (!"pca" %in% names(reference@reductions)) {
+    .err("sc_map_query : la référence n'a pas de réduction 'pca' — lancez le pipeline sur l'objet de référence d'abord.")
+  }
+  dims_used <- min(dims, ncol(SeuratObject::Embeddings(reference[["pca"]])))
+  if (is.na(dims_used) || dims_used < 2) {
+    .err("sc_map_query : la réduction 'pca' de la référence est vide — lancez le pipeline d'abord.")
+  }
+  if (dims_used < dims) {
+    warning(sprintf("sc_map_query : dims clampé %d -> %d (PCA de la référence moins profonde).",
+                    dims, dims_used), call. = FALSE)
+  }
+
+  # Couches "data" normalisées exigées par FindTransferAnchors : normalise
+  # silencieusement ce qui manque (l'aval reste inchangé sinon).
+  for (nm in c("reference", "query")) {
+    o <- get(nm)
+    DefaultAssay(o) <- "RNA"
+    has_data <- tryCatch(is.matrix(SeuratObject::GetAssayData(o, layer = "data")) ||
+                           inherits(SeuratObject::GetAssayData(o, layer = "data"), "Matrix"),
+                         error = function(e) FALSE)
+    if (!has_data) {
+      o <- Seurat::NormalizeData(o, verbose = FALSE)
+      assign(nm, o)
+    }
+  }
+
+  # Modèle UMAP de la référence : posé DÉDIÉ ("umap.map", return.model=TRUE) —
+  # jamais d'heuristique sur l'UMAP existant (projeté, sans modèle).
+  reference <- withr::with_seed(seed, Seurat::RunUMAP(
+    reference, dims = seq_len(dims_used), reduction = "pca",
+    reduction.name = "umap.map", return.model = TRUE, verbose = FALSE))
+
+  anchors <- Seurat::FindTransferAnchors(
+    reference = reference, query = query, dims = seq_len(dims_used),
+    reference.reduction = "pca", verbose = FALSE)
+  # ⚠️ MESURE (2026-11-09) : TransferData/MapQuery exige un VECTEUR (facteur
+  # ou character) pour le label transfer — le data.frame de la vignette v5
+  # est refusé (« None of the provided refdata elements are valid », mesuré).
+  query <- Seurat::MapQuery(
+    anchorset = anchors, reference = reference, query = query,
+    refdata = stats::setNames(list(ref_labels), label_col),
+    reference.reduction = "pca", reduction.model = "umap.map", verbose = FALSE)
+
+  predicted_col <- paste0("predicted.", label_col)
+  if (!predicted_col %in% colnames(query@meta.data)) {
+    .err(sprintf(paste0("sc_map_query : la colonne prédite '%s' attendue est absente après MapQuery ",
+                        "(colonnes : %s) — version Seurat inattendue ?"),
+                 predicted_col, paste(grep("^predicted", colnames(query@meta.data), value = TRUE), collapse = ", ")))
+  }
+  score_col <- paste0(predicted_col, ".score")
+  list(query = query, label_col = label_col,
+       n_ref = ncol(reference), n_query = ncol(query), dims_used = dims_used,
+       predicted_col = predicted_col,
+       score_col = if (score_col %in% colnames(query@meta.data)) score_col else NULL)
+}
+
 #' Remap a Seurat object's RNA assay rownames (Ensembl/Entrez) to gene symbols
 #'
 #' Mirrors remap_gene_ids_to_symbol() (helpers_io.R, used for Bulk) but is
