@@ -42,6 +42,13 @@ sc_ap_normalize_params <- function(p = list()) {
     sc_ap_singler              = FALSE,
     sc_ap_singler_ref          = "hpca",
     sc_ap_singler_level        = "main",
+    # SF (2026-11-09) : cell cycle OPT-IN — scoring en metadata (S.Score,
+    # G2M.Score, Phase, CC.Difference) + régression optionnelle dans ScaleData.
+    # Défaut FALSE = zéro changement (D4 même esprit que le sketch) ; la
+    # régression par défaut = CC.Difference (S − G2M, fiche §3-SF : préserve
+    # le cyclage biologique) ; "complete" régresse les deux scores.
+    sc_ap_cellcycle            = FALSE,
+    sc_ap_cellcycle_regress    = "difference",
     sc_ap_markers              = TRUE,
     sc_ap_pathway              = FALSE,
     sc_ap_pathway_db           = "GOBP",
@@ -406,7 +413,31 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
       Seurat::DefaultAssay(obj) <- assay
       obj <- Seurat::NormalizeData(obj, verbose = FALSE)
       obj <- Seurat::FindVariableFeatures(obj, nfeatures = nfeatures, verbose = FALSE)
-      obj <- smart_scale_data(obj)
+      # ── SF (2026-11-09) : cell cycle OPT-IN + régression ScaleData ────────
+      cc_vars <- NULL
+      if (isTRUE(p_norm$sc_ap_cellcycle) && !identical(norm_method, "sct")) {
+        cc_organism <- as.character(params$sc_ap_mapping_org %||% p_norm$sc_ap_mapping_org %||% "human")
+        cc_res <- tryCatch(
+          sc_cell_cycle_scores(obj, organism = cc_organism),
+          error = function(e) e)
+        if (inherits(cc_res, "error")) {
+          log_fn(sprintf("⚠ Cell cycle ignoré : %s", conditionMessage(cc_res)))
+        } else {
+          obj <- cc_res$obj
+          cc_vars <- if (identical(p_norm$sc_ap_cellcycle_regress, "complete")) {
+            c("S.Score", "G2M.Score")
+          } else "CC.Difference"
+          if (exists("sc_backend_status", mode = "function") &&
+              isTRUE(tryCatch(sc_backend_status(obj) == "disk", error = function(e) FALSE))) {
+            log_fn("Cell cycle : scores en metadata ; régression SANS objet disque (ScaleData non garantie disk-backed).")
+            cc_vars <- NULL
+          }
+          log_fn(sprintf("✓ Cell cycle scoring (%d gènes S / %d gènes G2M — régression : %s)",
+                         cc_res$n_s, cc_res$n_g2m,
+                         if (is.null(cc_vars)) "aucune" else paste(cc_vars, collapse = "+")))
+        }
+      }
+      obj <- smart_scale_data(obj, vars.to.regress = cc_vars)
     }
     step_times$norm_s <- as.numeric(difftime(Sys.time(), t_norm, units = "secs"))
     log_fn("✓ Normalisation OK")

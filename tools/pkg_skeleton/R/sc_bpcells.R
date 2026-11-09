@@ -98,12 +98,24 @@ convert_seurat_to_bpcells <- function(obj, dir = NULL) {
 #'
 #' @param obj Seurat object with NormalizeData()+FindVariableFeatures() already run.
 #' @param extra_features Additional gene symbols to include.
+#' @param vars.to.regress Optionnel (jalon SF, 2026-11-09) : colonnes metadata
+#'   passées à `ScaleData(vars.to.regress = ...)` — ex. "CC.Difference"
+#'   (S − G2M, défaut fiche §3-SF) ou c("S.Score","G2M.Score") (option
+#'   complète). NULL (défaut) = comportement historique strict. L'appelant
+#'   NE doit PAS l'utiliser sur un objet BPCells on-disk (régression ScaleData
+#'   non garantie disk-backed — garde côté pipeline).
 #' @return Seurat object with scale.data covering VariableFeatures ∪ extra_features.
-smart_scale_data <- function(obj, extra_features = character(0)) {
+smart_scale_data <- function(obj, extra_features = character(0),
+                             vars.to.regress = NULL) {
   var_feat <- tryCatch(VariableFeatures(obj), error = function(e) character(0))
   if (length(var_feat) == 0) var_feat <- rownames(obj)   # safety net if VST wasn't run
   feats <- unique(c(var_feat, intersect(extra_features, rownames(obj))))
-  ScaleData(obj, features = feats, verbose = FALSE)
+  if (is.null(vars.to.regress)) {
+    ScaleData(obj, features = feats, verbose = FALSE)
+  } else {
+    ScaleData(obj, features = feats, vars.to.regress = vars.to.regress,
+              verbose = FALSE)
+  }
 }
 
 #' Ensure a set of genes are covered by scale.data before a DoHeatmap() call,

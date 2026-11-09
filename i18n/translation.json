@@ -12873,6 +12873,15 @@
     {"fr": "Query projetée sur l'UMAP de référence (ref.umap)", "en": "Query projected onto the reference UMAP (ref.umap)"},
     {"fr": "Scores de confiance (max par cellule)", "en": "Confidence scores (max per cell)"},
     {"fr": "Erreur: objet de référence introuvable dans la session.", "en": "Error: reference object not found in the session."},
-    {"fr": "Erreur: l'objet de référence et l'objet actif sont le même objet — chargez/activez un second dataset.", "en": "Error: the reference object and the active object are the same — load/activate a second dataset."}
+    {"fr": "Erreur: l'objet de référence et l'objet actif sont le même objet — chargez/activez un second dataset.", "en": "Error: the reference object and the active object are the same — load/activate a second dataset."},
+    {"fr": "Scores de cycle cellulaire (S/G2M)", "en": "Cell cycle scores (S/G2M)"},
+    {"fr": "Régression dans ScaleData", "en": "Regression in ScaleData"},
+    {"fr": "CC.Difference (S − G2M, préserve le cyclage)", "en": "CC.Difference (S − G2M, preserves cycling)"},
+    {"fr": "S.Score + G2M.Score (complète)", "en": "S.Score + G2M.Score (complete)"},
+    {"fr": "Reference mapping (MapQuery)...", "en": "Reference mapping (MapQuery)..."},
+    {"fr": "Ancres + transfert...", "en": "Anchors + transfer..."},
+    {"fr": "Dimensions PCA", "en": "PCA dimensions"},
+    {"fr": "Aucun transfert MapQuery — lancez 'Transférer les étiquettes (MapQuery)'.", "en": "No MapQuery transfer yet — run 'Transfer labels (MapQuery)'."},
+    {"fr": "Aucun score MapQuery — lancez 'Transférer les étiquettes (MapQuery)'.", "en": "No MapQuery scores yet — run 'Transfer labels (MapQuery)'."}
   ]
 }

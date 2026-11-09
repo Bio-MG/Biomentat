@@ -1186,6 +1186,59 @@ sc_map_query <- function(reference, query, label_col, dims = 30L, seed = 1) {
        score_col = if (score_col %in% colnames(query@meta.data)) score_col else NULL)
 }
 
+#' Cell cycle scoring (jalon SF — fiche PROPOSAL_SEURAT_V56_GEMS §3-SF)
+#'
+#' `Seurat::CellCycleScoring()` en metadata (S.Score, G2M.Score, Phase) +
+#' colonne `CC.Difference` (S − G2M — la régression par défaut de la fiche :
+#' préserve le cyclage biologique en régressant la DIFFÉRENCE de phase, pas
+#' les deux scores indépendamment). La régression elle-même est OPTIONNELLE
+#' et vit côté pipeline (`smart_scale_data(vars.to.regress = ...)`).
+#'
+#' Limites honnêtes : les gènes cc.genes de Seurat sont des SYMBOLES HUMAINS
+#' — un objet souris (ENSMUSG) produit un refus classé actionnable (le
+#' mapping orthologue souris = chantier séparé, cohérent avec la décision
+#' orthologie de la fiche PACKS) ; un objet en IDs ENSG non remappés produit
+#' aussi un refus (hint remappage d'import).
+#'
+#' @param obj Seurat object (couche "data" normalisée exigée — normalisation
+#'   silencieuse si absente).
+#' @param organism "human" (seul supporté au jalon SF).
+#' @param min_overlap Nombre minimal de gènes présents par liste (S et G2M).
+#' @param ctrl Contrôles AddModuleScore par bin (défaut Seurat : 100). ⚠️ Un
+#'   objet doit avoir ~24×ctrl gènes pour peupler chaque bin d'expression —
+#'   sur un petit fixture, réduire ctrl (test : 10).
+#' @return list(obj = objet enrichi, n_s, n_g2m) — erreurs classées
+#'   sc_helpers_error.
+sc_cell_cycle_scores <- function(obj, organism = c("human", "mouse"),
+                                 min_overlap = 10L, ctrl = 100L) {
+  .err <- function(msg) stop(errorCondition(msg, class = "sc_helpers_error"))
+  organism <- match.arg(organism)
+  if (identical(organism, "mouse")) {
+    .err(paste0("Cell cycle : les listes cc.genes de Seurat sont des symboles HUMAINS. ",
+                "Le mapping orthologue souris est un chantier séparé (cohérent avec la ",
+                "décision orthologie de la fiche PACKS) — scoring non disponible pour 'mouse' au jalon SF."))
+  }
+  cc <- tryCatch(get("cc.genes", envir = asNamespace("Seurat")),
+                 error = function(e) .err("Cell cycle : listes cc.genes introuvables dans Seurat."))
+  n_s   <- length(intersect(cc$s.genes,   rownames(obj)))
+  n_g2m <- length(intersect(cc$g2m.genes, rownames(obj)))
+  if (n_s < min_overlap || n_g2m < min_overlap) {
+    .err(sprintf(paste0("Cell cycle : seulement %d/%d gènes S et %d/%d gènes G2M présents dans l'objet ",
+                        "(min. %d chacun). Vos identifiants sont probablement des IDs ENSG non remappés — ",
+                        "utilisez le remappage Symbol de l'import (Step 0) avant le scoring."),
+                 n_s, length(cc$s.genes), n_g2m, length(cc$g2m.genes), min_overlap))
+  }
+  has_data <- tryCatch(inherits(SeuratObject::GetAssayData(obj, layer = "data"), "AnyMatrix") ||
+                         is.matrix(SeuratObject::GetAssayData(obj, layer = "data")),
+                       error = function(e) FALSE)
+  if (!has_data) obj <- Seurat::NormalizeData(obj, verbose = FALSE)
+  obj <- Seurat::CellCycleScoring(obj, s.features = cc$s.genes,
+                                  g2m.features = cc$g2m.genes,
+                                  ctrl = as.integer(ctrl), verbose = FALSE)
+  obj$CC.Difference <- obj$S.Score - obj$G2M.Score
+  list(obj = obj, n_s = n_s, n_g2m = n_g2m)
+}
+
 #' Remap a Seurat object's RNA assay rownames (Ensembl/Entrez) to gene symbols
 #'
 #' Mirrors remap_gene_ids_to_symbol() (helpers_io.R, used for Bulk) but is

@@ -1576,6 +1576,18 @@ mod_sc_server <- function(id, global_data) {
                                        c(.tr("Main (General)"), .tr("Fine (Specifique)"))), inline=TRUE))
           )
         ),
+        # ── SF (2026-11-09) : cell cycle OPT-IN (scoring metadata + régression
+        # ScaleData optionnelle — défaut CC.Difference, fiche §3-SF) ──────────
+        checkboxInput(ns_m("sc_ap_cellcycle"),
+                      paste("🧬", .tr("Scores de cycle cellulaire (S/G2M)")), value = FALSE),
+        conditionalPanel(
+          condition = sprintf("input['%s'] == true", ns_m("sc_ap_cellcycle")),
+          radioButtons(ns_m("sc_ap_cellcycle_regress"), .tr("Régression dans ScaleData"),
+                       choices = stats::setNames(c("difference", "complete"),
+                                                 c(.tr("CC.Difference (S − G2M, préserve le cyclage)"),
+                                                   .tr("S.Score + G2M.Score (complète)"))),
+                       selected = "difference", inline = TRUE)
+        ),
         checkboxInput(ns_m("sc_ap_markers"),
                       paste("\U0001f9ec", .tr("FindAllMarkers après clustering")), value=FALSE),
         checkboxInput(ns_m("sc_ap_pathway"),
