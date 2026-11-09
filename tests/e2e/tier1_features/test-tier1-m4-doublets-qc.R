@@ -36,6 +36,14 @@ e2e_source_if_exists("tools/pkg_skeleton/R/provenance.R")
 .make_test_sc_obj <- function(n_genes = 120, n_cells = 80) {
   set.seed(42)
   mat <- matrix(rpois(n_genes * n_cells, lambda = 3), nrow = n_genes, ncol = n_cells)
+  # Structure MARQUEUR (fix e2e F20-5, 2026-11-09) : les 40 premiers gènes sont
+  # surexprimés dans la première moitié des cellules, les 40 suivants dans la
+  # seconde — un vrai profil A/B avec marqueurs + gènes partagés. Sans cela,
+  # la sélection de gènes non-DE de SoupX (autoEstCont, 1.6.2 au lock) tombe
+  # sur un ensemble vide et l'estimation NaN — le fixture Poisson uniforme
+  # n'est pas un tissu ; SoupX exige de la structure biologique.
+  mat[1:40, 1:(n_cells %/% 2)] <- mat[1:40, 1:(n_cells %/% 2)] * 8
+  mat[41:80, ((n_cells %/% 2) + 1):n_cells] <- mat[41:80, ((n_cells %/% 2) + 1):n_cells] * 8
   rownames(mat) <- paste0("Gene-", seq_len(n_genes))
   colnames(mat) <- paste0("Cell-", seq_len(n_cells))
   suppressWarnings(Seurat::CreateSeuratObject(counts = mat))

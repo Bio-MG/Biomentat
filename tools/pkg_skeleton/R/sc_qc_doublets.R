@@ -157,10 +157,21 @@
 #' @param obj Objet Seurat d'entrée (counts bruts en mémoire).
 #' @param counts_mat Matrice de counts brute (gènes x cellules).
 #' @param seed Graine (clustering rapide + DecontX).
+#' @param tod_mat Matrice de DROPLETS bruts (tod ≠ toc) — requis pour SoupX
+#'   (le profil de soupe s'estime sur les gouttelettes vides ; avec tod==toc
+#'   le profil est NaN, MESURÉ 2026-11-09). NULL (défaut M4 : l'app ne
+#'   dispose pas de la matrice non filtrée) → moteur celda/DecontX, conçu
+#'   pour l'entrée cellules-seules.
 #' @return Matrice corrigée (mêmes dimensions/noms que counts_mat).
 #' @raises Erreur classée sc_qc_error (jamais de repli silencieux).
-.sc_qc_ambient_decontaminate <- function(obj, counts_mat, seed) {
-  if (requireNamespace("SoupX", quietly = TRUE)) {
+.sc_qc_ambient_decontaminate <- function(obj, counts_mat, seed, tod_mat = NULL) {
+  # ── Voie SoupX : UNIQUEMENT avec de vrais droplets (tod ≠ toc) ────────────
+  # Fix e2e F20-5 (2026-11-09, itér. 3) : la voie SoupX historique passait
+  # tod==toc (le même matrix cellules) — le profil de soupe rendait NaN et
+  # autoEstCont mourait. SoupX n'a JAMAIS fonctionné sur cette machine : le
+  # vert du 2026-10-27 = branche « moteur absent » (SoupX installé le 11-09
+  # par restore post-QW-1 `a1b88c8` — « restent NON INSTALLÉS » y est noté).
+  if (!is.null(tod_mat) && requireNamespace("SoupX", quietly = TRUE)) {
     if (!requireNamespace("scran", quietly = TRUE)) {
       stop(errorCondition(
         paste0("Décontamination SoupX : le package 'scran' est requis pour le clustering rapide (quickCluster). ",
@@ -168,15 +179,46 @@
         class = c("sc_ambient_package_missing", "sc_qc_error")))
     }
     sce <- Seurat::as.SingleCellExperiment(obj)
-    clus <- withr::with_seed(seed, scran::quickCluster(sce))
-    sc <- SoupX::SoupChannel(tod = counts_mat, tps = counts_mat, calcChannels = FALSE)
+    # Gènes tout-zéro exclus du CLUSTERING uniquement (fix e2e F20-5, 2026-11-09
+    # — iter. 2) : leur log-CPM NaN casse quickCluster (« missing values and
+    # NaN's not allowed ») ; le profil Soup (tod/toc) reste INTACT — seules les
+    # corrélations de clustering les ignorent, idiom scran standard.
+    sce_counts <- SummarizedExperiment::assay(sce, "counts")
+    keep_genes <- Matrix::rowSums(sce_counts, na.rm = TRUE) > 0
+    if (!any(keep_genes)) {
+      stop(errorCondition(
+        "Décontamination SoupX : aucun gène détecté dans l'objet — rien à clusteriser.",
+        class = c("sc_qc_error_ambient_failed", "sc_qc_error")))
+    }
+    sce <- sce[keep_genes, ]
+    # min.size adaptatif (fix e2e F20-5, 2026-11-09) : le défaut quickCluster
+    # (100) refuse les petits jeux (« fewer cells than the minimum cluster
+    # size » — le fixture e2e porte 80 cellules). Production inchangée dès
+    # ~400 cellules ; en dessous, la taille de cluster suit le jeu.
+    clus <- withr::with_seed(seed, scran::quickCluster(
+      sce, min.size = min(100L, max(2L, floor(ncol(sce) / 4L)))))
+    # API SoupX 1.6.2 au lock = SoupChannel(tod, toc, …) — droplets + cellules.
+    # L'ancien appel (tod=…, tps=…) datait de l'API pré-1.6 : `tps` ne
+    # matchait plus aucun argument et `toc` restait manquant.
+    sc <- SoupX::SoupChannel(tod = tod_mat, toc = counts_mat,
+                             calcChannels = FALSE)
     sc <- SoupX::setClusters(sc, clus)
     sc <- withr::with_seed(seed, SoupX::autoEstCont(sc, verbose = FALSE))
     return(SoupX::adjustCounts(sc, round = TRUE))
   }
   if (requireNamespace("celda", quietly = TRUE)) {
-    sce_d <- withr::with_seed(seed, celda::decontX(counts_mat))
-    return(SummarizedExperiment::assay(sce_d, "decontXcounts"))
+    # celda 1.22 (fix e2e F20-5, 2026-11-09) : decontX sur une MATRICE rend
+    # une LIST (runParams/estimates/decontXcounts/contamination/z) — la matrice
+    # corrigée vit dans $decontXcounts ; le SCE n'existe que si x en est un.
+    res_d <- withr::with_seed(seed, celda::decontX(counts_mat))
+    out <- if (is.list(res_d)) res_d$decontXcounts
+           else SummarizedExperiment::assay(res_d, "decontXcounts")
+    if (is.null(out) || !identical(dim(out), dim(counts_mat))) {
+      stop(errorCondition(
+        "Décontamination celda : la matrice corrigée est absente ou désalignée — aucun repli silencieux.",
+        class = c("sc_qc_error_ambient_failed", "sc_qc_error")))
+    }
+    return(as.matrix(out))
   }
   stop(errorCondition(
     paste0("Aucun moteur de décontamination ('SoupX' ou 'celda'/DecontX) installé — le garde amont devrait avoir bloqué cet appel."),
