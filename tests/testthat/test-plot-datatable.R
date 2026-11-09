@@ -28,7 +28,8 @@ test_that("surface publique figee", {
   expect_setequal(
     ts_datatable_public_api(),
     c("ts_datatable", "ts_datatable_buttons",
-      "ts_datatable_page_lengths", "ts_datatable_public_api")
+      "ts_datatable_page_lengths", "ts_datatable_public_api",
+      "ts_dt_future", "ts_dt_future_install", "ts_dt_future_restore")
   )
   expect_false(anyDuplicated(ts_datatable_public_api()) > 0)
 })
@@ -306,4 +307,61 @@ test_that("2H : les tables larges optent explicitement pour le scrollX", {
   # Le reste du contrat est intact dans la même construction :
   expect_identical(got$x$filter, "top")
   expect_identical(got$x$options$pageLength, 10)
+})
+# --- PC (2026-11-09) : canal future opt-in ------------------------------------
+
+test_that("PC : ts_dt_future() est FAUX par defaut (opt-in strict, zero changement)", {
+  withr::with_options(list(TS_DT_FUTURE = NULL), {
+    old_env <- Sys.getenv("TS_DT_FUTURE", unset = NA_character_)
+    do.call(Sys.unsetenv, list("TS_DT_FUTURE"))
+    on.exit(if (!is.na(old_env)) do.call(Sys.setenv, list(TS_DT_FUTURE = old_env)), add = TRUE)
+    expect_false(ts_dt_future())
+  })
+})
+
+test_that("PC : ts_dt_future() accepte option logique, chaine et variable d'env", {
+  withr::with_options(list(TS_DT_FUTURE = TRUE), {
+    old_env <- Sys.getenv("TS_DT_FUTURE", unset = NA_character_)
+    do.call(Sys.unsetenv, list("TS_DT_FUTURE"))
+    on.exit(if (!is.na(old_env)) do.call(Sys.setenv, list(TS_DT_FUTURE = old_env)), add = TRUE)
+    expect_true(ts_dt_future())
+  })
+  withr::with_options(list(TS_DT_FUTURE = "1"), expect_true(ts_dt_future()))
+  withr::with_options(list(TS_DT_FUTURE = "false"), expect_false(ts_dt_future()))
+  withr::with_options(list(TS_DT_FUTURE = NULL), {
+    withr::with_envvar(c(TS_DT_FUTURE = "1"), expect_true(ts_dt_future()))
+    # une option explicite FALSE gagne sur l'env :
+    withr::with_options(list(TS_DT_FUTURE = FALSE), {
+      withr::with_envvar(c(TS_DT_FUTURE = "1"), expect_false(ts_dt_future()))
+    })
+  })
+})
+
+test_that("PC : ts_dt_future_install() pose le defaut du formal future, idempotent, et le test restaure", {
+  skip_if_not_installed("future.mirai")
+  on.exit(ts_dt_future_restore(), add = TRUE)
+
+  expect_true(isTRUE(ts_dt_future_install()))
+  got <- formals(DT::renderDT)$future
+  expect_identical(got, quote(getOption("TS_DT_FUTURE", FALSE)))
+  # idempotent :
+  expect_true(isTRUE(ts_dt_future_install()))
+  expect_identical(formals(DT::renderDT)$future, quote(getOption("TS_DT_FUTURE", FALSE)))
+
+  # Le defaut pose EVALUE au defaut stock : option absente => FALSE (zero
+  # changement), option TRUE => TRUE. Le formal reste surchargeable par un
+  # appel explicite (site qui passe future = ... garde la priorite).
+  withr::with_options(list(TS_DT_FUTURE = NULL), {
+    expect_false(eval(formals(DT::renderDT)$future))
+  })
+  withr::with_options(list(TS_DT_FUTURE = TRUE), {
+    expect_true(eval(formals(DT::renderDT)$future))
+  })
+})
+
+test_that("PC : ts_dt_future_restore() revient au defaut stock FALSE", {
+  skip_if_not_installed("future.mirai")
+  ts_dt_future_install()
+  expect_true(isTRUE(ts_dt_future_restore()))
+  expect_identical(formals(DT::renderDT)$future, FALSE)
 })

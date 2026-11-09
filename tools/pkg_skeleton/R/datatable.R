@@ -27,6 +27,31 @@
 # par : ce fichier, tests/testthat/test-plot-datatable.R et
 # docs/contracts/PLOT_DATATABLE_CONTRACT.md.
 # =============================================================================
+# PC (2026-11-09) — canal future opt-in du render DT (jalon « app
+# non-bloquante ») : le filtrage server-side des tables volumineuses peut
+# quitter le thread principal via DT::renderDT(future = TRUE) — DT 0.34
+# route alors chaque requete AJAX de filtre sur promises::future_promise(),
+# c.-a-d. sur le plan future courant du process. DEUX primitives vivent ICI
+# (point de passage unique du jalon PC, fichier exclusif de la lane) :
+#   - ts_dt_future()        : resolveur OPT-IN (option/env TS_DT_FUTURE,
+#                             default FALSE = comportement stock de DT).
+#   - ts_dt_future_install(): pose le defaut du formal `future` de
+#     DT::renderDT sur ce resolveur (evaluate A CHAQUE appel de renderDT,
+#     donc activation a chaud possible). Idempotent, garde sur la presence
+#     du formal (DT >= 0.33) et de future.mirai. Sans cet appel, DT reste
+#     100% stock.
+# MESURE (2026-11-09, sondes /tmp/pc_recon) : le pont mirai<->future exige
+# le paquet CRAN future.mirai (mirai 2.7.2 n'expose aucun backend future ;
+# future::plan(mirai::mirai) -> « node stack overflow »). GO operateur du
+# 2026-11-09 : future.mirai 1.1.0 ajoute au lock (unique ecart). Le backend
+# reel est plan(mirai_cluster) (future.mirai) pose par init_spatial_daemons()
+# quand TS_DT_FUTURE est actif — PIDs mesures : reutilisation du pool
+# existant, 0 worker nouveau. Sans pool init, le plan de boot F2
+# (multisession, global.R:558) sert de repli : 0 worker nouveau non plus
+# (workers deja spawnes par le boot). Le formal installe evalue l'OPTION a
+# l'appel : la desactivation (options(TS_DT_FUTURE = FALSE)) suffit, sans
+# re-install.
+# =============================================================================
 
 # --- Constantes ---------------------------------------------------------------
 
@@ -55,7 +80,8 @@ ts_datatable_buttons <- function(filename_base) {
 #' Surface publique figee (verifiee par le test de gel).
 ts_datatable_public_api <- function() {
   c("ts_datatable", "ts_datatable_buttons", "ts_datatable_page_lengths",
-    "ts_datatable_public_api")
+    "ts_datatable_public_api", "ts_dt_future", "ts_dt_future_install",
+    "ts_dt_future_restore")
 }
 
 # --- Erreurs classees --------------------------------------------------------
@@ -168,4 +194,95 @@ ts_datatable <- function(df, page_length, filename_base = NULL,
   if (!is.null(ext)) args$extensions <- ext
 
   do.call(DT::datatable, args)
+}
+
+# --- PC (2026-11-09) : canal future opt-in du render DT ----------------------
+
+#' Resolveur du canal future des tables DT (jalon PC).
+#'
+#' Le filtrage server-side DT est OPT-IN : sans activation explicite, le
+#' comportement stock de `DT::renderDT` est preserve (filtrage synchrone
+#' sur le thread principal — zero changement). Activation : option
+#' `TS_DT_FUTURE` (logique ou chaine "true"/"TRUE"/"1") ou variable
+#' d'environnement du meme nom.
+#'
+#' Le backend effectif est le plan future courant du process :
+#' `plan(mirai_cluster)` (pool mirai existant, pose par
+#' `init_spatial_daemons()` quand ce canal est actif) ou, a defaut de pool
+#' init, le plan de boot F2 (`multisession`, global.R:558). Dans les deux
+#' cas : 0 worker nouveau (mesure PIDs 2026-11-09).
+#'
+#' @return Un logique scalaire : TRUE = canal demande.
+#' @export
+ts_dt_future <- function() {
+  v <- getOption("TS_DT_FUTURE", NULL)
+  if (!is.null(v)) return(.ts_dt_truthy(v))
+  .ts_dt_truthy(Sys.getenv("TS_DT_FUTURE", unset = ""))
+}
+
+#' Predicat truthy des reglages opt-in (option/env TS_*).
+#'
+#' MESURE (2026-11-09) : as.logical("1") vaut NA (les chaines numeriques ne
+#' se coercent PAS en logique) — le predicat accepte explicitement les
+#' formes logique, "TRUE"/"T"/"1"/"YES" (insensibles a la casse) et refuse
+#' tout le reste ("false", "", NA, autres).
+.ts_dt_truthy <- function(v) {
+  if (is.null(v) || length(v) != 1L || is.na(v)) return(FALSE)
+  if (is.logical(v)) return(isTRUE(v))
+  if (is.character(v)) {
+    toupper(trimws(v)) %in% c("TRUE", "T", "1", "YES")
+  } else FALSE
+}
+
+#' Installe le defaut `future` du render DT sur le resolveur (jalon PC).
+#'
+#' Pose `formals(DT::renderDT)$future <- quote(getOption("TS_DT_FUTURE",
+#' FALSE))` : l'expression est evaluee dans le namespace DT A CHAQUE appel
+#' de `DT::renderDT(...)`, donc (a) le defaut reste FALSE (stock) tant que
+#' l'option n'est pas posee, (b) l'activation est possible a chaud (chaque
+#' re-enregistrement d'output la lit), (c) `getOption()` est base — aucune
+#' dependance a l'environnement d'evaluation.
+#'
+#' Gardees : DT present, formal `future` existant (DT >= 0.33), paquet
+#' `future.mirai` present (pont mesure — voir l'en-tete du fichier). Sans
+#' ces gardes, rien n'est modifie et la fonction retourne FALSE : l'app
+#' tourne en DT stock.
+#'
+#' Implantation mesuree (2026-11-09) : `formals(DT::renderDT)$future <- v`
+#' (assignment complexe via `::`) echoue avec « object 'DT' not found » —
+#' la seule voie fiable est la copie locale du closure + assignInNamespace
+#' (restauration symetrique dans les tests). Idempotent : re-executer ne
+#' fait rien si le defaut est deja pose. Appelle par
+#' `init_spatial_daemons()` (spatial_async.R) apres verification du pool —
+#' le seul appel de production ; les tests appellent directement et
+#' restaurent le formal precedent.
+#'
+#' @return invisible(TRUE) si le defaut est (ou devient) pose, sinon
+#'   invisible(FALSE) — jamais d'erreur.
+ts_dt_future_install <- function() {
+  if (!requireNamespace("DT", quietly = TRUE)) return(invisible(FALSE))
+  if (!requireNamespace("future.mirai", quietly = TRUE)) return(invisible(FALSE))
+  ns <- asNamespace("DT")
+  fm <- get("renderDT", envir = ns)
+  if (!"future" %in% names(formals(fm))) return(invisible(FALSE))
+  target <- quote(getOption("TS_DT_FUTURE", FALSE))
+  if (identical(formals(fm)$future, target)) return(invisible(TRUE))
+  formals(fm)$future <- target
+  assignInNamespace("renderDT", fm, ns = "DT")
+  invisible(TRUE)
+}
+
+#' Restaure le formal `future` stock de DT::renderDT (compagnon de test).
+#'
+#' Uniquement pour les tests et les teardowns : pose le formal `future`
+#' a `FALSE` (defaut DT stock) via la meme voie que ts_dt_future_install().
+#' @return invisible(TRUE) si DT est present, invisible(FALSE) sinon.
+ts_dt_future_restore <- function() {
+  if (!requireNamespace("DT", quietly = TRUE)) return(invisible(FALSE))
+  ns <- asNamespace("DT")
+  fm <- get("renderDT", envir = ns)
+  if (identical(formals(fm)$future, FALSE)) return(invisible(TRUE))
+  formals(fm)$future <- FALSE
+  assignInNamespace("renderDT", fm, ns = "DT")
+  invisible(TRUE)
 }

@@ -374,3 +374,166 @@ test_that("mod_geo : messages d'erreur IDENTIQUES a l'execution (sites 468, 481)
 
 # ── cleanup ───────────────────────────────────────────────────────────────────
 unlink(.geo_tmp, recursive = TRUE, force = TRUE)
+
+# --- PC (2026-11-09) : la voie reseau supp passe par httr2 --------------------
+# Remplacement de GEOquery::getGEOSuppFiles (retry 429/5xx + timeout +
+# throttle). Tests 100% locaux : le 429 -> retry passe par un serveur httpuv
+# sur port aleatoire (Retry-After: 0 => zero attente), suite reste offline.
+
+test_that("PC : .geo_ncbi_url construit le layout miroir NCBI", {
+  expect_identical(.geo_ncbi_url("GSE52778"),
+                   "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE52nnn/GSE52778/supp/")
+  expect_identical(.geo_ncbi_url("gse164073"),
+                   "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE164nnn/GSE164073/supp/")
+  expect_identical(.geo_ncbi_url("GSE1234"),
+                   "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE1nnn/GSE1234/supp/")
+  e <- tryCatch(.geo_ncbi_url("GSE12"), error = function(e) e)
+  expect_s3_class(e, "geo_import_error")
+  e2 <- tryCatch(.geo_ncbi_url("SRP123456"), error = function(e) e)
+  expect_s3_class(e2, "geo_import_error")
+})
+
+test_that("PC : .geo_parse_supp_index extrait les fichiers plausibles, pas les repertoires", {
+  html <- paste0('<html><body>',
+                 '<a href="../">Parent Directory</a>',
+                 '<a href="GSE52778_counts.tsv.gz">counts</a>',
+                 '<a href="GSE52778_README.txt">readme</a>',
+                 '<a href="supp/">dir</a>',
+                 '<a href="notes">no ext</a>',
+                 '</body></html>')
+  got <- .geo_parse_supp_index(html)
+  expect_setequal(got, c("GSE52778_counts.tsv.gz", "GSE52778_README.txt"))
+  expect_identical(.geo_parse_supp_index("<html></html>"), character(0))
+})
+
+test_that("PC : .geo_supp_request porte retry 3 essais, timeout et throttle", {
+  req <- .geo_supp_request("https://ftp.ncbi.nlm.nih.gov/geo/series/GSE52nnn/GSE52778/supp/")
+  # httr2 1.3.0 n'exporte pas req_policies : lecture de la structure interne
+  # (le COMPORTEMENT de retry est verifie de bout en bout par le test 429
+  # ci-dessous sur serveur local).
+  expect_identical(req$policies$retry_max_tries, 3L)
+  expect_identical(as.numeric(req$options$timeout_ms), 300000)
+  expect_true("throttle_realm" %in% names(req$policies))
+})
+
+test_that("PC : la voie supp survit a deux 429 (serveur local en processus enfant, Retry-After: 0)", {
+  skip_if_not_installed("httpuv")
+  # MESURE 2026-11-09 : un serveur httpuv IN-PROCESS ne sert pas les
+  # requetes pendant un curl bloquant (boucle d'evenements jamais tournee
+  # en Rscript autonome) -> timeout. Le serveur vit donc dans un process
+  # enfant Rscript dont la boucle httpuv tourne librement.
+  port <- 30000L + sample(20000L, 1L)
+  index_html <- paste0('<html><body>',
+                       '<a href="../">Parent Directory</a>',
+                       '<a href="GSE52778_counts.tsv.gz">counts</a>',
+                       '</body></html>')
+  srv_script <- tempfile(fileext = "-geo_srv.R")
+  writeLines(sprintf('
+    library(httpuv)
+    idx_hits <- 0L
+    index_html <- %s
+    httpuv::runServer("127.0.0.1", %d, list(
+      call = function(req) {
+        if (identical(req$PATH_INFO, "/ready")) {
+          return(list(status = 200L, headers = list("Content-Type" = "text/plain"), body = "ok"))
+        }
+        if (grepl("GSE52778_counts.tsv.gz$", req$PATH_INFO)) {
+          return(list(status = 200L, headers = list("Content-Type" = "text/plain"),
+                      body = charToRaw("gene	sample1
+abc	1
+")))
+        }
+        idx_hits <<- idx_hits + 1L
+        if (idx_hits <= 2L) {
+          return(list(status = 429L, headers = list("Retry-After" = "0"),
+                      body = "rate limited"))
+        }
+        list(status = 200L, headers = list("Content-Type" = "text/html"),
+             body = charToRaw(index_html))
+      }))
+  ', deparse(index_html), port), srv_script)
+  rscript <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
+  pid <- system2(rscript, shQuote(srv_script), wait = FALSE)
+  on.exit({
+    try(tools::pskill(pid), silent = TRUE)
+    unlink(srv_script)
+  }, add = TRUE)
+
+  # attente de disponibilite (endpoint /ready, hors budget 429)
+  ready <- FALSE
+  for (i in seq_len(40L)) {
+    r <- tryCatch(
+      httr2::req_perform(.geo_supp_request(sprintf("http://127.0.0.1:%d/ready", port),
+                                            timeout_s = 2, max_tries = 1L)),
+      error = function(e) NULL)
+    if (!is.null(r)) { ready <- TRUE; break }
+    Sys.sleep(0.25)
+  }
+  if (!ready) skip("serveur httpuv enfant indisponible")
+
+  destdir <- tempfile("geo_supp_pc")
+  dir.create(destdir, recursive = TRUE)
+  on.exit(unlink(destdir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  index_url <- sprintf("http://127.0.0.1:%d/geo/series/GSE52nnn/GSE52778/supp/", port)
+  index_resp <- httr2::req_perform(
+    .geo_supp_request(index_url, timeout_s = 10, max_tries = 3L))
+  files <- .geo_parse_supp_index(httr2::resp_body_string(index_resp))
+  paths <- vapply(files, function(fn) {
+    dest <- file.path(destdir, fn)
+    httr2::req_perform(
+      .geo_supp_request(paste0(index_url, fn), timeout_s = 10, max_tries = 3L),
+      path = dest)
+    dest
+  }, character(1), USE.NAMES = FALSE)
+
+  # Deux 429 puis succes : le troisieme essai a traverse.
+  expect_length(paths, 1L)
+  expect_true(file.exists(paths))
+  expect_true(any(grepl("gene", readLines(paths))))
+})
+
+test_that("PC : voie supp heureuse et listing vide (mocks httr2, single-shot)", {
+  index_html <- paste0('<html><body>',
+                       '<a href="../">Parent Directory</a>',
+                       '<a href="GSE52778_counts.tsv.gz">counts</a>',
+                       '</body></html>')
+  calls <- new.env(parent = emptyenv())
+  calls$n <- 0L
+  mock <- function(req) {
+    calls$n <- calls$n + 1L
+    if (grepl("counts.tsv.gz$", req$url)) {
+      httr2::response(status = 200L, headers = list("Content-Type" = "text/plain"),
+                      body = charToRaw("gene	sample1
+abc	1
+"))
+    } else {
+      httr2::response(status = 200L, headers = list("Content-Type" = "text/html"),
+                      body = charToRaw(index_html))
+    }
+  }
+  destdir <- tempfile("geo_supp_pc_mock")
+  dir.create(destdir, recursive = TRUE)
+  on.exit(unlink(destdir, recursive = TRUE, force = TRUE), add = TRUE)
+  got <- httr2::with_mocked_responses(mock, {
+    .geo_fetch_supp("GSE52778", destdir, timeout_s = 5, max_tries = 3L)
+  })
+  # forme de retour getGEOSuppFiles-compatible (le mock n'ecrit PAS les
+  # fichiers — la materialisation disque + contenu sont couverts par le
+  # test 429 sur serveur enfant, voie curl reelle).
+  expect_length(rownames(got), 1L)
+  expect_match(basename(rownames(got)), "GSE52778_counts.tsv.gz", fixed = TRUE)
+  expect_s3_class(got, "data.frame")
+
+  # listing sans fichier plausible => erreur classee (mock single-shot : le
+  # chemin retry est couvert par le test 429 sur serveur enfant)
+  mock_empty <- function(req) {
+    httr2::response(status = 200L, headers = list("Content-Type" = "text/html"),
+                    body = charToRaw('<html><body><a href="../">Parent</a></body></html>'))
+  }
+  e <- tryCatch(
+    httr2::with_mocked_responses(mock_empty, {
+      .geo_fetch_supp("GSE52778", destdir, timeout_s = 5, max_tries = 3L)
+    }), error = function(e) e)
+  expect_s3_class(e, "geo_import_error")
+})

@@ -352,6 +352,96 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
 # Internal helpers (file-scoped, not exported)
 # =============================================================================
 
+# --- PC (2026-11-09) : la voie reseau des supplementaires passe par httr2 ----
+# GEOquery::getGEOSuppFiles (download.file/curl interne) ne survivait pas aux
+# 429/timeout NCBI : un rate-limit tuait l'import (tryCatch brut). Les trois
+# helpers ci-dessous remplacent UNIQUEMENT le telechargement des fichiers
+# supp (listing HTTPS du miroir FTP NCBI + telechargement avec retry
+# 429/5xx/408, timeout par requete et throttle courtois) ; getGEO (series
+# matrix) reste chez GEOquery. Zero nouvelle dependance : httr2 est deja au
+# lock. Structure de retour IDENTIQUE a getGEOSuppFiles (data.frame, paths en
+# rownames) : toute la logique aval (candidate_paths / candidate_exts) ne
+# change pas d'un octet.
+
+# Extensions plausibles pour un fichier supp tabulaire (meme liste que
+# .geo_fetch — constante unique, le parseur du listing la partage).
+.GEO_SUPP_EXTS <- c("tsv", "csv", "txt", "tab", "gz", "xlsx")
+
+#' URL du listing supp NCBI (PC)
+#'
+#' Layout miroir HTTPS : series/GSE<...>nnn/<GSE>/supp/ — les 3 derniers
+#' chiffres de l'accession sont remplaces par "nnn" (GSE164073 -> GSE164nnn,
+#' GSE52778 -> GSE527nnn, GSE1234 -> GSE1nnn).
+.geo_ncbi_url <- function(accession) {
+  acc <- toupper(trimws(accession))
+  if (!grepl("^GSE[0-9]{4,}$", acc)) {
+    stop(errorCondition(sprintf("Accession GEO invalide : %s", accession),
+                        class = "geo_import_error"))
+  }
+  sprintf("https://ftp.ncbi.nlm.nih.gov/geo/series/%snnn/%s/supp/",
+          substr(acc, 1L, nchar(acc) - 3L), acc)
+}
+
+#' Parse le listing HTML du miroir NCBI (PC)
+#'
+#' Extrait les hrefs plausibles (nom de fichier avec une extension connue,
+#' pas de repertoire). Un listing vide est une ERREUR : un supp NCBI sans
+#' fichier tabulaire est deja refuse par la logique aval, mais un listing
+#' 404/anti-abuse vide doit echouer ICI avec un message clair.
+.geo_parse_supp_index <- function(html_body, exts = .GEO_SUPP_EXTS) {
+  hrefs <- regmatches(html_body, gregexpr('href="[^"]+"', html_body))[[1]]
+  hrefs <- substr(hrefs, 7L, nchar(hrefs) - 1L)
+  hrefs <- hrefs[!hrefs %in% c("../", "/")]
+  hrefs <- hrefs[!grepl("/$", hrefs)]
+  hrefs[tolower(tools::file_ext(hrefs)) %in% exts]
+}
+
+#' Configuration reseau commune des requetes supp (PC) — pure, testee.
+#'
+#' retry 3 essais (httr2 retry le 408/429/5xx par defaut et respecte
+#' Retry-After), timeout par requete, throttle courtois (3 req/s NCBI).
+.geo_supp_request <- function(url, timeout_s = 300, max_tries = 3L) {
+  httr2::request(url) |>
+    httr2::req_retry(max_tries = max_tries) |>
+    httr2::req_timeout(timeout_s) |>
+    httr2::req_throttle(rate = 3) |>
+    httr2::req_user_agent("biomentat (R httr2)")
+}
+
+#' Telecharge les supplementaires d'un GSE via httr2 (PC)
+#'
+#' Remplacement contractuel de GEOquery::getGEOSuppFiles : meme forme de
+#' retour (data.frame, rownames = chemins locaux) — la logique aval de
+#' .geo_fetch ne change pas. Echec du listing ou d'un fichier = erreur
+#' condition geo_import_error, survit aux 429 (retry interne).
+.geo_fetch_supp <- function(accession, destdir, timeout_s = 300, max_tries = 3L) {
+  index_url <- .geo_ncbi_url(accession)
+  index_resp <- httr2::req_perform(
+    .geo_supp_request(index_url, timeout_s = timeout_s, max_tries = max_tries))
+  if (httr2::resp_status(index_resp) != 200L) {
+    # req_perform() fait deja echouer les 4xx/5xx (req_error par defaut) ;
+    # garde defensive explicite.
+    stop(errorCondition(sprintf("Listing supp %s inaccessible (HTTP %s).",
+                                index_url, httr2::resp_status(index_resp)),
+                        class = "geo_import_error"))
+  }
+  files <- .geo_parse_supp_index(httr2::resp_body_string(index_resp))
+  if (length(files) == 0L) {
+    stop(errorCondition(sprintf(
+      "Aucun fichier supplementaire plausible dans le listing de %s (accession inconnue ou reseau filtre ?).",
+      index_url), class = "geo_import_error"))
+  }
+  local_paths <- vapply(files, function(fn) {
+    dest <- file.path(destdir, fn)
+    httr2::req_perform(
+      .geo_supp_request(paste0(index_url, fn),
+                        timeout_s = timeout_s, max_tries = max_tries),
+      path = dest)
+    dest
+  }, character(1), USE.NAMES = FALSE)
+  stats::setNames(data.frame(row.names = local_paths), NULL)
+}
+
 #' Fetch GEO supplementary files + series_matrix via GEOquery
 .geo_fetch <- function(accession) {
   if (!requireNamespace("GEOquery", quietly = TRUE))
@@ -388,8 +478,11 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
     }
   }, error = function(e) NULL)
 
+  # PC (2026-11-09) : voie reseau httr2 (retry 429/5xx + timeout + throttle)
+  # — remplacement direct de GEOquery::getGEOSuppFiles, forme de retour
+  # identique (data.frame, paths en rownames).
   supp_files <- tryCatch(
-    GEOquery::getGEOSuppFiles(accession, makeDirectory = FALSE, baseDir = destdir),
+    .geo_fetch_supp(accession, destdir),
     error = function(e) stop(errorCondition(paste0("Impossible de télécharger les supplémentaires : ", conditionMessage(e)), class = "geo_import_error"))
   )
 

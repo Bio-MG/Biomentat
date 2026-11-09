@@ -1,6 +1,34 @@
 # =============================================================================
 # tools/pkg_skeleton/R/spatial_async.R — mirai daemon pool + reactivePoll progress tracking
 # =============================================================================
+# v7 (PC 2026-11-09 — app non-bloquante) : bornes de vie du pool + watchdog.
+#   1. Bornes de vie OPT-IN : mirai::daemons(n, walltime=, idletime=) — les
+#      valeurs viennent de TS_MIRAI_WALLTIME_MS / TS_MIRAI_IDLETIME_MS
+#      (variable d'env ou option, millisecondes). SANS ces reglages, l'appel
+#      reste EXACTEMENT mirai::daemons(n) : workers permanents, zero
+#      changement (comportement mesure : un daemon mort par idletime N'EST
+#      PAS relance — le dispatcher attend indefiniment, tache hangee jusqu'au
+#      .timeout ; sonde 2026-11-09). walltime est DANGEREUX pour les taches
+#      longues (RCTD 40 min, Label Transfer 45 min) : opt-in explicite
+#      seulement, jamais par defaut.
+#   2. Watchdog « pool epuise » : init_spatial_daemons() ne fait plus un
+#      early-return aveugle si le drapeau daemons_ready est leve. Si
+#      mirai::daemons_set() est TRUE mais status()$connections == 0 (tous
+#      les workers morts — idletime, crash, nettoyage OS), le pool est
+#      detruit puis respawn avec le preload complet et la verification
+#      post-init. status() est SURE et immediat apres mort par idle
+#      (mesure 2026-11-09 : connections = 0, retour synchrone) — c'est le
+#      seul pre-requis du watchdog, falsifie a l'inverse pour call_mirai().
+#   3. Cabelage du canal future DT (jalon PC, resolver dans datatable.R) :
+#      apres verification du pool, ts_dt_future_install() pose le defaut du
+#      formal `future` de DT::renderDT (inert tant que TS_DT_FUTURE est
+#      absent — defaut stock FALSE), et si TS_DT_FUTURE est actif, le plan
+#      future devient plan(mirai_cluster) (future.mirai) : le filtrage
+#      server-side des tables DT monte sur le pool EXISTANT (PIDs mesures :
+#      reutilisation, 0 worker nouveau). Sans pool init, le plan de boot F2
+#      (multisession, global.R:558) sert de repli — workers deja payes au
+#      boot, donc 0 worker nouveau aussi.
+# =============================================================================
 # v5 (vague 5 — Phase 6 stats preload): tools/pkg_skeleton/R/spatial_stats.R (B1 neighborhood
 # enrichment, B3 composition diff, B4 Getis-Ord hotspots, B6 Ripley's K) is now
 # part of the default `source_files` preloaded into every daemon, and
@@ -232,6 +260,72 @@ APP_DAEMON_SOURCE_FILES <- c(
 #'   APP_DAEMON_SOURCE_FILES — the APPLICATION-wide preload (spatial + SC DA),
 #'   because the pool is started once and its preload is frozen at that moment
 #'   (see the v6 changelog above).
+#' Resolveur des bornes de vie opt-in du pool (v7, PC)
+#'
+#' Lit TS_MIRAI_IDLETIME_MS / TS_MIRAI_WALLTIME_MS (variable d'environnement
+#' d'abord, puis option du meme nom en minuscules), en millisecondes.
+#' SANS reglage => liste vide => l'appel de daemons() reste exactement
+#' `mirai::daemons(n)` (workers permanents — comportement historique).
+#'
+#' @return Liste nommee (eventuellement vide) d'arguments valides pour
+#'   mirai::daemons(...) — jamais NA, jamais <= 0.
+ts_mirai_pool_lifetime_args <- function() {
+  .resolve_ms <- function(name) {
+    v <- Sys.getenv(name, unset = "")
+    if (!nzchar(v)) {
+      # TS_MIRAI_IDLETIME_MS -> option "ts.mirai.idletime" (MESURE : tolower
+      # ne convertit PAS les underscores en points — mapping explicite).
+      opt <- gsub("_", ".", sub("_ms$", "", tolower(name)))
+      v <- getOption(opt, NULL)
+    }
+    x <- suppressWarnings(as.numeric(v[1]))
+    if (length(x) == 1L && !is.na(x) && x > 0) x else NULL
+  }
+  args <- list()
+  idle <- .resolve_ms("TS_MIRAI_IDLETIME_MS")
+  wall <- .resolve_ms("TS_MIRAI_WALLTIME_MS")
+  if (!is.null(idle)) args$idletime <- idle
+  if (!is.null(wall)) args$walltime <- wall
+  args
+}
+
+#' Le pool applicatif est-il EPUISE (drapeau leve mais 0 worker vivant) ?
+#'
+#' Faux dans tous les cas ambigus (mirai absent, status() en erreur, pool
+#' jamais demarre) : le watchdog ne doit jamais se declencher par accident.
+#' Mesure 2026-11-09 : apres mort par idletime, status() reste synchrone et
+#' renvoie connections = 0 — c'est le seul signal fiable (un mirai() emis
+#' dans cet etat attend indefiniment un worker qui ne revient pas).
+#'
+#' @return Logique scalaire.
+.ts_mirai_pool_exhausted <- function() {
+  tryCatch({
+    if (!requireNamespace("mirai", quietly = TRUE)) return(FALSE)
+    if (!isTRUE(mirai::daemons_set())) return(FALSE)
+    identical(as.integer(mirai::status()$connections), 0L)
+  }, error = function(e) FALSE)
+}
+
+#' Initialize the mirai daemon pool used by all spatial async tasks
+#'
+#' Idempotent: safe to call multiple times — daemons are only spawned once
+#' per R process. Pre-loads Seurat + BPCells and sources this project's
+#' helper files (ABSOLUTE paths, resolved here in the main process) on every
+#' daemon, then runs a post-init verification pass and records the result.
+#'
+#' v7 (PC) : l'idempotence est devenue un WATCHDOG — si le drapeau ready est
+#' leve mais qu'aucun worker ne repond (pool epuise, ex. bornes de vie
+#' opt-in), le pool est detruit puis respawn avec preload et verification
+#' completes. Les bornes de vie walltime/idletime sont OPT-IN via
+#' ts_mirai_pool_lifetime_args() (defaut : workers permanents, zero
+#' changement).
+#'
+#' @param n_daemons Integer, number of persistent background R processes.
+#' @param source_files Character vector of project file paths (relative to
+#'   the app's working directory) to source() inside every daemon. Defaults to
+#'   APP_DAEMON_SOURCE_FILES — the APPLICATION-wide preload (spatial + SC DA),
+#'   because the pool is started once and its preload is frozen at that moment
+#'   (see the v6 changelog above).
 #' @return invisible(TRUE) on success, invisible(FALSE) if mirai is missing.
 init_spatial_daemons <- function(n_daemons = ts_mirai_n_daemons(),
                                  source_files = APP_DAEMON_SOURCE_FILES) {
@@ -242,7 +336,16 @@ init_spatial_daemons <- function(n_daemons = ts_mirai_n_daemons(),
     return(invisible(FALSE))
   }
 
-  if (isTRUE(.spatial_async_env$daemons_ready)) return(invisible(TRUE))
+  if (isTRUE(.spatial_async_env$daemons_ready)) {
+    if (!.ts_mirai_pool_exhausted()) return(invisible(TRUE))
+    warning(sprintf(
+      paste0("[spatial] Pool mirai EPUISE (drapeau ready leve mais 0 worker vivant — ",
+             "ex. mort par idletime, mesurée : le dispatcher ne relance PAS les daemons ",
+             "locaux). Respawn automatique du pool (%d workers attendus)."),
+      .spatial_async_env$n_daemons %||% n_daemons),
+      call. = FALSE)
+    stop_spatial_daemons()
+  }
 
   # Resolve ABSOLUTE paths ONCE, here (main process) -- never re-derived
   # relative to whatever a given daemon's own getwd() is. Le repertoire de base
@@ -266,7 +369,15 @@ init_spatial_daemons <- function(n_daemons = ts_mirai_n_daemons(),
       call. = FALSE)
   }
 
-  mirai::daemons(n_daemons)
+  # v7 (PC) : bornes de vie OPT-IN (walltime/idletime en ms). Sans reglage
+  # TS_MIRAI_*_MS, la liste est vide et l'appel reste mirai::daemons(n) —
+  # comportement historique, workers permanents.
+  .lifetime_args <- ts_mirai_pool_lifetime_args()
+  if (length(.lifetime_args) > 0L) {
+    do.call(mirai::daemons, c(list(n = n_daemons), .lifetime_args))
+  } else {
+    mirai::daemons(n_daemons)
+  }
 
   tryCatch({
     mirai::everywhere({
@@ -337,6 +448,27 @@ init_spatial_daemons <- function(n_daemons = ts_mirai_n_daemons(),
     warning(sprintf("[spatial] Daemons demarres mais verification post-init EN ECHEC (%s). ",
                     paste(verify$missing, collapse = "; ")),
             "Consultez spatial_daemon_diagnostics_text() ou le badge 'Session' de l'onglet Spatial.")
+  }
+
+  # --- v7 (PC) : cable le canal future du render DT (datatable.R) ---------
+  # 1) ts_dt_future_install() pose le defaut du formal `future` de
+  #    DT::renderDT sur le resolveur : INERT tant que TS_DT_FUTURE est
+  #    absent (l'expression evaluee vaut le defaut stock FALSE).
+  # 2) Si le canal est ACTIF (TS_DT_FUTURE), le plan future devient
+  #    plan(mirai_cluster) : le filtrage server-side des tables DT monte
+  #    sur CE pool (PIDs mesures : reutilisation, 0 worker nouveau).
+  #    Sans pool init, le plan de boot F2 (multisession, global.R:558)
+  #    sert de repli — workers deja payes au boot.
+  tryCatch(ts_dt_future_install(), error = function(e) NULL)
+  if (exists("ts_dt_future", mode = "function") && isTRUE(ts_dt_future())) {
+    tryCatch({
+      future::plan(future.mirai::mirai_cluster)
+      message("[spatial] Canal future DT actif : backend mirai_cluster sur le pool existant (0 worker nouveau).")
+    }, error = function(e) {
+      warning("[spatial] TS_DT_FUTURE actif mais plan(mirai_cluster) impossible : ",
+              conditionMessage(e), " — le plan courant (boot F2 multisession) reste en place.",
+              call. = FALSE)
+    })
   }
 
   invisible(TRUE)
