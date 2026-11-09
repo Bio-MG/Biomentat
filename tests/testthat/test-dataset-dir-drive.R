@@ -256,6 +256,13 @@ test_that("T7-5 sans env : le répertoire défaut <root>/data_sc/datasets est da
 
   expected_root <- normalizePath(file.path(ts_project_root(), "data_sc", "datasets"),
                                  winslash = "/", mustWork = FALSE)
+  # Hermétique (2026-11-09) : le dépôt peut porter un fixture de non-régression
+  # DANS le répertoire défaut (ex. bulk_fixture_f2measure, drop P0.5 — non
+  # suivi par git). On pré-mesure l'état physique AVANT l'appel au lieu de
+  # supposer un environnement vierge ; le contrat « le listing ne crée JAMAIS
+  # le répertoire » reste falsifié dès que le répertoire est absent.
+  pre_exists <- dir.exists(expected_root)
+  pre_dirs   <- if (pre_exists) length(list.dirs(expected_root, recursive = FALSE)) else 0L
   resp <- e$.ts_dispatch(list(jsonrpc = "2.0", id = 10L, method = "tools/call",
                               params = list(name = "transcripto_drive_datasets",
                                             arguments = list())))
@@ -263,7 +270,13 @@ test_that("T7-5 sans env : le répertoire défaut <root>/data_sc/datasets est da
                info = "le répertoire défaut <root>/data_sc/datasets est DANS les racines (ts_drive_import_roots inclut la racine projet) — condition de l'ask mesurée, aucun élargissement")
   sc <- resp$result$structuredContent
   expect_identical(sc$datasets_dir, expected_root)
-  expect_identical(sc$count, 0L)
-  expect_false(dir.exists(expected_root),
-               info = "le listing ne crée JAMAIS le répertoire défaut (P0 AC2)")
+  if (!pre_exists) {
+    expect_identical(sc$count, 0L)
+    expect_false(dir.exists(expected_root),
+                 info = "le listing ne crée JAMAIS le répertoire défaut (P0 AC2)")
+  } else {
+    expect_identical(sc$count, pre_dirs,
+                     info = "le listing reflète le contenu physique, sans le modifier")
+    expect_true(dir.exists(expected_root))
+  }
 })
