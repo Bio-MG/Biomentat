@@ -1189,19 +1189,33 @@ resolve_sketch_preset <- function(preset, n_total_cells, custom_ncells = NULL) {
 #' @param log_fn Optional function(character) called with a message if a
 #'   fallback to Louvain occurred (caller decides where it goes: log panel,
 #'   showNotification, ...).
-#' @return Seurat object with $seurat_clusters set.
-robust_find_clusters <- function(obj, resolution, algo = 1L, log_fn = NULL) {
+#' @param graph.name Optional graph to cluster (Seurat::FindClusters
+#'   `graph.name=`) — used by the native-integration path to cluster the
+#'   UNintegrated neighbours stored under dedicated graphs without clobbering
+#'   the main graph. NULL (défaut) = comportement historique inchangé.
+#' @param cluster.name Optional meta.data column name for the clustering
+#'   (Seurat::FindClusters `cluster.name=`). NULL (défaut) = comportement
+#'   historique (seurat_clusters) inchangé.
+#' @return Seurat object with $seurat_clusters set (or $cluster.name when
+#'   given).
+robust_find_clusters <- function(obj, resolution, algo = 1L, log_fn = NULL,
+                                 graph.name = NULL, cluster.name = NULL) {
   algo <- suppressWarnings(as.integer(algo %||% 1L))
   if (is.na(algo)) algo <- 1L
+  extra <- list()
+  if (!is.null(graph.name))    extra$graph.name    <- graph.name
+  if (!is.null(cluster.name))  extra$cluster.name  <- cluster.name
   tryCatch(
-    Seurat::FindClusters(obj, resolution = resolution, algorithm = algo, verbose = FALSE),
+    do.call(Seurat::FindClusters, c(list(obj, resolution = resolution,
+                                         algorithm = algo, verbose = FALSE), extra)),
     error = function(e) {
       if (algo != 1L) {
         algo_name <- c("2"="Louvain multilevel","3"="SLM","4"="Leiden")[as.character(algo)]
         if (!is.null(log_fn))
           log_fn(sprintf("%s indisponible/a \u00e9chou\u00e9 (%s) \u2014 repli sur Louvain standard.",
                          algo_name %||% "Algorithme", conditionMessage(e)))
-        Seurat::FindClusters(obj, resolution = resolution, algorithm = 1L, verbose = FALSE)
+        do.call(Seurat::FindClusters, c(list(obj, resolution = resolution,
+                                             algorithm = 1L, verbose = FALSE), extra))
       } else stop(e)
     }
   )

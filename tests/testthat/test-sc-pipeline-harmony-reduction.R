@@ -30,19 +30,27 @@ test_that("FindNeighbors du chemin principal suit clust_red / clust_dims", {
   calls <- ts_ast_find_all(p, function(x) ts_ast_is_call_to(x, "FindNeighbors"))
   # Sonde DISCRIMINANTE : TROIS sites depuis P1-6a (b0a1686, 2026-11-08) —
   # sketch + chemin principal auto + cœur du pipeline MANUEL
-  # (run_sc_manual_pipeline_core, corps transposé verbatim : sc_pipeline.R:966).
-  # L'INVARIANT scientifique (le clustering suit l'espace intégré) doit tenir
-  # sur les DEUX chemins non-sketch. Si le compte change encore, le test doit
-  # le dire plutôt que de tomber juste par hasard.
-  expect_length(calls, 3L)
+  # (run_sc_manual_pipeline_core, corps transposé verbatim) + site UNINTEGRATED
+  # ajouté par SC (fiche Seurat v5 §3-SC, IntegrateLayers natif, 2026-11-09) :
+  # voisins PCA sous graphes dédiés `unintegrated_*` — le SEUL site autorisé à
+  # porter un reduction= littéral, sa fonction est précisément de rester sur la
+  # PCA brute pour la garde de comparabilité. L'INVARIANT scientifique (le
+  # clustering suit l'espace intégré) doit tenir sur les DEUX chemins non-sketch
+  # principaux. Si le compte change encore, le test doit le dire plutôt que de
+  # tomber juste par hasard.
+  expect_length(calls, 4L)
 
   deps   <- vapply(calls, ts_ast_deparse, character(1))
   sketch <- grepl("sketch_params", deps, fixed = TRUE)
   expect_equal(sum(sketch), 1L)
+  unintegrated <- grepl("unintegrated", deps, fixed = TRUE)
+  expect_equal(sum(unintegrated), 1L,
+               info = "le site unintegrated est unique (garde de comparabilité SC)")
 
   # Le chemin SKETCH ne peut pas porter d'intégration (elle force use_sketch
-  # à FALSE en amont) : il reste sur la PCA, c'est voulu.
-  mains <- calls[!sketch]
+  # à FALSE en amont) : il reste sur la PCA, c'est voulu. Le site UNINTEGRATED
+  # est exclu des « mains » : il porte reduction = "pca" VOLONTAIREMENT.
+  mains <- calls[!sketch & !unintegrated]
   expect_length(mains, 2L)
 
   .arg <- function(call, name) {

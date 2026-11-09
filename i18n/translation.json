@@ -12156,6 +12156,18 @@
     {
       "fr": "🧹 Tout effacer les notifications",
       "en": "🧹 Clear all notifications"
+    },
+    {
+      "fr": "PCA réciproque (v5 natif IntegrateLayers)",
+      "en": "Reciprocal PCA (v5 native IntegrateLayers)"
+    },
+    {
+      "fr": "CCA (v5 natif IntegrateLayers)",
+      "en": "CCA (v5 native IntegrateLayers)"
+    },
+    {
+      "fr": "Harmony corrige le batch AVANT le clustering (clusters, marqueurs et DA dérivent de l'espace intégré). Recommandé dès 2 échantillons ; ignoré si < 2 batchs. Les voies natives v5 (PCA réciproque, CCA) splittent les couches par batch puis IntegrateLayers ; les clusters non intégrés restent conservés sous 'unintegrated_clusters'.",
+      "en": "Harmony corrects batch BEFORE clustering (clusters, markers and DA derive from the integrated space). Recommended from 2 samples on; ignored with < 2 batches. The v5 native paths (reciprocal PCA, CCA) split layers by batch then run IntegrateLayers; unintegrated clusters are kept under 'unintegrated_clusters'."
     }
   ]
 }

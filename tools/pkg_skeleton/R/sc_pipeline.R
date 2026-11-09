@@ -376,6 +376,29 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
 
   } else {
     # ── Full Dataset Branch ──────────────────────────────────────────────────
+    # ── Intégration native v5 (fiche §3-SC, 2026-11-09) ──────────────────────
+    # Le split doit PRÉCÉDER la normalisation : la voie native IntegrateLayers
+    # (vignette seurat5_integration) normalise/PCA par couche puis intègre les
+    # réductions. Seuls rpca/cca sont branchés au jalon 1 : Harmony conserve son
+    # bloc historique ci-dessous (comportement actuel), et `mnn` est MORT SUR
+    # MESURE — FastMNNIntegration absent de Seurat 5.6.0 (getNamespaceExports,
+    # mesuré) ; la voie batchelor serait un lock + une décision séparés.
+    native_int <- NULL
+    if (identical(integration, "mnn")) {
+      log_fn("Intégration 'mnn' indisponible : FastMNNIntegration absent de Seurat 5.6.0 (mesuré getNamespaceExports) — voie batchelor = lock + décision séparés. PCA brute.")
+    } else if (identical(integration, "rpca") || identical(integration, "cca")) {
+      if (identical(norm_method, "sct")) {
+        log_fn("Intégration native ignorée : compat SCT documentée mais non activée au jalon 1 (fiche §3-SC) — PCA brute.")
+      } else if (!batch_var %in% colnames(obj@meta.data) ||
+                 length(unique(obj@meta.data[[batch_var]])) < 2) {
+        log_fn(sprintf("Intégration native (%s) ignorée : variable de batch '%s' absente ou < 2 niveaux — PCA brute.", integration, batch_var))
+      } else {
+        native_int <- integration
+        obj[[assay]] <- split(obj[[assay]], f = factor(obj@meta.data[[batch_var]]))  # base generic — dispatch méthode SeuratObject
+        log_fn(sprintf("Split par batch '%s' → couches %s — normalisation/PCA par couche.",
+                       batch_var, paste(SeuratObject::Layers(obj[[assay]]), collapse = ", ")))
+      }
+    }
     log_fn("Normalisation...")
     if (identical(norm_method, "sct")) {
       obj <- Seurat::SCTransform(obj, verbose = FALSE, variable.features.n = nfeatures, vst.flavor = "v2")
@@ -393,7 +416,7 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
     step_times$pca_s <- as.numeric(difftime(Sys.time(), t_pca, units = "secs"))
     log_fn(sprintf("✓ PCA (%d dims)", pca_dim))
 
-    # Harmony Integration
+    # Harmony Integration (comportement actuel conservé — fiche §3-SC)
     if (identical(integration, "harmony")) {
       t_harm <- Sys.time()
       if (requireNamespace("harmony", quietly = TRUE) &&
@@ -411,11 +434,45 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
         log_fn("Harmony non appliquée : conditions non remplies.")
       }
       step_times$harmony_s <- as.numeric(difftime(Sys.time(), t_harm, units = "secs"))
+    } else if (!is.null(native_int)) {
+      # Voie native IntegrateLayers (ordre MESURÉ sur fixture le 2026-11-09 :
+      # le clustering NON intégré d'abord, l'intégrÉ en DERNIER — FindClusters
+      # écrase seurat_clusters au dernier appel, et l'aval (marqueurs, DA,
+      # annotations) lit seurat_clusters = clusters intégrés).
+      t_int <- Sys.time()
+      method_fn <- switch(native_int, rpca = Seurat::RPCAIntegration, cca = Seurat::CCAIntegration)
+      obj <- withr::with_seed(seed, Seurat::IntegrateLayers(
+        object = obj, method = method_fn, orig.reduction = "pca",
+        new.reduction = sprintf("integrated.%s", native_int), verbose = FALSE))
+      clust_red <- sprintf("integrated.%s", native_int)
+      clust_dims <- min(pca_dim, ncol(Seurat::Embeddings(obj, clust_red)))
+      # JoinLayers (fiche : « en fin ») — les couches redeviennent uniques pour
+      # les marqueurs/annotations ; les réductions intégrées ne dépendent pas
+      # des couches de comptes.
+      obj[[assay]] <- SeuratObject::JoinLayers(obj[[assay]])
+      mixing_before <- tryCatch(sc_batch_mixing_score(obj, reduction = "pca", batch_col = batch_var)$score, error = function(e) NULL)
+      mixing_after  <- tryCatch(sc_batch_mixing_score(obj, reduction = clust_red, batch_col = batch_var)$score, error = function(e) NULL)
+      log_fn(sprintf("✓ Intégration native %s appliquée (%d dims)", native_int, clust_dims))
+      # Garde de comparabilité (fiche §3-SC) : clusters NON intégrés conservés
+      # côte à côte — graphes DÉDIÉS (jamais de clobber des graphes principaux),
+      # et clustering intégré en DERNIER ci-dessous (seurat_clusters).
+      obj <- Seurat::FindNeighbors(obj, reduction = "pca", dims = 1:min(pca_dim, ncol(Seurat::Embeddings(obj, "pca"))),
+                                   graph.name = c("unintegrated_nn", "unintegrated_snn"), verbose = FALSE)
+      obj <- robust_find_clusters(obj, resolution = resolution, algo = cluster_algo, log_fn = log_fn,
+                                  graph.name = "unintegrated_snn", cluster.name = "unintegrated_clusters")
+      log_fn("Clusters non intégrés conservés sous 'unintegrated_clusters' (comparabilité).")
+      step_times$integration_native_s <- as.numeric(difftime(Sys.time(), t_int, units = "secs"))
     }
 
     t_clust <- Sys.time()
     obj <- Seurat::FindNeighbors(obj, dims = 1:clust_dims, reduction = clust_red, verbose = FALSE)
     obj <- robust_find_clusters(obj, resolution = resolution, algo = cluster_algo, log_fn = log_fn)
+    if (!is.null(native_int)) {
+      # Miroir additif : les clusters intégrés portent aussi leur nom de
+      # méthode (seurat_clusters reste la colonne lue par tout l'aval).
+      obj[[paste0(native_int, "_clusters")]] <- obj$seurat_clusters
+      log_fn(sprintf("Clusters intégrés conservés sous '%s_clusters'.", native_int))
+    }
     step_times$clustering_s <- as.numeric(difftime(Sys.time(), t_clust, units = "secs"))
     log_fn(sprintf("✓ %d clusters (res %.1f)", length(unique(obj$seurat_clusters)), resolution))
 
