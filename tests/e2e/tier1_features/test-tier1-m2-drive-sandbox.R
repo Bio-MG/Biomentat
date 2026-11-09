@@ -453,7 +453,12 @@ test_that("F12-3: transcripto_drive_state returns passive state without arming s
   expect_true(nxt > 1L)
   body <- substr(src, start, start + nxt - 2L)
   expect_match(body, "ts_drive_read_state(", fixed = TRUE)
-  expect_false(grepl("arm.json", body, fixed = TRUE))
+  # Re-basage (2026-11-09) : le corps porte désormais un commentaire
+  # d'auto-documentation (« ZERO writes: no state.json, no arm.json… ») — le
+  # garde vise le CODE, pas sa propre légende : les commentaires sont retirés
+  # avant la sonde (la preuve T7-3 d'écriture-zéro reste l'exécution).
+  body_code <- gsub("#[^\n]*", "", body)
+  expect_false(grepl("arm.json", body_code, fixed = TRUE))
 })
 
 test_that("F12-4: transcripto_drive_state accurately serializes error buffer in response", {
