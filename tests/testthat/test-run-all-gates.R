@@ -150,15 +150,17 @@ test_that("les gardes historiques sont de kind `exit`", {
 })
 
 test_that("les chemins du registre sont ceux des outils reellement presents", {
-  # Tripwire d'INVENTAIRE. `docs_hash_manifest.R` est perdu au 2026-10-24
-  # (HANDOFF §OUTILS PERDUS) : c'est le seul manquant attendu. La liste est
-  # volontairement EXACTE — reconstruire l'outil doit faire ROUGIR ce test pour
+  # Tripwire d'INVENTAIRE. Re-basé le 2026-11-09 (B4 DOC_TIDY `a6f7b33`) :
+  # `docs_hash_manifest.R` — perdu au 2026-10-24 (HANDOFF §OUTILS PERDUS),
+  # seul manquant attendu par la baseline d'origine — est RECONSTRUIT, donc
+  # AUCUN outil du registre ne doit plus être absent. La liste est
+  # volontairement EXACTE — perdre un outil doit faire ROUGIR ce test pour
   # forcer la mise a jour, au lieu de passer inapercu.
   root <- ts_project_root()
   reg <- ts_gates_registry()
   absent <- ts_gates_ids()[!file.exists(file.path(root, vapply(
     reg, function(g) g$script, character(1))))]
-  expect_identical(absent, "docs_hash",
+  expect_identical(absent, character(0),
                    info = paste("absents mesures :", paste(absent, collapse = ", ")))
 })
 
