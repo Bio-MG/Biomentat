@@ -4,9 +4,10 @@ mod_bulk_pathways_ui <- function(id) {
   ns <- NS(id)
   tagList(
     radioButtons(ns("enrich_mode"), i18n$t("M\u00e9thode d'enrichissement"),
-                choices = stats::setNames(c("ora","gsea"),
+                choices = stats::setNames(c("ora","gsea","dir"),
                   c(.tr_plain("ORA \u2014 sur g\u00e8nes significatifs (classique)"),
-                    .tr_plain("GSEA \u2014 sur tous les g\u00e8nes class\u00e9s (sans seuil)"))),
+                    .tr_plain("GSEA \u2014 sur tous les g\u00e8nes class\u00e9s (sans seuil)"),
+                    .tr_plain("Directionnelle \u2014 goana/kegga (table DE compl\u00e8te, Up/Down par voie)"))),
                 selected = "ora"),
     div(class = "small text-muted mb-2",
         i18n$t("GSEA n'a pas besoin de seuil de significativit\u00e9 arbitraire \u2014 elle classe tous les g\u00e8nes par Log2FC et teste l'enrichissement cumul\u00e9. Plus robuste statistiquement, recommand\u00e9e si peu de g\u00e8nes passent vos seuils.")),
@@ -21,6 +22,15 @@ mod_bulk_pathways_ui <- function(id) {
         condition = "input.pathway_source == 'manual'", ns = ns,
         selectizeInput(ns("pathway_genes"), i18n$t("G\u00e8nes"), choices = NULL, multiple = TRUE)
       )
+    ),
+
+    # PB (GEMS D5) — ORA directionnelle : seuil FDR de la sélection DE (BH
+    # interne de goana/kegga sur la p-valeur BRUTE ; le padj du module est le
+    # même BH — la cohérence est mesurée au test du moteur).
+    conditionalPanel(
+      condition = "input.enrich_mode == 'dir'", ns = ns,
+      numericInput(ns("dir_fdr"), i18n$t("Seuil FDR (s\u00e9lection DE directionnelle)"),
+                   value = 0.05, min = 0.001, max = 0.5, step = 0.01)
     ),
 
     fluidRow(
@@ -109,6 +119,17 @@ mod_bulk_pathways_output_ui <- function(id) {
       nav_panel(i18n$t("Réseau"),         uiOutput(ns("network_ui"))),
       nav_panel(i18n$t("Table"),          DTOutput(ns("pathway_table"))),
       nav_panel(i18n$t("Courbe GSEA"),    uiOutput(ns("gsea_curve_ui"))),
+      # PB (GEMS D5) — ORA directionnelle : table goana/kegga + barcodeplot
+      nav_panel(i18n$t("Directionnelle"), value = "tab_dir",
+        fluidRow(
+          column(6, DTOutput(ns("dir_table"))),
+          column(6,
+            selectInput(ns("dir_term"), i18n$t("Voie (barcodeplot)"), choices = NULL),
+            plotOutput(ns("dir_barcode"), height = "480px"),
+            div(class = "small text-muted",
+                i18n$t("Rang log2FC complet de la table DE ; la voie s\u00e9lectionn\u00e9e est surlign\u00e9e (limma::barcodeplot)."))
+          )
+        )),
       # Bulk V2 M2 — scores par échantillon (voies x échantillons)
       nav_panel(i18n$t("Scores par \u00e9chantillon"), value = "tab_scores",
         uiOutput(ns("scores_dropped_ui")),
@@ -364,8 +385,9 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
     # ── i18n push on language switch ─────────────────────────────────────
     observeEvent(global_data$language, {
       updateRadioButtons(session, "enrich_mode", label = .tr("M\u00e9thode d'enrichissement"),
-        choices = stats::setNames(c("ora","gsea"),
-          c(.tr("ORA \u2014 sur g\u00e8nes significatifs (classique)"), .tr("GSEA \u2014 sur tous les g\u00e8nes class\u00e9s (sans seuil)"))))
+        choices = stats::setNames(c("ora","gsea","dir"),
+          c(.tr("ORA \u2014 sur g\u00e8nes significatifs (classique)"), .tr("GSEA \u2014 sur tous les g\u00e8nes class\u00e9s (sans seuil)"),
+            .tr("Directionnelle \u2014 goana/kegga (table DE compl\u00e8te, Up/Down par voie)"))))
       updateSelectInput(session, "pathway_source", label = .tr("Source de g\u00e8nes"),
         choices = stats::setNames(c("up","down","all_sig","manual"),
           c(.tr("G\u00e8nes Up (significatifs)"), .tr("G\u00e8nes Down (significatifs)"),
@@ -727,6 +749,50 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         return()
       }
 
+      # ── PB (GEMS D5) — ORA DIRECTIONNELLE (goana/kegga sur la table DE) ────
+      # Même protocole drive que les deux modes existants (not_ready / empty /
+      # done / error) : les gardes moteur classés (pathway_error) sortent par
+      # la branche error avec leur raison honnête.
+      if (input$enrich_mode == "dir") {
+        res_de <- .active_de_results()
+        if (is.null(res_de)) {
+          showNotification(.tr("\u26a0\ufe0f Lancez d'abord l'\u00e9tape 2 (Analyse Diff\u00e9rentielle)."), type = "warning")
+          outcome$reason <- "no DE result yet: run the DE step first"
+          drive_record("run_pathway", "not_ready")
+          return()
+        }
+        db_dir <- switch(input$pathway_db %||% "GOBP", GOBP = "GO", KEGG = "KEGG", "GO")
+        p$set(message = .tr("ORA directionnelle (goana/kegga) en cours..."), value = 0.3)
+        tryCatch({
+          res <- run_pathway_direction(res_de,
+                                       universe_ids = rownames(shiny::isolate(shared_rv$filtered_counts)),
+                                       db = db_dir,
+                                       organism = input$pathway_org,
+                                       fdr_cutoff = input$dir_fdr %||% 0.05)
+          tbl <- rbind(res$go, res$kegg)
+          if (is.null(tbl) || nrow(tbl) == 0L) {
+            showNotification(.tr("\u2139\ufe0f Aucune voie testable (goana/kegga)."), type = "warning")
+            shared_rv$pathway_dir_results <- NULL
+            outcome$reason <- "the directional ORA ran and found no pathway"
+            drive_record("run_pathway", "empty", 0L)
+            return()
+          }
+          shared_rv$pathway_dir_results <- res
+          showNotification(.t_fmt(.tr("\u2705 ORA directionnelle : {n} voies (goana/kegga)"), n = nrow(tbl)),
+                           type = "message")
+          shared_rv$active_tab <- "tab_dir"
+          drive_record("run_pathway", "done", nrow(tbl))
+          outcome$v <- "ok"
+        }, error = function(e) {
+          showNotification(.t_fmt(.tr("\u274c Erreur directionnelle: {msg}"), msg = as.character(e$message)[1]),
+                           type = "error", duration = 8)
+          shared_rv$pathway_dir_results <- NULL
+          drive_record("run_pathway", "error", error = as.character(e$message)[1])
+          outcome$v <- "failed"
+        })
+        return()
+      }
+
       genes_to_test <- NULL
       if (input$pathway_source %in% c("up","down","all_sig")) {
         res <- .active_de_results()
@@ -834,6 +900,94 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       global_data$language                     # i18n trigger
       req(shared_rv$pathway_results)
       build_pathway_dt(shared_rv$pathway_results, tr = .tr_fn(global_data))
+    })
+
+    # ── PB (GEMS D5) — résultats ORA directionnelle (goana/kegga) ────────────
+    # Tables limma natives (colonne db estampillée par le moteur) empilées en
+    # un seul tableau affichage ; ID = rownames (GO:… / hsa…).
+    .stack_dir_tables <- function(res) {
+      parts <- list()
+      if (!is.null(res$go)) {
+        t <- res$go
+        t$ID <- rownames(t)
+        parts[[length(parts) + 1L]] <-
+          t[, c("ID", "Term", "Ont", "N", "Up", "Down",
+                "P.Up", "FDR.Up", "P.Down", "FDR.Down", "db"), drop = FALSE]
+      }
+      if (!is.null(res$kegg)) {
+        t <- res$kegg
+        t$ID <- rownames(t)
+        names(t)[names(t) == "Pathway"] <- "Term"
+        t$Ont <- "KEGG"
+        parts[[length(parts) + 1L]] <-
+          t[, c("ID", "Term", "Ont", "N", "Up", "Down",
+                "P.Up", "FDR.Up", "P.Down", "FDR.Down", "db"), drop = FALSE]
+      }
+      if (!length(parts)) return(NULL)
+      do.call(rbind, parts)
+    }
+
+    output$dir_table <- renderDT({
+      global_data$language                     # i18n trigger
+      req(shared_rv$pathway_dir_results)
+      t <- .stack_dir_tables(shared_rv$pathway_dir_results)
+      req(t)
+      tr <- .tr_fn(global_data)
+      colnames(t) <- c("ID", tr("Voie"), tr("Ontologie"), tr("Nb Gènes"),
+                       tr("Up"), tr("Down"), tr("P Up"), tr("FDR Up"),
+                       tr("P Down"), tr("FDR Down"), "db")[seq_along(t)]
+      ts_datatable(t, page_length = 15L, filename_base = "pathways_dir")
+    })
+
+    # Choix du barcodeplot : un identifiant de voie par entrée (ID conservé
+    # séparément du libellé pour le mapping org db).
+    observe({
+      req(shared_rv$pathway_dir_results)
+      t <- .stack_dir_tables(shared_rv$pathway_dir_results)
+      if (is.null(t) || !nrow(t)) return()
+      labels <- sprintf("%s — %s (%s)", t$ID, t$Term, t$db)
+      updateSelectInput(session, "dir_term", choices = stats::setNames(t$ID, labels))
+    })
+
+    output$dir_barcode <- renderPlot({
+      global_data$language
+      res <- shared_rv$pathway_dir_results
+      req(res, input$dir_term)
+      tryCatch({
+        orgpkg <- switch(input$pathway_org %||% "human",
+                         human = "org.Hs.eg.db", mouse = "org.Mm.eg.db")
+        if (!requireNamespace(orgpkg, quietly = TRUE)) {
+          stop(errorCondition(paste0("Package '", orgpkg, "' requis."),
+                              class = "pathway_error"))
+        }
+        res_de <- .active_de_results()
+        req(res_de)
+        # Rang complet : logFC de TOUTE la table DE, nommé par Entrez
+        # (déduplication = même règle que le moteur : min pvalue par Entrez).
+        orgdb_obj <- get(orgpkg, envir = asNamespace(orgpkg))
+        m <- suppressWarnings(AnnotationDbi::select(
+          orgdb_obj, keys = unique(as.character(res_de$gene)),
+          keytype = "SYMBOL", column = "ENTREZID"))
+        m <- m[!is.na(m$ENTREZID), ]
+        p_of <- res_de$pvalue[match(m$SYMBOL, res_de$gene)]
+        m <- m[order(m$ENTREZID, p_of), ]
+        m <- m[!duplicated(m$ENTREZID), ]
+        stats <- stats::setNames(res_de$log2FoldChange[match(m$SYMBOL, res_de$gene)],
+                                 m$ENTREZID)
+        # Gènes de la voie : GO par GOID, KEGG par PATH (préfixe hsa retiré).
+        term_id <- input$dir_term
+        keytype <- if (grepl("^GO:", term_id)) "GO" else "PATH"
+        if (keytype == "PATH") term_id <- sub("^[a-z]{3}", "", term_id)
+        term_map <- suppressWarnings(AnnotationDbi::select(
+          orgdb_obj, keys = term_id, keytype = keytype, column = "ENTREZID"))
+        term_genes <- unique(term_map$ENTREZID[!is.na(term_map$ENTREZID)])
+        plot_pathway_barcode(stats, term_genes,
+                             xlab = "log2FC", labels = c("Down", "Up"))
+      }, error = function(e) {
+        plot.new()
+        text(0.5, 0.5, paste(.tr("Erreur:"), conditionMessage(e)),
+             col = "red", cex = 0.9)
+      })
     })
     output$dl_pathway <- downloadHandler(
       filename = function() paste0("pathways_bulk_", input$pathway_db, "_", Sys.Date(), ".csv"),

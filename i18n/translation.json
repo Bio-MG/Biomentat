@@ -12168,6 +12168,702 @@
     {
       "fr": "Harmony corrige le batch AVANT le clustering (clusters, marqueurs et DA dérivent de l'espace intégré). Recommandé dès 2 échantillons ; ignoré si < 2 batchs. Les voies natives v5 (PCA réciproque, CCA) splittent les couches par batch puis IntegrateLayers ; les clusters non intégrés restent conservés sous 'unintegrated_clusters'.",
       "en": "Harmony corrects batch BEFORE clustering (clusters, markers and DA derive from the integrated space). Recommended from 2 samples on; ignored with < 2 batches. The v5 native paths (reciprocal PCA, CCA) split layers by batch then run IntegrateLayers; unintegrated clusters are kept under 'unintegrated_clusters'."
+    },
+    {
+      "fr": "Directionnelle — goana/kegga (table DE complète, Up/Down par voie)",
+      "en": "Directional b"
+    },
+    {
+      "fr": "Seuil FDR (sélection DE directionnelle)",
+      "en": "FDR threshold (directional DE selection)"
+    },
+    {
+      "fr": "Directionnelle",
+      "en": "Directional"
+    },
+    {
+      "fr": "Voie (barcodeplot)",
+      "en": "Pathway (barcodeplot)"
+    },
+    {
+      "fr": "Rang log2FC complet de la table DE ; la voie sélectionnée est surlignée (limma::barcodeplot).",
+      "en": "Full log2FC ranking of the DE table; the selected pathway is highlighted (limma::barcodeplot)."
+    },
+    {
+      "fr": "ORA directionnelle (goana/kegga) en cours...",
+      "en": "Directional ORA (goana/kegga) running..."
+    },
+    {
+      "fr": "✅ ORA directionnelle : {n} voies (goana/kegga)",
+      "en": "✅ Directional ORA: {n} pathways (goana/kegga)"
+    },
+    {
+      "fr": "❌ Erreur directionnelle: {msg}",
+      "en": "❌ Directional error: {msg}"
+    },
+    {
+      "fr": "ℹ️ Aucune voie testable (goana/kegga).",
+      "en": "ℹ️ No testable pathway (goana/kegga)."
+    },
+    {
+      "fr": "Voie",
+      "en": "Pathway"
+    },
+    {
+      "fr": "Ontologie",
+      "en": "Ontology"
+    },
+    {
+      "fr": "Up",
+      "en": "Up"
+    },
+    {
+      "fr": "Down",
+      "en": "Down"
+    },
+    {
+      "fr": "P Up",
+      "en": "P Up"
+    },
+    {
+      "fr": "FDR Up",
+      "en": "FDR Up"
+    },
+    {
+      "fr": "P Down",
+      "en": "P Down"
+    },
+    {
+      "fr": "FDR Down",
+      "en": "FDR Down"
+    },
+    {
+      "fr": "Colonne statut (0 = censurC), 1 = C)vC)nement)",
+      "en": "Status column (0 = censored, 1 = event)"
+    },
+    {
+      "fr": "1/2 (1 = censurC), 2 = C)vC)nement)",
+      "en": "1/2 (1 = censored, 2 = event)"
+    },
+    {
+      "fr": "GC(nes (VST)",
+      "en": "Genes (VST)"
+    },
+    {
+      "fr": "Variables (Cox univariC)s, multi)",
+      "en": "Variables (univariate Cox, multiple)"
+    },
+    {
+      "fr": "DC)coupe High/Low",
+      "en": "High/Low split"
+    },
+    {
+      "fr": "MC)diane",
+      "en": "Median"
+    },
+    {
+      "fr": "Lancer Cox univariC)s",
+      "en": "Run univariate Cox"
+    },
+    {
+      "fr": "Aucune colonne temps/statut exploitable dC)tectC)e dans les mC)tadonnC)es (temps numC)rique > 0, statut 0/1 ou 1/2). Les analyses de survie restent verrouillC)es.",
+      "en": "No usable time/status column detected in the metadata (numeric time > 0, status 0/1 or 1/2). Survival analyses remain locked."
+    },
+    {
+      "fr": "Analyses activC)es si >= 10 C)vC)nements observC)s (garde de la mission). DC)coupes mC)diane/quartiles uniquement b",
+      "en": "Analyses enabled when >= 10 observed events (mission guard). Median/quartile splits only — no optimal cutpoint search."
+    },
+    {
+      "fr": "En attente b",
+      "en": "Waiting — run Filtering & VST (step 1) first."
+    },
+    {
+      "fr": "⚠️ SÃ©lectionnez au moins une variable pour les Cox.",
+      "en": "⚠️ Select at least one variable for the Cox models."
+    },
+    {
+      "fr": "Lancez d'abord Kaplan-Meier (panneau de gauche). DC)coupes mC)diane/quartiles uniquement b",
+      "en": "Run Kaplan-Meier first (left panel). Median/quartile splits only — no optimal cutpoint search."
+    },
+    {
+      "fr": "ProbabilitC) de survie",
+      "en": "Survival probability"
+    },
+    {
+      "fr": "Cox univariC)s : chaque variable est testC)e SEULE (HR par unitC) de la variable). Aucun cutpoint optimal n'est recherchC) b",
+      "en": "Univariate Cox: each variable is tested ALONE (HR per unit). No optimal cutpoint is searched — KM splits use the median or quartiles (Q4 vs Q1, middle excluded), standard non-optimized practices."
+    },
+    {
+      "fr": "DC(s >= 2 variables testC)es en rafale, l'ajustement BH (colonne p (BH)) doit C*tre prC)fC)rC) aux p brutes b",
+      "en": "When >= 2 variables are tested in bulk, BH adjustment (p (BH) column) should be preferred over raw p-values — multiple testing inflates the false positive rate."
+    },
+    {
+      "fr": "Export RDS (rC)sultats complets)",
+      "en": "RDS export (full results)"
+    },
+    {
+      "fr": "Si renseignC), le jeu importC) est aussi enregistrC) sous ce nom pour la comparaison multi-jeux (Bulk > Multi-jeux).",
+      "en": "If filled, the imported dataset is also registered under this name for multi-dataset comparison (Bulk > Multi-datasets)."
+    },
+    {
+      "fr": "b\u001a o8\u000f Dataset non enregistrC) (multi-jeux) : %s",
+      "en": "b\u001a o8\u000f Dataset not registered (multi-dataset): %s"
+    },
+    {
+      "fr": "p\u001f\u0013& Import enregistrC) pour la comparaison multi-jeux : B+ %s B;.",
+      "en": "p\u001f\u0013& Import registered for multi-dataset comparison: \"%s\"."
+    },
+    {
+      "fr": "Multi-jeux b",
+      "en": "Multi-dataset b"
+    },
+    {
+      "fr": "Enregistrez l'C)tat courant (import + filtrage + DE + voies) sous un label, pour le comparer plus tard C  d'autres jeux. Le jeu actif n'est jamais modifiC).",
+      "en": "Save the current state (import + filtering + DE + pathways) under a label, to compare it later with other datasets. The active dataset is never modified."
+    },
+    {
+      "fr": "Enregistrer l'C)tat courant",
+      "en": "Save current state"
+    },
+    {
+      "fr": "Datasets enregistrC)s",
+      "en": "Registered datasets"
+    },
+    {
+      "fr": "Aucun jeu Bulk actif C  enregistrer.",
+      "en": "No active Bulk dataset to save."
+    },
+    {
+      "fr": "b\u001c\u0013 C\ttat enregistrC) sous B+ %s B;.",
+      "en": "b\u001c\u0013 State saved under \"%s\"."
+    },
+    {
+      "fr": "b\u001c\u0013 C\ttat enregistrC) (mis C  jour) sous B+ %s B;.",
+      "en": "b\u001c\u0013 State updated under \"%s\"."
+    },
+    {
+      "fr": "Aucun dataset enregistrC) pour l'instant.",
+      "en": "No registered dataset yet."
+    },
+    {
+      "fr": "Dataset C  supprimer",
+      "en": "Dataset to remove"
+    },
+    {
+      "fr": "b\u001c\u0013 Dataset B+ %s B; supprimC).",
+      "en": "b\u001c\u0013 Dataset \"%s\" removed."
+    },
+    {
+      "fr": "Comparez des jeux enregistrC)s (import nommC) ou bouton B+ Enregistrer l'C)tat courant B;) partageant un mC*me nom de contraste. Les seuils choisis s'appliquent C  TOUS les jeux comparC)s.",
+      "en": "Compare registered datasets (named import or the \"Save current state\" button) sharing a common contrast name. The chosen thresholds apply to ALL compared datasets."
+    },
+    {
+      "fr": "Datasets C  comparer (>= 2)",
+      "en": "Datasets to compare (>= 2)"
+    },
+    {
+      "fr": "SC)lectionnez au moins 2 datasets traitC)s (via B+ Multi-jeux b",
+      "en": "Select at least 2 processed datasets (via \"Multi-dataset b"
+    },
+    {
+      "fr": "Aucun nom de contraste commun aux datasets sC)lectionnC)s.",
+      "en": "No contrast name is common to the selected datasets."
+    },
+    {
+      "fr": "b\u001c\u0013 Comparaison calculC)e (contraste B+ %s B;, %d datasets).",
+      "en": "b\u001c\u0013 Comparison computed (contrast \"%s\", %d datasets)."
+    },
+    {
+      "fr": "Un dataset comparC) a C)tC) supprimC) depuis le calcul b",
+      "en": "A compared dataset was deleted since the run b"
+    },
+    {
+      "fr": "Moins de 2 datasets avec des gC(nes significatifs b",
+      "en": "Fewer than 2 datasets with significant genes b"
+    },
+    {
+      "fr": "Aucun gC(ne dans les intersections avec ces seuils.",
+      "en": "No genes in the intersections with these thresholds."
+    },
+    {
+      "fr": "RC)sultats de la comparaison",
+      "en": "Comparison results"
+    },
+    {
+      "fr": "Volcanos cC4te C  cC4te",
+      "en": "Side-by-side volcanoes"
+    },
+    {
+      "fr": "GC(nes par intersection",
+      "en": "Genes per intersection"
+    },
+    {
+      "fr": "Jaccard = recouvrement des ensembles Up (resp. Down) entre deux jeux. B+ % mC*me direction B; = proportion des gC(nes significatifs communs qui varient dans le mC*me sens.",
+      "en": "Jaccard = overlap of the Up (resp. Down) sets between two datasets. \"% same direction\" = share of common significant genes varying in the same direction."
+    },
+    {
+      "fr": "DC)tail des datasets",
+      "en": "Dataset details"
+    },
+    {
+      "fr": "b\u001c\u0013 %s b",
+      "en": "b\u001c\u0013 %s b"
+    },
+    {
+      "fr": "Enregistre le rC)sultat DE pseudobulk (comptages agrC)gC)s + contraste) dans le conteneur bulk_datasets pour le comparer aux jeux Bulk (onglet B+ Comparaison multi-jeux B; du module Bulk). Le jeu actif n'est jamais modifiC).",
+      "en": "Registers the pseudobulk DE result (aggregated counts + contrast) into the bulk_datasets container so it can be compared against Bulk datasets (\"Multi-dataset comparison\" tab of the Bulk module). The active dataset is never modified."
+    },
+    {
+      "fr": "Aucun rC)sultat DE pseudobulk C  envoyer b",
+      "en": "No pseudobulk DE result to send b"
+    },
+    {
+      "fr": "b\u001c\u0013 Jeu B+ %s B; mis C  jour dans bulk_datasets (producteur pseudobulk).",
+      "en": "b\u001c\u0013 Dataset \"%s\" updated in bulk_datasets (producer: pseudobulk)."
+    },
+    {
+      "fr": "b\u001c\u0013 Jeu B+ %s B; enregistrC) dans bulk_datasets (producteur pseudobulk).",
+      "en": "b\u001c\u0013 Dataset \"%s\" registered in bulk_datasets (producer: pseudobulk)."
+    },
+    {
+      "fr": "b\u001c\u0013 Pseudobulk mis C  jour sous B+ %s B; b",
+      "en": "b\u001c\u0013 Pseudobulk updated as \"%s\" b"
+    },
+    {
+      "fr": "b\u001c\u0013 Pseudobulk enregistrC) sous B+ %s B; b",
+      "en": "b\u001c\u0013 Pseudobulk registered as \"%s\" b"
+    },
+    {
+      "fr": "Enregistrez l'objet SC courant (brut ou traitC)) sous un label, avec la relation dC)clarC)e vis-C -vis du jeu de rC)fC)rence : mode 1 = analyses sC)parC)es C  paramC(tres partagC)s, mode 2 = paramC(tres distincts. Le jeu actif n'est jamais modifiC).",
+      "en": "Register the current SC object (raw or processed) under a label, with the declared relation to the reference dataset: mode 1 = separate analyses with shared parameters, mode 2 = distinct parameters. The active dataset is never modified."
+    },
+    {
+      "fr": "Relation dC)clarC)e (dC)cision 5)",
+      "en": "Declared relation (decision 5)"
+    },
+    {
+      "fr": "Jeu indC)pendant (aucune relation)",
+      "en": "Standalone dataset (no relation)"
+    },
+    {
+      "fr": "Mode 1 b",
+      "en": "Mode 1 b"
+    },
+    {
+      "fr": "Mode 2 b",
+      "en": "Mode 2 b"
+    },
+    {
+      "fr": "Datasets SC enregistrC)s (double jeu)",
+      "en": "Registered SC datasets (dual dataset)"
+    },
+    {
+      "fr": "Renseignez un label pour enregistrer une copie du jeu importC) dans le conteneur sc_datasets (le jeu actif reste l'objet importC)). Relation : mode 1 = traiter avec les mC*mes rC)glages que le jeu de rC)fC)rence ; mode 2 = rC)glages propres au jeu.",
+      "en": "Enter a label to register a copy of the imported dataset into the sc_datasets container (the active dataset remains the imported object). Relation: mode 1 = process with the same settings as the reference dataset; mode 2 = dataset-specific settings."
+    },
+    {
+      "fr": "Jeu SC B+ %s B; enregistrC) dans sc_datasets (producteur import).",
+      "en": "SC dataset \"%s\" registered in sc_datasets (producer: import)."
+    },
+    {
+      "fr": "Aucun objet SC actif C  enregistrer.",
+      "en": "No active SC object to register."
+    },
+    {
+      "fr": "b\u001c\u0013 Jeu SC enregistrC) (mis C  jour) sous B+ %s B;.",
+      "en": "b\u001c\u0013 SC dataset registered (updated) as \"%s\"."
+    },
+    {
+      "fr": "b\u001c\u0013 Jeu SC enregistrC) sous B+ %s B;.",
+      "en": "b\u001c\u0013 SC dataset registered as \"%s\"."
+    },
+    {
+      "fr": "Pseudobulk DE b",
+      "en": "Pseudobulk DE b"
+    },
+    {
+      "fr": "%d valeur(s) disponible(s) dans la table pour cette cible b",
+      "en": "%d value(s) available in the table for this target b"
+    },
+    {
+      "fr": "Aucun rC)sultat velocity importC) : importez d'abord des vecteurs prC)calculC)s dans le panneau VC)locitC) (8.6).",
+      "en": "No imported velocity result: import precomputed vectors in the Velocity panel (8.6) first."
+    },
+    {
+      "fr": "Aucune coordonnC)e disponible dans le bundle spatial courant.",
+      "en": "No coordinates available in the current spatial bundle."
+    },
+    {
+      "fr": "Bundle spatial courant : %d spot(s)/cellule(s) (coordonnC)es d'import, colonnes id/x/y).",
+      "en": "Current spatial bundle: %d spot(s)/cell(s) (import coordinates, id/x/y columns)."
+    },
+    {
+      "fr": "Calculer le contexte vC)locitC)",
+      "en": "Compute the velocity context"
+    },
+    {
+      "fr": "Colonne de pseudo-temps (mC)ta.data)",
+      "en": "Pseudotime column (meta.data)"
+    },
+    {
+      "fr": "Contexte spatial : %d paire(s) cartographiC)e(s) sur %d.",
+      "en": "Spatial context: %d pair(s) mapped out of %d."
+    },
+    {
+      "fr": "Contexte trajectoire : %d combinaison(s) paire/lignC)e calculC)e(s) sur %d.",
+      "en": "Trajectory context: %d pair/lineage combination(s) computed out of %d."
+    },
+    {
+      "fr": "Contexte vC)locitC)",
+      "en": "Velocity context"
+    },
+    {
+      "fr": "Contexte vC)locitC) : %d paire(s) cartographiC)e(s) b",
+      "en": "Velocity context: %d pair(s) mapped b"
+    },
+    {
+      "fr": "Contexte vC)locitC) indisponible (statut : %s) b",
+      "en": "Velocity context unavailable (status: %s) b"
+    },
+    {
+      "fr": "DC)faut consommC) de config/thresholds.R (TS_VELOCITY_OVERLAP_MIN).",
+      "en": "Default consumed from config/thresholds.R (TS_VELOCITY_OVERLAP_MIN)."
+    },
+    {
+      "fr": "Erreur contexte vC)locitC) :",
+      "en": "Velocity context error:"
+    },
+    {
+      "fr": "Facteur d'attC)nuation (0-1)",
+      "en": "Attenuation factor (0-1)"
+    },
+    {
+      "fr": "IN SILICO PERTURBATION b",
+      "en": "IN SILICO PERTURBATION b"
+    },
+    {
+      "fr": "IN SILICO b",
+      "en": "IN SILICO b"
+    },
+    {
+      "fr": "La distance est une contrainte spatiale b",
+      "en": "Distance is a spatial constraint b"
+    },
+    {
+      "fr": "LignC)e",
+      "en": "Lineage"
+    },
+    {
+      "fr": "LignC)es (slingshot)",
+      "en": "Lineages (slingshot)"
+    },
+    {
+      "fr": "Mode par lignC)e : chaque cellule est rattachC)e C  la premiC(re colonne pseudotime_slingshot_* finie (point de branchement = premiC(re lignC)e). Les lignC)es ne sont jamais collapsC)es.",
+      "en": "Per-lineage mode: each cell is attached to the first finite pseudotime_slingshot_* column (branch point = first lineage). Lineages are never collapsed."
+    },
+    {
+      "fr": "Objet CellChat (.rds) : extraction de resultats deja calcules uniquement b",
+      "en": "CellChat object (.rds): extraction of already computed results only b"
+    },
+    {
+      "fr": "Paire sender b\u0006\u0012 receiver",
+      "en": "Sender b\u0006\u0012 receiver pair"
+    },
+    {
+      "fr": "Perturbation in silico : %d interaction(s) supprimC)e(s), %d attC)nuC)e(s) b",
+      "en": "In silico perturbation: %d interaction(s) removed, %d attenuated b"
+    },
+    {
+      "fr": "Pseudo-temps = ordonnement relatif d'une trajectoire infC)rC)e, PAS un temps rC)el. Le score importC) d'une paire est constant b",
+      "en": "Pseudotime = relative ordering of an inferred trajectory, NOT real time. The imported score of a pair is constant b"
+    },
+    {
+      "fr": "Rayon (NA = non calculC))",
+      "en": "Radius (NA = not computed)"
+    },
+    {
+      "fr": "RC)duction 2D",
+      "en": "2D reduction"
+    },
+    {
+      "fr": "RC)sultat de communication pC)rimC) : rC)importez.",
+      "en": "Stale communication result: re-import."
+    },
+    {
+      "fr": "RC)sultat velocity consommC) : statut B+ %s B;, %d cellule(s) alignC)e(s). Les vecteurs ne sont jamais rC)-infC)rC)s.",
+      "en": "Velocity result consumed: status \"%s\", %d cell(s) aligned. Vectors are never re-inferred."
+    },
+    {
+      "fr": "Seed fixC)e : 1 (dC)terministe).",
+      "en": "Fixed seed: 1 (deterministic)."
+    },
+    {
+      "fr": "Source de coordonnC)es",
+      "en": "Coordinate source"
+    },
+    {
+      "fr": "Statut : %s b",
+      "en": "Status: %s b"
+    },
+    {
+      "fr": "B+ AssociC) C  l'C)tat de vitesse B; n'C)tablit aucune causalitC) : la magnitude des vecteurs prC)calculC)s est une quantitC) descriptive par population.",
+      "en": "\"Associated with the velocity state\" establishes no causality: the magnitude of the precomputed vectors is a descriptive per-population quantity."
+    },
+    {
+      "fr": "Accession GEO invalide b",
+      "en": "Invalid GEO accession b"
+    },
+    {
+      "fr": "Batch et condition entiC(rement collinC)aires : ",
+      "en": "Batch and condition are fully collinear: "
+    },
+    {
+      "fr": "Cliquez sur DC)composition de variance pour lancer le calcul.",
+      "en": "Click Variance decomposition to run the computation."
+    },
+    {
+      "fr": "Colonne identitC) / cluster (optionnel)",
+      "en": "Identity / cluster column (optional)"
+    },
+    {
+      "fr": "DC)composition de la variance par facteur",
+      "en": "Variance decomposition per factor"
+    },
+    {
+      "fr": "DC)composition de variance",
+      "en": "Variance decomposition"
+    },
+    {
+      "fr": "DC)composition de variance...",
+      "en": "Variance decomposition..."
+    },
+    {
+      "fr": "Lancez d'abord le Filtrage & VST (C)tape 1) pour activer les diagnostics batch.",
+      "en": "Run Filtering & VST (step 1) first to enable the batch diagnostics."
+    },
+    {
+      "fr": "Part de variance expliquC)e par le batch vs la condition, gC(ne par gC(ne (plafond mC)moire dC)terministe, voir contrat).",
+      "en": "Share of variance explained by batch vs condition, gene by gene (deterministic memory cap, see contract)."
+    },
+    {
+      "fr": "VC)rifie que l'effet lot (batch) n'est pas confondu avec la condition biologique AVANT l'analyse diffC)rentielle. Matrice exigC)e : VST (produite C  l'C)tape 1) b",
+      "en": "Checks that the batch effect is not confounded with the biological condition BEFORE the differential analysis. Required matrix: VST (produced at step 1) b"
+    },
+    {
+      "fr": "b\u001c\u0013 Plan C)quilibrC) : l'effet batch peut C*tre ajustC) dans le design.",
+      "en": "b\u001c\u0013 Balanced design: the batch effect can be adjusted for in the design."
+    },
+    {
+      "fr": "3c. RC)seau de co-expression (WGCNA)",
+      "en": "3c. Co-expression network (WGCNA)"
+    },
+    {
+      "fr": "b\u001c\u0013 Power retenu : {p} (R2 = {r}).",
+      "en": "b\u001c\u0013 Power retained: {p} (R2 = {r})."
+    },
+    {
+      "fr": "RNA Velocity b",
+      "en": "RNA Velocity b"
+    },
+    {
+      "fr": "DC)composition de la variance (par gC(ne)",
+      "en": "Variance decomposition (per gene)"
+    },
+    {
+      "fr": "Fraction de la variance expliquC)e",
+      "en": "Fraction of variance explained"
+    },
+    {
+      "fr": "Scree Plot b",
+      "en": "Scree Plot b"
+    },
+    {
+      "fr": "Specificite b",
+      "en": "Specificity b"
+    },
+    {
+      "fr": "Magnitude b",
+      "en": "Magnitude b"
+    },
+    {
+      "fr": "Communication cellule-cellule b",
+      "en": "Cell-cell communication b"
+    },
+    {
+      "fr": "2b. RaretC) par population",
+      "en": "2b. Rarity per population"
+    },
+    {
+      "fr": "RaretC) par population",
+      "en": "Rarity per population"
+    },
+    {
+      "fr": "RaretC) par population (descriptif)",
+      "en": "Rarity per population (descriptive)"
+    },
+    {
+      "fr": "Compte les cellules par population annotC)e et signale celles qui passent sous un seuil que vous dC)clarez.",
+      "en": "Counts cells per annotated population and flags those falling below a threshold you declare."
+    },
+    {
+      "fr": "Colonne d'identitC) (populations)",
+      "en": "Identity column (populations)"
+    },
+    {
+      "fr": "RC(gle de raretC)",
+      "en": "Rarity rule"
+    },
+    {
+      "fr": "Seuil dC)clarC)",
+      "en": "Declared threshold"
+    },
+    {
+      "fr": "Colonne d'C)chantillon (optionnel)",
+      "en": "Sample column (optional)"
+    },
+    {
+      "fr": "Calculer la raretC)",
+      "en": "Compute rarity"
+    },
+    {
+      "fr": "Populations et raretC) dC)clarC)e",
+      "en": "Populations and declared rarity"
+    },
+    {
+      "fr": "RC(gle dC)clarC)e et compteurs",
+      "en": "Declared rule and counters"
+    },
+    {
+      "fr": "En attente d'un calcul. Choisissez la colonne d'identitC), la rC(gle et le seuil dC)clarC).",
+      "en": "Waiting for a computation. Choose the identity column, the rule and the declared threshold."
+    },
+    {
+      "fr": "Calcul de raretC) terminC).",
+      "en": "Rarity computation finished."
+    },
+    {
+      "fr": "Erreur raretC) :",
+      "en": "Rarity error:"
+    },
+    {
+      "fr": "Choisissez d'abord la colonne de mC)tadonnC)es dC)crivant les populations.",
+      "en": "Choose the metadata column describing the populations first."
+    },
+    {
+      "fr": "non qualifiC)e",
+      "en": "not qualified"
+    },
+    {
+      "fr": "rC(gle dC)clarC)e par l'utilisateur",
+      "en": "rule declared by the user"
+    },
+    {
+      "fr": "RaretC) dC)clarC)e",
+      "en": "Declared rarity"
+    },
+    {
+      "fr": "Fusionne >= 2 jeux enregistrC)s (Multi-jeux b",
+      "en": "Merges >= 2 registered datasets (Multi-dataset b"
+    },
+    {
+      "fr": "Datasets C  fusionner (>= 2)",
+      "en": "Datasets to merge (>= 2)"
+    },
+    {
+      "fr": "SC)lectionnez des datasets...",
+      "en": "Select datasets..."
+    },
+    {
+      "fr": "Aucune b",
+      "en": "None b"
+    },
+    {
+      "fr": "Nom du jeu fusionnC)",
+      "en": "Merged dataset name"
+    },
+    {
+      "fr": "Le jeu actif courant sera remplacC) (comme un import). Enregistrez-le d'abord via B+ Enregistrer l'C)tat courant B; si nC)cessaire.",
+      "en": "The current active dataset will be replaced (like an import). Save it first via b"
+    },
+    {
+      "fr": "RC)sultat de la fusion",
+      "en": "Merge results"
+    },
+    {
+      "fr": "GC(nes par dataset",
+      "en": "Genes per dataset"
+    },
+    {
+      "fr": "PCA avant / aprC(s",
+      "en": "PCA before / after"
+    },
+    {
+      "fr": "SC)lectionnez au moins 2 datasets enregistrC)s.",
+      "en": "Select at least 2 registered datasets."
+    },
+    {
+      "fr": "GC(nes communs : %d (%s).",
+      "en": "Common genes: %d (%s)."
+    },
+    {
+      "fr": "%d C)chantillon(s) seront renommC)s (collision de noms).",
+      "en": "%d sample(s) will be renamed (name collision)."
+    },
+    {
+      "fr": "b\u001c\u0013 Harmonisation ComBat-seq possible.",
+      "en": "b\u001c\u0013 ComBat-seq harmonization is feasible."
+    },
+    {
+      "fr": "La condition dC)clarC)e sera prC)servC)e.",
+      "en": "The declared condition will be preserved."
+    },
+    {
+      "fr": "Aucune condition commune dC)clarC)e : correction C  l'aveugle.",
+      "en": "No common condition declared: blind correction."
+    },
+    {
+      "fr": "Chargement du jeu fusionnC)...",
+      "en": "Loading the merged dataset..."
+    },
+    {
+      "fr": "b\u001c\u0013 Fusion chargC)e : %d gC(nes communs C\u0017 %d C)chantillons (%s).",
+      "en": "b\u001c\u0013 Merge loaded: %d common genes C\u0017 %d samples (%s)."
+    },
+    {
+      "fr": "Harmonisation ComBat-seq appliquC)e (lot = jeu d'origine).",
+      "en": "ComBat-seq harmonization applied (batch = dataset of origin)."
+    },
+    {
+      "fr": "Aucun renommage d'C)chantillon (noms uniques entre les jeux).",
+      "en": "No sample renaming (unique names across datasets)."
+    },
+    {
+      "fr": "C\tchantillons renommC)s (collision de noms)",
+      "en": "Renamed samples (name collision)"
+    },
+    {
+      "fr": "Diagnostic descriptif b",
+      "en": "Descriptive diagnostic b"
+    },
+    {
+      "fr": "PCA descriptive colorC)e par jeu d'origine (pas de correction appliquC)e, ou diagnostic indisponible).",
+      "en": "Descriptive PCA colored by dataset of origin (no correction applied, or diagnostic unavailable)."
+    },
+    {
+      "fr": "Option A (dossiers) b",
+      "en": "Option A (folders) b"
+    },
+    {
+      "fr": "Intersection : %d gC(nes communs C  TOUS les C)chantillons b",
+      "en": "Intersection: %d genes common to ALL samples b"
+    },
+    {
+      "fr": "metadata.csv : %d cellules flaggC)es doublet/multiplets sur %d b",
+      "en": "metadata.csv: %d cells flagged doublet/multiplets out of %d b"
+    },
+    {
+      "fr": "Lecture stricte des couches spliced/unspliced (+ ambiguous si present). Aucune inference ; les symboles de gC(nes dupliquC)s sont rendus uniques (avertissement affichC)).",
+      "en": "Strict reading of the spliced/unspliced layers (+ ambiguous when present). No inference; duplicated gene symbols are made unique (warning shown)."
     }
   ]
 }

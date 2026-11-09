@@ -7,6 +7,32 @@ j <- jsonlite::fromJSON(json_path, simplifyVector = FALSE)
 
 # key (fr) -> en
 new_entries <- list(
+  # --- PB jalon 2 (2026-11-09) : ORA directionnelle goana/kegga (GEMS D5,
+  # mod_bulk_pathways) — mode radio, entrée FDR, onglet résultats, messages
+  # handler, en-têtes de table DT.
+  c("Directionnelle \u2014 goana/kegga (table DE compl\u00e8te, Up/Down par voie)",
+    "Directional — goana/kegga (full DE table, Up/Down per pathway)"),
+  c("Seuil FDR (s\u00e9lection DE directionnelle)",
+    "FDR threshold (directional DE selection)"),
+  c("Directionnelle", "Directional"),
+  c("Voie (barcodeplot)", "Pathway (barcodeplot)"),
+  c("Rang log2FC complet de la table DE ; la voie s\u00e9lectionn\u00e9e est surlign\u00e9e (limma::barcodeplot).",
+    "Full log2FC ranking of the DE table; the selected pathway is highlighted (limma::barcodeplot)."),
+  c("ORA directionnelle (goana/kegga) en cours...",
+    "Directional ORA (goana/kegga) running..."),
+  c("\u2705 ORA directionnelle : {n} voies (goana/kegga)",
+    "\u2705 Directional ORA: {n} pathways (goana/kegga)"),
+  c("\u274c Erreur directionnelle: {msg}", "\u274c Directional error: {msg}"),
+  c("\u2139\ufe0f Aucune voie testable (goana/kegga).",
+    "\u2139\ufe0f No testable pathway (goana/kegga)."),
+  c("Voie", "Pathway"),
+  c("Ontologie", "Ontology"),
+  c("Up", "Up"),
+  c("Down", "Down"),
+  c("P Up", "P Up"),
+  c("FDR Up", "FDR Up"),
+  c("P Down", "P Down"),
+  c("FDR Down", "FDR Down"),
   # --- O28 batch B5 (2026-10-30) : item 3E du packet round-7 — surface de
   # validation propose/valide de l'harmonisation des identites CCC
   # (mod_sc_communication.R, spéc §2.17) + signal visible des labels sans
