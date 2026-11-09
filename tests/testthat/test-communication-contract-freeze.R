@@ -336,3 +336,42 @@ test_that("contract document is in sync with the frozen code", {
                  info = paste("champ de mesure absent du document :", f))
   }
 })
+
+# =============================================================================
+# CELLCHAT_TSV_IMPORT_CONTRACT — chemin d'import CellChat TSV/CSV (V-1.0)
+# =============================================================================
+# Ferme docs/contracts/CELLCHAT_TSV_IMPORT_CONTRACT.md (extrait read-only
+# 2026-09-12) : colonnes requises source/target/ligand/receptor/prob
+# (-> sender/receiver/ligand/receptor/score), colonnes optionnelles
+# pathway/p_value, erreurs CLASSÉES communication_import_error (jamais de
+# repli silencieux), et chemin e2e documenté (harmonize -> qc -> finalize).
+# Toute évolution du contrat = code + ce test + le document, simultanément.
+test_that("CELLCHAT_TSV_IMPORT_CONTRACT — colonnes gelées et chemin d'import", {
+  doc_path <- file.path(ts_project_root(), "docs", "contracts",
+                        "CELLCHAT_TSV_IMPORT_CONTRACT.md")
+  expect_true(file.exists(doc_path),
+              info = "contrat CELLCHAT_TSV_IMPORT absent de docs/contracts/")
+  doc <- paste(readLines(doc_path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(doc, "parse_cellchat_import", fixed = TRUE)
+  expect_match(doc, "harmonize_communication_identities", fixed = TRUE)
+  expect_match(doc, "communication_import_qc", fixed = TRUE)
+  expect_match(doc, "finalize_communication_result", fixed = TRUE)
+
+  # Colonnes REQUISES — chacune manquante = erreur classée, jamais un repli.
+  tab <- .comm_cellchat_tab()
+  required <- c("source", "target", "ligand", "receptor", "prob")
+  for (col in required) {
+    broken <- tab[, setdiff(names(tab), col), drop = FALSE]
+    expect_error(parse_cellchat_import(broken, source_file = "cellchat.tsv"),
+                 class = "communication_import_error",
+                 info = sprintf("colonne requise absente : %s", col))
+  }
+
+  # Colonnes OPTIONNELLES (pathway/p_value) — leur absence reste importable :
+  # la table canonique existe, les 5 champs gélés par interaction sont là.
+  minimal <- parse_cellchat_import(tab[, required, drop = FALSE],
+                                   source_file = "cellchat.tsv")
+  expect_identical(nrow(minimal$table), 3L)
+  expect_true(all(c("sender", "receiver", "ligand", "receptor", "score")
+                  %in% names(minimal$table)))
+})
