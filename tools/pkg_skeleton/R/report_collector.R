@@ -517,7 +517,7 @@
         producteurs = paste(vapply(ds_container, function(e) {
           as.character(e$producer %||% NA_character_)
         }, character(1)), collapse = "; "),
-        enregistré_le = paste(vapply(ds_container, function(e) {
+        enregistre_le = paste(vapply(ds_container, function(e) {
           tryCatch(format(e$registered_at, "%Y-%m-%d %H:%M:%S"),
                    error = function(e2) { ts_log_swallow("report_collector.rank_value", e2); NA_character_ })
         }, character(1)), collapse = "; ")
