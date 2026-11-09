@@ -1263,3 +1263,193 @@ plot_pathway_barcode <- function(rank_stats, index_genes, ...) {
   }
   limma::barcodeplot(rank_stats, index = idx, ...)
 }
+
+
+# =============================================================================
+# PB v2 (GEMS D5, GO opérateur 2026-11-10) — COMPARAISON INTER-CONDITIONS :
+# compareCluster, le « 3e idiome » complété.
+# =============================================================================
+# PB v1 (goana/kegga) compare les DIRECTIONS Up/Down PAR VOIE sur UNE table
+# DE ; compareCluster compare les ENRICHISSEMENTS ENTRE LISTES DE GÈNES
+# (conditions/tissus/contrastes) — fiche §PB : « compareCluster après »,
+# GSE164073 3 tissus. MÊME DISCIPLINE que PB v1 (commit 933ec9b) : fond
+# OBLIGATOIRE (doctrine M12), règle d'identifiants composites B1-C, classe
+# pathway_error, map_fun injecté pour la pureté testable. Moteur d'abord —
+# le branchement module suivra en jalon 2 (précédent PB v1 : moteur
+# 933ec9b → branchement 68172f9).
+# =============================================================================
+
+#' Comparaison d'enrichissement inter-conditions (compareCluster, PB v2)
+#'
+#' Compare les enrichissements de PLUSIEURS listes de gènes (une liste par
+#' condition/tissu/contraste) dans un MÊME fond —
+#' `clusterProfiler::compareCluster`, le 3e idiome complété après l'ORA
+#' directionnelle PB v1. Gardes : >= 2 listes nommées ; listes trop petites
+#' DÉPOSÉES avec note (jamais testées muettement) ; fond OBLIGATOIRE (M12) ;
+#' règle composites B1-C ; map_fun injecté (motif M12, pureté testable).
+#'
+#' @param gene_lists liste NOMMÉE de vecteurs caractère (SYMBOLs ou
+#'   composites ENSG..._SYMBOL).
+#' @param universe_ids fond obligatoire partagé par toutes les listes.
+#' @param db "GO", "KEGG" ou les deux — bases calculées indépendamment ;
+#'   une base vide reste NULL avec note.
+#' @param organism "human" ou "mouse".
+#' @param ont "BP" (défaut), "CC" ou "MF".
+#' @param pvalue_cutoff,qvalue_cutoff seuils passés à compareCluster.
+#' @param min_list_size taille mini d'une liste mappée en Entrez.
+#' @param map_fun injection du mapping SYMBOL -> Entrez.
+#'
+#' @return list(go =, kegg =, meta =) — data.frame compareCluster + colonne
+#'   `db` ; NULL si la base n'a rien produit ; meta (comptes par liste,
+#'   notes M12, seuils).
+run_pathway_compare_cluster <- function(gene_lists, universe_ids,
+                                        db = c("GO", "KEGG"),
+                                        organism = "human",
+                                        ont = "BP",
+                                        pvalue_cutoff = 0.05,
+                                        qvalue_cutoff = 0.2,
+                                        min_list_size = 5L,
+                                        map_fun = NULL) {
+  db <- tryCatch(match.arg(db, c("GO", "KEGG"), several.ok = TRUE),
+                 error = function(e) NULL)
+  if (is.null(db) || !length(db)) {
+    stop(errorCondition("db doit être 'GO', 'KEGG' ou les deux.",
+                        class = "pathway_error"))
+  }
+  organism <- tryCatch(match.arg(organism, c("human", "mouse")),
+                       error = function(e) NULL)
+  if (is.null(organism)) {
+    stop(errorCondition("organism doit être 'human' ou 'mouse'.",
+                        class = "pathway_error"))
+  }
+  if (!is.list(gene_lists) || is.null(names(gene_lists)) ||
+      any(!nzchar(names(gene_lists)))) {
+    stop(errorCondition("gene_lists doit être une liste NOMMÉE de vecteurs de gènes (une entrée par condition).",
+                        class = "pathway_error"))
+  }
+  if (length(gene_lists) < 2L) {
+    stop(errorCondition("compareCluster compare PLUSIEURS listes : fournissez >= 2 conditions (une seule liste = enrichGO/enrichKEGG simple, voie déjà livrée).",
+                        class = "pathway_error"))
+  }
+  ont <- tryCatch(match.arg(ont, c("BP", "CC", "MF")),
+                  error = function(e) NULL)
+  if (is.null(ont)) stop(errorCondition("ont doit être 'BP', 'CC' ou 'MF'.", class = "pathway_error"))
+  pvalue_cutoff <- suppressWarnings(as.numeric(pvalue_cutoff)[1])
+  qvalue_cutoff <- suppressWarnings(as.numeric(qvalue_cutoff)[1])
+  if (is.na(pvalue_cutoff) || pvalue_cutoff <= 0 || pvalue_cutoff >= 1 ||
+      is.na(qvalue_cutoff) || qvalue_cutoff <= 0 || qvalue_cutoff > 1) {
+    stop(errorCondition("pvalue_cutoff (]0,1[) et qvalue_cutoff (]0,1]) invalides.",
+                        class = "pathway_error"))
+  }
+
+  # -- 1. Fond obligatoire (doctrine M12, identique PB v1) ---------------------
+  universe_ids <- strip_composite_gene_ids(as.character(universe_ids))
+  universe_ids <- unique(universe_ids[!is.na(universe_ids) & nzchar(universe_ids)])
+  if (!length(universe_ids)) {
+    stop(errorCondition("Fond (universe_ids) vide — compareCluster refuse le fond par défaut : fournissez les rownames de la matrice filtrée.",
+                        class = "pathway_error"))
+  }
+
+  # -- 2. Mapping injecté (même idiome M12 que PB v1) ---------------------------
+  orgpkg <- switch(organism, human = "org.Hs.eg.db", mouse = "org.Mm.eg.db")
+  if (is.null(map_fun)) {
+    if (!requireNamespace(orgpkg, quietly = TRUE)) {
+      stop(errorCondition(paste0("Package '", orgpkg,
+                                 "' requis pour l'analyse ", organism, "."),
+                          class = "pathway_error"))
+    }
+    map_fun <- function(keys) clusterProfiler::bitr(
+      keys, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = orgpkg)
+  }
+  orgdb <- getExportedValue(orgpkg, orgpkg)
+
+  # -- 3. Mapping PAR LISTE + dépôt honnête des listes trop petites ------------
+  per_list <- list()
+  dropped <- character(0)
+  lists_entrez <- list()
+  for (nm in names(gene_lists)) {
+    ids <- strip_composite_gene_ids(as.character(gene_lists[[nm]]))
+    ids <- unique(ids[!is.na(ids) & nzchar(ids)])
+    n_declared <- length(ids)
+    mp <- if (n_declared) tryCatch(map_fun(ids), error = function(e) NULL) else NULL
+    n_mapped <- if (!is.null(mp)) length(unique(mp$ENTREZID)) else 0L
+    if (n_mapped < min_list_size) {
+      dropped <- c(dropped, nm)
+      per_list[[nm]] <- list(declared = n_declared, entrez = n_mapped, kept = FALSE)
+      next
+    }
+    lists_entrez[[nm]] <- unique(mp$ENTREZID)
+    per_list[[nm]] <- list(declared = n_declared, entrez = n_mapped, kept = TRUE)
+  }
+  notes <- character(0)
+  if (length(dropped)) {
+    notes <- c(notes, sprintf(
+      "%d liste(s) déposée(s) sous les %d gènes Entrez min. (%s) — déposées, jamais testées muettement.",
+      length(dropped), min_list_size, paste(dropped, collapse = ", ")))
+  }
+  if (length(lists_entrez) < 2L) {
+    stop(errorCondition(paste0(
+      "Moins de 2 listes valides après mapping (min_list_size=", min_list_size,
+      ") — compareCluster refuse de tourner sur une comparaison vide. Comptes : ",
+      paste(vapply(per_list, function(x) paste0(x$declared, "->", x$entrez), ""),
+            collapse = ", ")),
+      class = "pathway_error"))
+  }
+
+  # -- 4. Fond mappé + notes (réutilise le résolveur M12 + sonde partielle) -----
+  universe_res <- .resolve_ora_universe(universe_ids, unlist(lists_entrez), map_fun)
+  universe_entrez <- universe_res$entrez
+  universe_note <- universe_res$note
+  if (is.null(universe_entrez) || !length(universe_entrez)) {
+    stop(errorCondition("Le fond déclaré ne mappe vers aucun Entrez — refus (jamais de repli silencieux sur le fond par défaut).",
+                        class = "pathway_error"))
+  }
+  uni_probe <- tryCatch(map_fun(unique(universe_ids)), error = function(e) NULL)
+  n_uni_mapped <- if (!is.null(uni_probe)) length(unique(uni_probe$ENTREZID)) else 0L
+  if (n_uni_mapped < length(universe_ids)) {
+    notes <- c(notes, sprintf(
+      "Fond : %d/%d identifiants déclarés convertis en Entrez — les non-convertibles sont exclus du fond effectif.",
+      n_uni_mapped, length(universe_ids)))
+  }
+  if (!is.null(universe_note)) notes <- c(notes, universe_note)
+
+  # -- 5. compareCluster par base (GO offline via OrgDb ; KEGG via enrichKEGG) --
+  .run_one <- function(fun, extra) {
+    res <- tryCatch(do.call(clusterProfiler::compareCluster, c(
+      list(geneClusters = lists_entrez, fun = fun,
+           universe = universe_entrez,
+           pvalueCutoff = pvalue_cutoff, qvalueCutoff = qvalue_cutoff),
+      extra)), error = function(e) e)
+    if (inherits(res, "error")) {
+      notes <<- c(notes, sprintf("compareCluster %s : %s", fun, conditionMessage(res)))
+      return(NULL)
+    }
+    df <- tryCatch(as.data.frame(res), error = function(e) NULL)
+    if (is.null(df) || nrow(df) == 0L) {
+      notes <<- c(notes, sprintf("compareCluster %s : 0 voie sous les seuils.", fun))
+      return(NULL)
+    }
+    df
+  }
+  out <- list(go = NULL, kegg = NULL)
+  if ("GO" %in% db) {
+    df <- .run_one("enrichGO", list(OrgDb = orgdb, keyType = "ENTREZID", ont = ont))
+    if (!is.null(df)) out$go <- df
+  }
+  if ("KEGG" %in% db) {
+    kegg_code <- switch(organism, human = "hsa", mouse = "mmu")
+    df <- .run_one("enrichKEGG", list(organism = kegg_code))
+    if (!is.null(df)) out$kegg <- df
+  }
+  # colonne db = nom affiché (MESURE : la boucle interne nommait "go"/"kegg")
+  for (nm in c("go", "kegg")) if (!is.null(out[[nm]])) {
+    out[[nm]]$db <- if (nm == "go") "GO" else "KEGG"
+  }
+
+  list(go = out$go, kegg = out$kegg,
+       meta = list(organism = organism, ont = ont,
+                   pvalue_cutoff = pvalue_cutoff, qvalue_cutoff = qvalue_cutoff,
+                   universe_n_entrez = length(universe_entrez),
+                   per_list = per_list, dropped = dropped,
+                   notes = notes))
+}
