@@ -89,6 +89,13 @@ source_project_file("modules/bulk/mod_bulk.R")
     rec(paste0("notify:", paste0(msg))); invisible(NULL)
   }
   e$auto_log_rv <- function(...) { rec("log"); invisible(NULL) }
+  # Re-basage (2026-11-09, vague drive/P1) : le prologue du handler publie
+  # l'état drive AVANT le prologue DE — `ts_drive_feed_manual_pipeline` /
+  # `ts_drive_feed_business_state` (drive_watcher.R:3931/3955). Le harnais ne
+  # charge pas le watcher ; bouchon neutre : ces feeds ne conditionnent pas le
+  # garde 427 ni le comptage des dispatches.
+  e$ts_drive_feed_manual_pipeline <- function(status = "idle", step = "") invisible(NULL)
+  e$ts_drive_feed_business_state <- function(...) invisible(NULL)
   # Helpers maison : a BOUCHONNER (la recherche retomberait sinon sur globalenv).
   e$design_saturation  <- function(meta, col) list(saturated = FALSE, n = nrow(meta), p = 1L)
   e$detect_gene_id_type <- function(x) "unknown"
@@ -366,16 +373,24 @@ test_that("B1-E : le contrat du panneau tient — zéro appel réactif, zéro é
   expect_equal(lengths(regmatches(blk, gregexpr("shared_rv$[a-z_]+ *<-", blk))), 0L)
 })
 
-test_that("B1-E : la position de l'onglet Résumé est inchangée (3g/4 relève de B1-D)", {
+test_that("B1-E : l'ordre des onglets finaux suit la numérotation harmonisée (re-basé 2026-11-09)", {
   ln <- readLines(file.path(ts_project_root(), .MBK_FILE), warn = FALSE,
                   encoding = "UTF-8")
   i_res   <- grep('value = "tab_resume"',      ln, fixed = TRUE)
   i_multi <- grep('value = "tab_bulk_multi"',  ln, fixed = TRUE)
   i_merge <- grep('value = "tab_bulk_merge"',  ln, fixed = TRUE)
   i_net   <- grep('value = "tab_bulk_network"', ln, fixed = TRUE)
+  # Unicité de chaque ancre : un doublon de value serait un nav cassé.
   expect_length(i_res, 1L)
-  # Résumé suivi de Multi-jeux, Fusion, Réseau PCSF — ordre inchangé.
-  expect_true(i_res < i_multi && i_multi < i_merge && i_merge < i_net)
+  expect_length(i_multi, 1L)
+  expect_length(i_merge, 1L)
+  expect_length(i_net, 1L)
+  # Re-basage (2026-11-09, harmonisation des étapes numérotées du chantier
+  # bulk REPORT/HARMONIZATION) : Réseau PCSF (5) PUIS Multi-jeux, Fusion,
+  # et Résumé EN DERNIER (7). L'ancien ordre (Résumé avant Multi) prédate la
+  # renumérotation ; l'INVARIANT gelé reste « un seul onglet par rôle, ordre
+  # de numérotation croissant ».
+  expect_true(i_net < i_multi && i_multi < i_merge && i_merge < i_res)
 })
 
 # =============================================================================
