@@ -198,7 +198,14 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     ns <- session$ns
 
     .tr <- function(key) {
-      tr <- global_data$i18n
+      # isolate() OBLIGATOIRE : .tr est appelée AU MONTAGE du module (bloc
+      # init palettes PK-4 plus bas, hors consommateur réactif) — un accès
+      # bare à global_data$i18n y aborte (« Can't access reactive value
+      # 'i18n' outside of reactive consumer ») et, l'erreur remontant hors
+      # de moduleServer, TUE le montage de TOUS les modules suivants du
+      # server() (mesuré live 2026-11-10 : SC import mort au boot). Même
+      # pattern que mod_sc_markers.R / mod_sc_viz.R (isolate).
+      tr <- isolate(global_data$i18n)
       if (is.null(tr)) return(key)
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
