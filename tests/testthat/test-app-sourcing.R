@@ -334,3 +334,39 @@ test_that("the two 2026-09-16 P0 fixes stay pinned (via the manifest)", {
     )
   }
 })
+
+test_that("aucun JS() non qualifie dans le code source par app.R (masquage SeuratObject)", {
+  # BUG MESURE 2026-11-10 (run operateur live, session RStudio) : le tableau
+  # marqueurs SC mourait avec « pas de methode pour 'JS' applicable pour un
+  # objet de classe "character" » dans le renderDT de mod_sc_markers.R.
+  # MECANISME : le boot F2 attache DT TOT, puis SeuratObject/Seurat APRES —
+  # SeuratObject::JS est une GENERIQUE S3 (UseMethod, mesure : fonction
+  # identique re-exportee par Seurat) — le bare JS(...) du code projet resout
+  # donc via le search path vers la generique SeuratObject, pas vers
+  # htmlwidgets::JS (fonction simple). Le harnais de test n'attache PAS
+  # Seurat avant ces render exprs -> la suite complete ne pouvait pas voir
+  # l'incident (18 794 pass le jour meme). Falsification RED->GREEN du
+  # 2026-11-10 : bare JS + Seurat attache = erreur exacte de l'operateur ;
+  # DT::JS = widget OK. La garde est VOLONTAIREMENT grossiere (tout le code
+  # source par app.R, pas seulement les render exprs) : le re-render UI sur
+  # changement de langue s'execute APRES l'attachement F2, donc meme le code
+  # « UI » peut tourner dans un search path masque. Qualifier DT::JS (ou
+  # htmlwidgets::JS) partout.
+  roots <- c(
+    list.files(file.path(ts_project_root(), "modules"), pattern = "\\.R$",
+               recursive = TRUE, full.names = TRUE),
+    file.path(ts_project_root(), c("app.R", "global.R")),
+    list.files(file.path(ts_project_root(), "tools/pkg_skeleton/R"),
+               pattern = "\\.R$", full.names = TRUE)
+  )
+  offenders <- character(0)
+  for (f in roots) {
+    lines <- readLines(f, warn = FALSE)
+    hit <- grepl("(^|[^:.\\w])JS\\(", lines, perl = TRUE) &
+      !grepl("DT::JS|htmlwidgets::JS|V8::JS", lines) &
+      !grepl("^\\s*#", lines)
+    if (any(hit)) offenders <- c(offenders,
+      sprintf("%s:%d", basename(f), which(hit)))
+  }
+  expect_identical(offenders, character(0))
+})

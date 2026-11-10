@@ -406,7 +406,10 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
             info   = .tr("Lignes _START_ à _END_ sur _TOTAL_ (Sélectionnez des lignes)")
           )
         ),
-        callback = JS("table.on('select.dt', function() {
+        # DT:: (pas bare JS) : SeuratObject::JS (générique S3) masque
+        # htmlwidgets::JS dans le search path de l'app vivante une fois le
+        # boot F2 attaché — BUG MESURÉ 2026-11-10, garde test-app-sourcing.R.
+        callback = DT::JS("table.on('select.dt', function() {
           Shiny.setInputValue('markers-table_markers_changed', Math.random(), {priority: 'event'});
         });")
       ) %>%
@@ -423,7 +426,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
           # client la colorerait « red » (sens inversé). Le JS ci-dessous
           # reproduit les intervalles < 0.001 / < 0.01 / < 0.05 pour les
           # cellules numériques et traite les chaînes du formateur 3B.
-          color = JS(
+          color = DT::JS(
             "(function() {",
             "  var p = parseFloat(value);",
             "  if (isNaN(p)) { return String(value).indexOf('<') === 0 ? 'darkgreen' : 'black'; }",
