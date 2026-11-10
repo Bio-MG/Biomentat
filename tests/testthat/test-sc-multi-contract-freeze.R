@@ -190,7 +190,9 @@ test_that("NO pre-existing SC file references sc_datasets (zero behavior change)
     "tools/pkg_skeleton/R/sc_communication_trajectory.R", "tools/pkg_skeleton/R/sc_communication_velocity.R",
     "tools/pkg_skeleton/R/sc_communication_views.R",
     "modules/sc/mod_sc_pipeline.R", "modules/sc/mod_sc_markers.R",
-    "modules/sc/mod_sc_annotation.R", "modules/sc/mod_sc_viz.R",
+    # mod_sc_annotation.R retiré 2026-11-10 : lecteur déclaré par l'amendement
+    # MD-4 (jalon SE 6b76cf4 — MapQuery) ; assertion dédiée ci-dessous.
+    "modules/sc/mod_sc_viz.R",
     "modules/sc/mod_sc_pathways.R", "modules/sc/mod_sc_trajectory.R",
     "modules/sc/mod_sc_velocity.R", "modules/sc/mod_sc_corr.R",
     "modules/sc/mod_sc_pseudobulk.R", "modules/sc/mod_sc_mapping.R",
@@ -205,4 +207,13 @@ test_that("NO pre-existing SC file references sc_datasets (zero behavior change)
   expect_true(grepl("sc_datasets", .ts_read("tools/pkg_skeleton/R/sc_multi.R"), fixed = TRUE))
   expect_true(grepl("sc_datasets", .ts_read("modules/sc/mod_sc_datasets.R"),
                     fixed = TRUE))
+  # Amendement 2026-11-10 (jalon SE 6b76cf4 — MapQuery) : mod_sc_annotation.R
+  # est un LECTEUR déclaré du registre (choices de référence + objet référence).
+  # Lecture seule : l'écriture du registre reste exclusive à mod_sc_datasets.R
+  # (contrat §2.2) — toute affectation à sc_datasets est refusée ici.
+  annot <- .ts_read("modules/sc/mod_sc_annotation.R")
+  expect_true(grepl("sc_datasets", annot, fixed = TRUE),
+              info = "mod_sc_annotation.R est le lecteur déclaré (amendement MD-4 2026-11-10)")
+  expect_false(grepl("sc_datasets(\\[\\[[^\\]]+\\]\\])?[[:space:]]*<-", annot, perl = TRUE),
+               info = "mod_sc_annotation.R doit rester LECTEUR du registre sc_datasets — aucune écriture (amendement MD-4 2026-11-10)")
 })

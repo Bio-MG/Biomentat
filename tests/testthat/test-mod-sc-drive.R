@@ -109,6 +109,9 @@ test_that("the drive input set is frozen, closed, and carries no modal-only key"
     "sc_ap_batch_var", "sc_ap_compute_umap",
     "sc_ap_sketch_preset", "sc_ap_sketch_ncells_custom",
     "sc_ap_singler", "sc_ap_singler_ref", "sc_ap_singler_level",
+    # SF (2026-11-10, réconciliation jalon 6380127) : cell cycle OPT-IN —
+    # le drive n'ajoute aucun calcul non éprouvé : sc_ap_cellcycle reste FALSE.
+    "sc_ap_cellcycle", "sc_ap_cellcycle_regress",
     "sc_ap_markers", "sc_ap_pathway", "sc_ap_pathway_db", "sc_ap_pathway_org",
     "sc_ap_correlation", "sc_ap_trajectory",
     # M4 (2026-10-26) : QC doublets & ambiant — opt-in (le drive n'ajoute
@@ -116,7 +119,7 @@ test_that("the drive input set is frozen, closed, and carries no modal-only key"
     "sc_ap_doublets", "sc_ap_run_ambient",
     "sc_ap_doublet_score_cutoff", "sc_ap_max_contamination"
   ))
-  expect_length(inputs, 28L)
+  expect_length(inputs, 30L)
   # Declared values. `sketch_preset = "max"` means FULL dataset: the drive never
   # depends on a hidden sub-sampling decision, and `bpcells = FALSE` keeps the
   # action free of any disk write.
@@ -127,6 +130,11 @@ test_that("the drive input set is frozen, closed, and carries no modal-only key"
   expect_identical(inputs$sc_ap_markers, TRUE)
   expect_identical(inputs$sc_ap_pathway, FALSE)
   expect_identical(inputs$sc_ap_singler, FALSE)
+  # SF (2026-11-10, réconciliation jalon 6380127) : cell cycle OPT-IN OFF au
+  # drive (même esprit que doublets) ; la régression suit le canon —
+  # "difference" = CC.Difference (S − G2M, fiche §3-SF).
+  expect_identical(inputs$sc_ap_cellcycle, FALSE)
+  expect_identical(inputs$sc_ap_cellcycle_regress, "difference")
   expect_identical(inputs$sc_ap_correlation, FALSE)
   expect_identical(inputs$sc_ap_trajectory, TRUE)
   # M4 (2026-10-26) : le drive n'ajoute aucun calcul non éprouvé — doublets

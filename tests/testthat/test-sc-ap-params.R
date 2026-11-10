@@ -30,6 +30,9 @@ assign(".tr", function(key) key, envir = globalenv())
   "sc_ap_integration", "sc_ap_batch_var",
   "sc_ap_sketch_preset", "sc_ap_sketch_ncells_custom",
   "sc_ap_singler", "sc_ap_singler_ref", "sc_ap_singler_level",
+  # SF (2026-11-10, réconciliation jalon 6380127) : cell cycle OPT-IN —
+  # ordre = canon sc_pipeline.R ; défauts FALSE / "difference".
+  "sc_ap_cellcycle", "sc_ap_cellcycle_regress",
   "sc_ap_markers", "sc_ap_pathway", "sc_ap_pathway_db", "sc_ap_pathway_org",
   "sc_ap_correlation", "sc_ap_trajectory",
   # M4 (2026-10-26) : QC doublets & ambiant — opt-in, défauts = defaults.R.
