@@ -4,10 +4,11 @@ mod_bulk_pathways_ui <- function(id) {
   ns <- NS(id)
   tagList(
     radioButtons(ns("enrich_mode"), i18n$t("M\u00e9thode d'enrichissement"),
-                choices = stats::setNames(c("ora","gsea","dir"),
+                choices = stats::setNames(c("ora","gsea","dir","compare"),
                   c(.tr_plain("ORA \u2014 sur g\u00e8nes significatifs (classique)"),
                     .tr_plain("GSEA \u2014 sur tous les g\u00e8nes class\u00e9s (sans seuil)"),
-                    .tr_plain("Directionnelle \u2014 goana/kegga (table DE compl\u00e8te, Up/Down par voie)"))),
+                    .tr_plain("Directionnelle \u2014 goana/kegga (table DE compl\u00e8te, Up/Down par voie)"),
+                    .tr_plain("Comparative — compareCluster (inter-contrastes)"))),
                 selected = "ora"),
     div(class = "small text-muted mb-2",
         i18n$t("GSEA n'a pas besoin de seuil de significativit\u00e9 arbitraire \u2014 elle classe tous les g\u00e8nes par Log2FC et teste l'enrichissement cumul\u00e9. Plus robuste statistiquement, recommand\u00e9e si peu de g\u00e8nes passent vos seuils.")),
@@ -41,6 +42,19 @@ mod_bulk_pathways_ui <- function(id) {
       column(6, selectInput(ns("pathway_org"), i18n$t("Organisme"),
                             choices = stats::setNames(c("human","mouse"),
                               c(.tr_plain("Humain"), .tr_plain("Souris")))))
+    ),
+    # PB v2 (GEMS D5, jalon 2) — compareCluster inter-contrastes : listes
+    # = DE results par contraste (shared_rv$contrasts), fond = rownames de la
+    # matrice filtrée (M12, un seul fond déclaré).
+    conditionalPanel(
+      condition = "input.enrich_mode == 'compare'", ns = ns,
+      selectInput(ns("comp_source"), i18n$t("Gènes par contraste"),
+                  choices = stats::setNames(c("all","up","down"),
+                    c(.tr_plain("Tous significatifs"), .tr_plain("Up seulement"), .tr_plain("Down seulement")))),
+      numericInput(ns("comp_fdr"), i18n$t("Seuil FDR (sélection DE comparative)"),
+                   value = 0.05, min = 0.001, max = 0.5, step = 0.01),
+      div(class = "small text-muted",
+          i18n$t("Compare les enrichissements des contrastes chargés (au moins 2 contrastes avec des gènes significatifs au seuil requis)."))
     ),
     numericInput(ns("pathway_pval"), i18n$t("P-value cutoff"), value = 0.05, min = 0.001, max = 0.1, step = 0.01),
 
@@ -131,6 +145,9 @@ mod_bulk_pathways_output_ui <- function(id) {
           )
         )),
       # Bulk V2 M2 — scores par échantillon (voies x échantillons)
+      # PB v2 (GEMS D5) — comparaison inter-contrastes (compareCluster)
+      nav_panel(i18n$t("Comparative"), value = "tab_comp",
+        fluidRow(column(12, DTOutput(ns("comp_table"))))),
       nav_panel(i18n$t("Scores par \u00e9chantillon"), value = "tab_scores",
         uiOutput(ns("scores_dropped_ui")),
         fluidRow(
@@ -385,7 +402,7 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
     # ── i18n push on language switch ─────────────────────────────────────
     observeEvent(global_data$language, {
       updateRadioButtons(session, "enrich_mode", label = .tr("M\u00e9thode d'enrichissement"),
-        choices = stats::setNames(c("ora","gsea","dir"),
+        choices = stats::setNames(c("ora","gsea","dir","compare"),
           c(.tr("ORA \u2014 sur g\u00e8nes significatifs (classique)"), .tr("GSEA \u2014 sur tous les g\u00e8nes class\u00e9s (sans seuil)"),
             .tr("Directionnelle \u2014 goana/kegga (table DE compl\u00e8te, Up/Down par voie)"))))
       updateSelectInput(session, "pathway_source", label = .tr("Source de g\u00e8nes"),
@@ -793,6 +810,62 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         return()
       }
 
+      # ── PB v2 (GEMS D5, jalon 2) — COMPARATIVE (compareCluster) ────────────
+      # Listes = gènes significatifs PAR CONTRASTE (shared_rv$contrasts) ;
+      # fond = rownames de la matrice filtrée (M12, un seul fond déclaré) ;
+      # même protocole drive que les 3 modes existants.
+      if (input$enrich_mode == "compare") {
+        fdr_c <- input$comp_fdr %||% 0.05
+        direction <- input$comp_source %||% "all"
+        lists <- lapply(names(shared_rv$contrasts), function(nm) {
+          de <- shared_rv$contrasts[[nm]]
+          if (is.null(de) || !is.data.frame(de) ||
+              !all(c("gene", "padj") %in% names(de))) return(NULL)
+          sel <- !is.na(de$padj) & de$padj < fdr_c
+          if (identical(direction, "up"))   sel <- sel & de$log2FoldChange > 0
+          if (identical(direction, "down")) sel <- sel & de$log2FoldChange < 0
+          unique(as.character(de$gene[sel]))
+        })
+        names(lists) <- names(shared_rv$contrasts)
+        lists <- Filter(function(x) !is.null(x) && length(x) > 0, lists)
+        if (length(lists) < 2) {
+          showNotification(.tr("⚠️ Comparative : au moins 2 contrastes avec des gènes significatifs au seuil requis — lancez l'étape 2 (Analyse Différentielle) sur plusieurs contrastes."), type = "warning")
+          outcome$reason <- "fewer than 2 contrasts with DE genes at threshold"
+          drive_record("run_pathway", "not_ready")
+          return()
+        }
+        db_c <- switch(input$pathway_db %||% "GOBP", GOBP = "GO", KEGG = "KEGG", "GO")
+        p$set(message = .tr("Comparative (compareCluster) en cours..."), value = 0.3)
+        tryCatch({
+          res <- run_pathway_compare_cluster(
+            gene_lists = lists,
+            universe_ids = rownames(shiny::isolate(shared_rv$filtered_counts)),
+            db = db_c, organism = input$pathway_org,
+            pvalue_cutoff = 0.05, qvalue_cutoff = 0.2)
+          tbl <- rbind(res$go, res$kegg)
+          if (is.null(tbl) || nrow(tbl) == 0L) {
+            showNotification(.tr("ℹ️ Aucune voie comparative sous les seuils."), type = "warning")
+            shared_rv$pathway_comp_results <- NULL
+            outcome$reason <- "compareCluster ran and found no pathway"
+            drive_record("run_pathway", "empty", 0L)
+            return()
+          }
+          shared_rv$pathway_comp_results <- res
+          shared_rv$active_tab <- "tab_comp"
+          showNotification(.t_fmt(.tr("✅ Comparative (compareCluster) : {n} voies"), n = nrow(tbl)),
+                           type = "message")
+          drive_record("run_pathway", "done", nrow(tbl))
+          outcome$v <- "ok"
+        }, error = function(e) {
+          showNotification(.t_fmt(.tr("❌ Erreur comparative: {msg}"), msg = as.character(e$message)[1]),
+                           type = "error", duration = 8)
+          shared_rv$pathway_comp_results <- NULL
+          drive_record("run_pathway", "error", error = as.character(e$message)[1])
+          outcome$v <- "failed"
+        })
+        return()
+      }
+
       genes_to_test <- NULL
       if (input$pathway_source %in% c("up","down","all_sig")) {
         res <- .active_de_results()
@@ -937,6 +1010,16 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
                        tr("Up"), tr("Down"), tr("P Up"), tr("FDR Up"),
                        tr("P Down"), tr("FDR Down"), "db")[seq_along(t)]
       ts_datatable(t, page_length = 15L, filename_base = "pathways_dir")
+    })
+
+    # PB v2 (GEMS D5, jalon 2) — table comparative (Cluster = contraste)
+    output$comp_table <- renderDT({
+      global_data$language                     # i18n trigger
+      req(shared_rv$pathway_comp_results)
+      r <- shared_rv$pathway_comp_results
+      t <- rbind(r$go, r$kegg)
+      req(t)
+      ts_datatable(t, page_length = 15L, filename_base = "pathways_compare")
     })
 
     # Choix du barcodeplot : un identifiant de voie par entrée (ID conservé
