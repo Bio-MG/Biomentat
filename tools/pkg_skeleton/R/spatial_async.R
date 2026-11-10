@@ -217,7 +217,27 @@ APP_DAEMON_SOURCE_FILES <- c(
   # appelle bulk_assert_raw_counts(), defini dans le premier. Mesure : sourcer
   # bulk_helpers.R seul laisse cette fonction introuvable dans le daemon.
   "tools/pkg_skeleton/R/batch_correction.R",
-  "tools/pkg_skeleton/R/bulk_helpers.R"
+  "tools/pkg_skeleton/R/bulk_helpers.R",
+  # --- SC : fonctions de modules requises par le coeur auto-pipeline (2026-11-10)
+  # BUG MESURE (run operateur 16:07-16:12, session 6561 vivante) : le pipeline
+  # auto affichait « SingleR/celldex non installes ou non disponibles —
+  # annotation ignoree » ALORS QUE SingleR + celldex sont installes et
+  # attaches au boot (log F2) — le skip venait du TROISIEME membre du garde
+  # sc_pipeline.R:537 `exists(".run_singler_safe", mode = "function")` :
+  # la fonction vit dans modules/sc/mod_sc_annotation.R, jamais prechargee
+  # (cette liste ne contenait que tools/pkg_skeleton/R/) → garde FALSE dans
+  # le daemon mirai, message mensonger, annotation silencieusement absente.
+  # Meme classe que la panne Milo 4E-4 (« could not find function », message
+  # plus haut). mod_sc_pathways.R porte .remap_if_ensg — garde jumelle
+  # sc_pipeline.R:589 : le remap ENSG->symbole sautait silencieusement en
+  # daemon (no-op invisible sur donnees symboles, faux defaut sur ENSG).
+  # Les deux fichiers sont PURS (definitions seulement, zero effet de bord
+  # top-level : library/source/options absents — mesure grep 2026-11-10).
+  # LIMITE documentee : la branche warning de .remap_if_ensg appelle
+  # .tr_plain (global.R:354, processus principal) — touchee seulement si
+  # AnnotationDbi/org.db ABSENT du daemon ; la voie nominale n'y touche pas.
+  "modules/sc/mod_sc_annotation.R",
+  "modules/sc/mod_sc_pathways.R"
 )
 
 #' Resolve the application root WITHOUT trusting getwd() (4E-4)

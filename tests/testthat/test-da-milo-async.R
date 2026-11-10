@@ -42,6 +42,35 @@ test_that("APP_DAEMON_SOURCE_FILES couvre la fermeture Milo et pointe des fichie
   expect_false(any(grepl("sccoda", APP_DAEMON_SOURCE_FILES, ignore.case = TRUE)))
 })
 
+test_that("APP_DAEMON_SOURCE_FILES couvre les gardes exists() du coeur SC auto-pipeline", {
+  # Jalon 2026-11-10 (BUG MESURE, run operateur 16:07-16:12 session vivante) :
+  # le pipeline auto tournant dans un daemon mirai, les gardes exists() du
+  # coeur (sc_pipeline.R) resolvent dans l'environnement PRECHARGE — pas dans
+  # le global du processus principal. .run_singler_safe (annotation SingleR,
+  # garde sc_pipeline.R:537) et .remap_if_ensg (remap ENSG->symbole avant ORA,
+  # garde sc_pipeline.R:589) vivent dans des FICHIERS DE MODULE jamais
+  # precharges → garde FALSE en daemon, repli SILENCIEUX : « SingleR/celldex
+  # non installes » (mensonge — packages installes) et remap ignore. Meme
+  # classe que la panne Milo 4E-4, d'ou la garde dans CE fichier.
+  expect_true(all(c(
+    "modules/sc/mod_sc_annotation.R",
+    "modules/sc/mod_sc_pathways.R"
+  ) %in% APP_DAEMON_SOURCE_FILES))
+
+  # Falsification du contenu : sourcer chaque fichier module dans un
+  # environnement vierge DOIT y definir la fonction que le coeur cherche —
+  # sinon le preload ajoute un chemin qui ne fournit rien.
+  e_ann <- new.env(parent = baseenv())
+  source(file.path(ts_project_root(), "modules/sc/mod_sc_annotation.R"),
+         local = e_ann)
+  expect_true(exists(".run_singler_safe", envir = e_ann, mode = "function"))
+
+  e_pw <- new.env(parent = baseenv())
+  source(file.path(ts_project_root(), "modules/sc/mod_sc_pathways.R"),
+         local = e_pw)
+  expect_true(exists(".remap_if_ensg", envir = e_pw, mode = "function"))
+})
+
 test_that("le module Milo passe par le pool applicatif partage (4E-4)", {
   src <- paste(readLines(file.path(ts_project_root(), "modules/sc/mod_sc_da_milo.R")),
                collapse = "\n")
