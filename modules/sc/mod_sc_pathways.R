@@ -152,10 +152,16 @@ mod_sc_pathways_ui <- function(id) {
                      options=list(placeholder="Selectionnez genes"))),
     fluidRow(
       column(6, selectInput(ns("pathway_db"), i18n$t("Base de donnees"),
-               choices=setNames(c("GOBP","KEGG","Reactome"), c(.tr_plain("GO Biological Process"), .tr_plain("KEGG Pathways"), .tr_plain("Reactome"))))),
+               choices=setNames(c("GOBP","KEGG","Reactome","Packs"),
+                 c(.tr_plain("GO Biological Process"), .tr_plain("KEGG Pathways"), .tr_plain("Reactome"),
+                   .tr_plain("Packs (GMT libraries)"))))),
       column(6, selectInput(ns("pathway_org"), i18n$t("Organisme"),
                choices=setNames(c("human","mouse"), c(.tr_plain("Humain"), .tr_plain("Souris")))))
     ),
+    # PK-2 (pilier 2 local, fiche packs §3/§4.3) : multi-sélection des
+    # librairies GMT installées — le sélecteur n'apparaît que sur « Packs » ;
+    # librairies = registre session (scan PK-1 au démarrage).
+    uiOutput(ns("packs_libs_ui")),
     numericInput(ns("pathway_pval"), i18n$t("P-value cutoff"), value=0.05, min=0.001, max=0.1, step=0.01),
     actionButton(ns("run_pathway"), i18n$t("Lancer Enrichissement"), class="btn-warning w-100", icon=icon("dna")),
     hr(),
@@ -244,6 +250,22 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
       updateSelectInput(session, "pathway_db", selected = shared_rv$pathway_db)
     }, ignoreInit = TRUE)
 
+    # PK-2 (pilier 2 local) : sélecteur multi-librairies des packs — rendu
+    # seulement sur la base « Packs » ; librairies = registre session
+    # (global_data$packs, scan PK-1 au démarrage de chaque session).
+    output$packs_libs_ui <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      if (!identical(input$pathway_db, "Packs")) return(NULL)
+      ch <- packs_library_choices(shiny::isolate(global_data$packs %||% list()))
+      if (length(ch) == 0L) {
+        return(tags$div(class = "small text-muted",
+                        .tr("Aucun pack de librairies installé — déposez un dossier dans data_sc/packs/ (effectif à la session suivante).")))
+      }
+      selectizeInput(ns("pathway_packs_libs"), .tr("Librairies de packs"),
+                     choices = ch, multiple = TRUE,
+                     options = list(placeholder = .tr("Sélectionnez une ou plusieurs librairies")))
+    })
+
     observeEvent(input$run_pathway, {
       req(global_data$sc_obj)
       genes_to_test <- NULL
@@ -281,15 +303,45 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
                          type="warning"); return()
       }
 
+      # PK-2 (pilier 2 local, fiche packs §3/§4) : la base « Packs » — refus
+      # honnêtes AVANT le vol. Souris = D4 (décision JOINT GEMS D5) : les
+      # librairies Enrichr sont des symboles humains, jamais un mapping
+      # silencieux ; la voie drive (inputs gelés) reste inchangée.
+      packs_libs <- NULL
+      if (identical(input$pathway_db, "Packs")) {
+        if (!identical(input$pathway_org, "human")) {
+          showNotification(.tr("Packs : orthologie souris en attente de l'arbitrage D4 (GEMS D5) — librairies symboles humains uniquement."),
+                           type="warning", duration=8); return()
+        }
+        packs_libs <- input$pathway_packs_libs
+        if (is.null(packs_libs) || length(packs_libs) == 0L) {
+          showNotification(.tr("Packs : sélectionnez au moins une librairie."),
+                           type="warning", duration=6); return()
+        }
+      }
+
       # add = TRUE : le module DÉCLARE un job drive — un on.exit() nu
       # effacerait la déclaration (garde test-drive-watcher.R §additive).
       p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
       p$set(message=.tr("Enrichissement..."), value=0.3)
 
       tryCatch({
-        res <- run_pathway_enrichment(genes=genes_to_test, organism=input$pathway_org,
-                                      database=input$pathway_db, pval_cutoff=input$pathway_pval,
-                                      universe = rownames(global_data$sc_obj))
+        res <- if (identical(input$pathway_db, "Packs")) {
+          # PK-2 : enricher() en espace SYMBOLES — aucun bitr (les librairies
+          # Enrichr consomment les symboles directement) ; l'univers reste
+          # les gènes mesurés de l'objet actif.
+          t2g <- packs_term2gene(shiny::isolate(global_data$packs %||% list()),
+                                 packs_libs)
+          run_packs_enrichment(genes=genes_to_test,
+                               term2gene=t2g$term2gene,
+                               term2name=t2g$term2name,
+                               universe = rownames(global_data$sc_obj),
+                               pval_cutoff=input$pathway_pval)
+        } else {
+          run_pathway_enrichment(genes=genes_to_test, organism=input$pathway_org,
+                                 database=input$pathway_db, pval_cutoff=input$pathway_pval,
+                                 universe = rownames(global_data$sc_obj))
+        }
         if (nrow(res)==0) {
           showNotification(.tr("ℹ️ Aucun pathway enrichi."), type="warning")
           pathway_rv(NULL); return()

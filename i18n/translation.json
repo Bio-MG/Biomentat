@@ -12892,6 +12892,11 @@
     {"fr": "❌ Erreur comparative: {msg}", "en": "❌ Comparative error: {msg}"},
     {"fr": "⚠️ Comparative : au moins 2 contrastes avec des gènes significatifs au seuil requis — lancez l'étape 2 (Analyse Différentielle) sur plusieurs contrastes.", "en": "⚠️ Comparative: at least 2 contrasts with significant genes at the required threshold — run step 2 (Differential Analysis) on several contrasts first."},
     {"fr": "ℹ️ Aucune voie comparative sous les seuils.", "en": "ℹ️ No comparative pathway below the thresholds."},
-    {"fr": "Comparative", "en": "Comparative"}
+    {"fr": "Comparative", "en": "Comparative"},
+    {"fr": "Librairies de packs", "en": "Pack libraries"},
+    {"fr": "Sélectionnez une ou plusieurs librairies", "en": "Select one or more libraries"},
+    {"fr": "Aucun pack de librairies installé — déposez un dossier dans data_sc/packs/ (effectif à la session suivante).", "en": "No library pack installed — drop a folder into data_sc/packs/ (active next session)."},
+    {"fr": "Packs : sélectionnez au moins une librairie.", "en": "Packs: select at least one library."},
+    {"fr": "Packs : orthologie souris en attente de l'arbitrage D4 (GEMS D5) — librairies symboles humains uniquement.", "en": "Packs: mouse orthology awaits arbitration D4 (GEMS D5) — human-symbol libraries only."}
   ]
 }

@@ -1453,3 +1453,287 @@ run_pathway_compare_cluster <- function(gene_lists, universe_ids,
                    per_list = per_list, dropped = dropped,
                    notes = notes))
 }
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PACKS — ORA locale sur les GMT de packs (PK-2, pilier 2 local)
+# fiche docs/proposals/PROPOSAL_PACKS_ECOSYSTEM_2026-11-09.md §3 jalon PK-2 ·
+# détail docs/ideation/PACKS_ECOSYSTEM_ENRICHR_PALETTES.md §4.1/§4.3.
+#
+# Contrat (fiche §4.1) : parsing GMT → TERM2GENE → clusterProfiler::enricher()
+# — le moteur existant fait tout : même objet enrichResult, même contrat de
+# table (ID/Description/pvalue/padj/GeneRatio/Count), mêmes exports/plots
+# (cnetplot/emapplot consomment l'attribut `enrich_obj`, motif STAT-S2).
+# Espace SYMBOLES : les librairies Enrichr sont des symboles humains — AUCUN
+# bitr SYMBOL→Entrez (zéro perte de gènes), donc l'univers (gènes détectés de
+# l'expérience, fiche §5 étape 1) est consommé tel quel. Zéro nouvelle
+# dépendance (parsing GMT = base R ; clusterProfiler déjà au lock).
+# Orthologie souris = D4, décision JOINT GEMS D5 — refus honnête côté modules,
+# le moteur reste organisme-free.
+# ═════════════════════════════════════════════════════════════════════════════
+
+#' Lecture pure d'un fichier GMT (librairie de gènes de pack)
+#'
+#' Format standard vérifié (fiche packs §2.7) : une ligne par terme,
+#' `terme \t description \t gene1 \t gene2 …` — la description peut être vide
+#' (mode texte Enrichr). Gènes uniques et nettoyés par terme.
+#'
+#' @param gmt_path Chemin du fichier .gmt (chaîne unique).
+#' @return list(term2gene = data.frame(term, gene),
+#'              term2name = data.frame(term, name) — name = description ou
+#'              terme si vide).
+#' @refusals pathway_error : chemin malformé, fichier absent, fichier vide,
+#'   ligne < 3 champs (la ligne est nommée), terme vide, terme sans gène,
+#'   terme dupliqué dans le même fichier.
+packs_read_gmt <- function(gmt_path) {
+  if (missing(gmt_path) || !is.character(gmt_path) || length(gmt_path) != 1L ||
+      is.na(gmt_path) || !nzchar(trimws(gmt_path))) {
+    stop(errorCondition(
+      "packs_read_gmt : chemin de fichier GMT attendu (chaîne unique non vide).",
+      class = "pathway_error"))
+  }
+  if (!file.exists(gmt_path)) {
+    stop(errorCondition(sprintf("Fichier GMT introuvable : « %s ».", gmt_path),
+                        class = "pathway_error"))
+  }
+  lines <- readLines(gmt_path, warn = FALSE)
+  lines <- lines[nzchar(trimws(lines))]
+  if (length(lines) == 0L) {
+    stop(errorCondition(sprintf("Fichier GMT vide : « %s ».", gmt_path),
+                        class = "pathway_error"))
+  }
+  seen <- new.env(parent = emptyenv())
+  t2g_parts <- vector("list", length(lines))
+  t2n_parts <- vector("list", length(lines))
+  for (i in seq_along(lines)) {
+    fields <- strsplit(lines[[i]], "\t", fixed = TRUE)[[1]]
+    if (length(fields) < 3L) {
+      stop(errorCondition(sprintf(
+        "GMT malformé « %s » ligne %d : attendus >= 3 champs tab-séparés (terme, description, gènes…), reçus %d.",
+        gmt_path, i, length(fields)), class = "pathway_error"))
+    }
+    term <- trimws(fields[[1]])
+    name_raw <- trimws(fields[[2]])
+    genes <- unique(trimws(fields[-c(1L, 2L)]))
+    genes <- genes[nzchar(genes)]
+    if (!nzchar(term)) {
+      stop(errorCondition(sprintf(
+        "GMT malformé « %s » ligne %d : terme vide.", gmt_path, i),
+        class = "pathway_error"))
+    }
+    if (length(genes) == 0L) {
+      stop(errorCondition(sprintf(
+        "GMT malformé « %s » ligne %d : le terme « %s » n'a aucun gène.",
+        gmt_path, i, term), class = "pathway_error"))
+    }
+    if (!is.null(seen[[term]])) {
+      stop(errorCondition(sprintf(
+        "GMT malformé « %s » ligne %d : terme dupliqué « %s » — une librairie GMT doit avoir des termes uniques.",
+        gmt_path, i, term), class = "pathway_error"))
+    }
+    seen[[term]] <- TRUE
+    t2g_parts[[i]] <- data.frame(term = term, gene = genes,
+                                 stringsAsFactors = FALSE)
+    t2n_parts[[i]] <- data.frame(term = term,
+                                 name = if (nzchar(name_raw)) name_raw else term,
+                                 stringsAsFactors = FALSE)
+  }
+  list(term2gene = do.call(rbind, t2g_parts),
+       term2name = do.call(rbind, t2n_parts))
+}
+
+#' Librairies disponibles dans le registre des packs (choix de sélection)
+#'
+#' @param packs Registre session (named list de biomentat_pack — scan PK-1) ;
+#'   NULL/vide tolérés. Les packs dont le type n'est pas « libraries » sont
+#'   ignorés (les palettes ne sont pas des librairies de gènes).
+#' @return named character : valeur = « <pack_id>||<basename> » (clé de
+#'   sélection stable), label = « <pack_name> — <fichier sans extension> ».
+#'   Vecteur vide quand aucun pack de librairies.
+packs_library_choices <- function(packs) {
+  if (is.null(packs) || !is.list(packs) || length(packs) == 0L) return(character(0))
+  vals <- character(0)
+  # itération sur les VALEURS : le registre session est nommé (PK-1), mais un
+  # registre anonyme (fixture de test, appel programmatique) reste fonctionnel.
+  for (e in packs) {
+    if (!is.list(e) || !identical(e$type, "libraries")) next
+    files <- e$files
+    if (!is.character(files) || length(files) == 0L) next
+    pid <- if (is.character(e$id) && length(e$id) == 1L && nzchar(e$id)) e$id else "pack"
+    for (f in files) {
+      key <- paste0(pid, "||", basename(f))
+      stem <- sub("\\.gmt$", "", basename(f), ignore.case = TRUE)
+      label <- sprintf("%s — %s", e$name %||% pid, stem)
+      vals[[key]] <- label
+    }
+  }
+  vals
+}
+
+#' TERM2GENE/TERM2NAME combinés pour les librairies sélectionnées
+#'
+#' Les identifiants de terme sont préfixés `<pack_id>::<fichier>::<terme>` :
+#' un même nom de terme dans deux librairies ne collisionne jamais, et la
+#' provenance (pack + librairie) reste visible dans la table rendue et les
+#' exports — la Description brute du GMT passe par TERM2NAME.
+#'
+#' @param packs Registre session (cf. packs_library_choices).
+#' @param selected Character : clés de sélection telles que émises par
+#'   packs_library_choices (« <pack_id>||<basename> »).
+#' @return list(term2gene = data.frame(term, gene),
+#'              term2name = data.frame(term, name)).
+#' @refusals pathway_error : sélection vide/NULL, clé inconnue (les clés
+#'   valides sont listées), fichier GMT déclaré par le pack absent du disque.
+packs_term2gene <- function(packs, selected) {
+  if (missing(selected) || is.null(selected) || !is.character(selected) ||
+      length(selected) == 0L || all(!nzchar(trimws(selected)))) {
+    stop(errorCondition(
+      "Packs : sélectionnez au moins une librairie (sélection vide).",
+      class = "pathway_error"))
+  }
+  valid <- packs_library_choices(packs)
+  bad <- setdiff(trimws(selected), names(valid))
+  if (length(bad) > 0L) {
+    stop(errorCondition(sprintf(
+      "Packs : librairie(s) inconnue(s) : « %s » — clés valides : %s. Ré-ouvrez le sélecteur (le registre a peut-être changé).",
+      paste(bad, collapse = ", "),
+      if (length(valid) == 0L) "(aucune — aucun pack de librairies installé)" else paste(names(valid), collapse = ", ")),
+      class = "pathway_error"))
+  }
+  t2g_parts <- vector("list", length(selected))
+  t2n_parts <- vector("list", length(selected))
+  # recherche du pack PAR ID (les ids PK-1 sont uniques au scan ; le registre
+  # peut être nommé ou non — l'indexation par nom ne suffit pas)
+  .find_pack <- function(pid) {
+    for (e in packs) if (is.list(e) && identical(e$id, pid)) return(e)
+    NULL
+  }
+  for (i in seq_along(selected)) {
+    key <- trimws(selected[[i]])
+    pack_id <- sub("\\|\\|.*$", "", key)
+    fname <- sub("^.*\\|\\|", "", key)
+    e <- .find_pack(pack_id)
+    if (is.null(e)) {
+      stop(errorCondition(sprintf(
+        "Packs : le pack « %s » est introuvable dans le registre session — ré-ouvrez le sélecteur (le registre a peut-être changé).",
+        pack_id), class = "pathway_error"))
+    }
+    gmt_path <- file.path(e$dir, fname)
+    if (!file.exists(gmt_path)) {
+      stop(errorCondition(sprintf(
+        "Packs : le fichier GMT « %s » déclaré par le pack « %s » est introuvable sur le disque — le dossier a peut-être bougé depuis le scan.",
+        gmt_path, pack_id), class = "pathway_error"))
+    }
+    lib <- packs_read_gmt(gmt_path)
+    stem <- sub("\\.gmt$", "", fname, ignore.case = TRUE)
+    prefix <- paste0(pack_id, "::", stem, "::")
+    t2g <- lib$term2gene
+    t2g$term <- paste0(prefix, t2g$term)
+    t2n <- lib$term2name
+    t2n$term <- paste0(prefix, t2n$term)
+    t2g_parts[[i]] <- t2g
+    t2n_parts[[i]] <- t2n
+  }
+  list(term2gene = do.call(rbind, t2g_parts),
+       term2name = do.call(rbind, t2n_parts))
+}
+
+#' ORA locale sur les librairies de packs — enricher(), contrat inchangé
+#'
+#' Même famille de sorties que run_pathway_enrichment() : data.frame
+#' (ID/Description/GeneRatio/BgRatio/pvalue/p.adjust/qvalue/geneID/Count) ou
+#' le data.frame vide au même contrat si aucun résultat, et l'objet
+#' enrichResult brut attaché en attribut `enrich_obj` (STAT-S2 — les vues
+#' réseau enrichplot cnetplot/emapplot le consomment). Espace SYMBOLES :
+#' pas de conversion Entrez — l'univers déclaré (gènes détectés de
+#' l'expérience) est consommé tel quel, en éliminant le biais de background
+#' d'Enrichr (fiche §4.1 « bonus rigueur »).
+#'
+#' @param genes Character : gènes à tester (symboles ; identifiants composites
+#'   ENSG…_SYMBOL acceptés, même règle B1-C que le moteur).
+#' @param term2gene data.frame(term, gene) — cf. packs_term2gene().
+#' @param term2name data.frame(term, name) optionnel (descriptions GMT).
+#' @param universe Character optionnel : gènes mesurés de l'expérience.
+#' @param pval_cutoff,qval_cutoff,p_adjust_method Identiques au moteur
+#'   (validations miroir, avant tout chargement de paquet).
+#' @return data.frame enrichi (ou vide au même contrat) + attribut enrich_obj.
+#' @refusals pathway_error : TERM2GENE malformé, gènes vides après nettoyage,
+#'   qval hors ]0;1], méthode d'ajustement inconnue.
+run_packs_enrichment <- function(genes, term2gene, term2name = NULL,
+                                 universe = NULL, pval_cutoff = 0.05,
+                                 qval_cutoff = 0.2, p_adjust_method = "BH") {
+  p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
+  qval_cutoff <- suppressWarnings(as.numeric(qval_cutoff))
+  if (length(qval_cutoff) != 1L || is.na(qval_cutoff) ||
+      qval_cutoff <= 0 || qval_cutoff > 1) {
+    stop(errorCondition("qval_cutoff doit être un nombre dans ]0, 1].",
+                        class = "pathway_error"))
+  }
+  if (missing(term2gene) || !is.data.frame(term2gene) ||
+      !all(c("term", "gene") %in% names(term2gene)) ||
+      nrow(term2gene) == 0L) {
+    stop(errorCondition(
+      "Packs : TERM2GENE attendu (data.frame non vide, colonnes term/gene) — cf. packs_term2gene().",
+      class = "pathway_error"))
+  }
+  if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
+    stop(errorCondition(
+      "Package 'clusterProfiler' requis. Installez-le via BiocManager.",
+      class = "pathway_error"))
+  }
+  library(clusterProfiler)
+  genes <- strip_composite_gene_ids(genes)
+  genes <- unique(trimws(genes[!is.na(genes) & nchar(trimws(genes)) > 0]))
+  if (length(genes) == 0L) {
+    stop(errorCondition(
+      "Packs : aucun gène valide fourni après nettoyage.", class = "pathway_error"))
+  }
+  universe_used <- NULL
+  if (!is.null(universe)) {
+    universe_used <- strip_composite_gene_ids(universe)
+    universe_used <- unique(trimws(universe_used[!is.na(universe_used) &
+                                                   nchar(trimws(universe_used)) > 0]))
+    if (length(universe_used) == 0L) universe_used <- NULL
+  }
+  t2g <- term2gene[, c("term", "gene"), drop = FALSE]
+  t2g$term <- trimws(as.character(t2g$term))
+  t2g$gene <- trimws(as.character(t2g$gene))
+  t2g <- t2g[nzchar(t2g$term) & nzchar(t2g$gene), , drop = FALSE]
+  if (nrow(t2g) == 0L) {
+    stop(errorCondition(
+      "Packs : TERM2GENE vide après nettoyage (termes/gènes vides).",
+      class = "pathway_error"))
+  }
+  t2n <- NULL
+  if (!is.null(term2name) && is.data.frame(term2name) &&
+      all(c("term", "name") %in% names(term2name)) && nrow(term2name) > 0L) {
+    t2n <- term2name[, c("term", "name"), drop = FALSE]
+    t2n$term <- trimws(as.character(t2n$term))
+    t2n$name <- trimws(as.character(t2n$name))
+    t2n <- t2n[nzchar(t2n$term) & nzchar(t2n$name), , drop = FALSE]
+    if (nrow(t2n) == 0L) t2n <- NULL
+  }
+  enrich_result <- enricher(
+    gene          = genes,
+    TERM2GENE     = t2g,
+    TERM2NAME     = t2n,
+    pvalueCutoff  = pval_cutoff,
+    qvalueCutoff  = qval_cutoff,
+    pAdjustMethod = p_adjust_method,
+    universe      = universe_used
+  )
+  if (is.null(enrich_result) || nrow(as.data.frame(enrich_result)) == 0L) {
+    return(data.frame(
+      ID          = character(0),
+      Description = character(0),
+      p.adjust    = numeric(0),
+      Count       = integer(0),
+      GeneRatio   = character(0)
+    ))
+  }
+  res_df <- as.data.frame(enrich_result)
+  # STAT-S2 (additif — motif gsea_obj) : l'objet brut reste porté pour les
+  # vues réseau enrichplot (cnetplot/emapplot + pairwise_termsim).
+  attr(res_df, "enrich_obj") <- enrich_result
+  res_df
+}
+
