@@ -12865,38 +12865,173 @@
       "fr": "Lecture stricte des couches spliced/unspliced (+ ambiguous si present). Aucune inference ; les symboles de gC(nes dupliquC)s sont rendus uniques (avertissement affichC)).",
       "en": "Strict reading of the spliced/unspliced layers (+ ambiguous when present). No inference; duplicated gene symbols are made unique (warning shown)."
     },
-    {"fr": "Reference mapping (MapQuery)", "en": "Reference mapping (MapQuery)"},
-    {"fr": "Transfère les étiquettes d'un objet annoté de la session vers l'objet actif (FindTransferAnchors + MapQuery, voie native Seurat 5).", "en": "Transfer labels from an annotated session object to the active object (FindTransferAnchors + MapQuery, native Seurat 5 path)."},
-    {"fr": "Objet de référence (session)", "en": "Reference object (session)"},
-    {"fr": "Colonne d'étiquettes", "en": "Label column"},
-    {"fr": "Transférer les étiquettes (MapQuery)", "en": "Transfer labels (MapQuery)"},
-    {"fr": "Query projetée sur l'UMAP de référence (ref.umap)", "en": "Query projected onto the reference UMAP (ref.umap)"},
-    {"fr": "Scores de confiance (max par cellule)", "en": "Confidence scores (max per cell)"},
-    {"fr": "Erreur: objet de référence introuvable dans la session.", "en": "Error: reference object not found in the session."},
-    {"fr": "Erreur: l'objet de référence et l'objet actif sont le même objet — chargez/activez un second dataset.", "en": "Error: the reference object and the active object are the same — load/activate a second dataset."},
-    {"fr": "Scores de cycle cellulaire (S/G2M)", "en": "Cell cycle scores (S/G2M)"},
-    {"fr": "Régression dans ScaleData", "en": "Regression in ScaleData"},
-    {"fr": "CC.Difference (S − G2M, préserve le cyclage)", "en": "CC.Difference (S − G2M, preserves cycling)"},
-    {"fr": "S.Score + G2M.Score (complète)", "en": "S.Score + G2M.Score (complete)"},
-    {"fr": "Reference mapping (MapQuery)...", "en": "Reference mapping (MapQuery)..."},
-    {"fr": "Ancres + transfert...", "en": "Anchors + transfer..."},
-    {"fr": "Dimensions PCA", "en": "PCA dimensions"},
-    {"fr": "Aucun transfert MapQuery — lancez 'Transférer les étiquettes (MapQuery)'.", "en": "No MapQuery transfer yet — run 'Transfer labels (MapQuery)'."},
-    {"fr": "Aucun score MapQuery — lancez 'Transférer les étiquettes (MapQuery)'.", "en": "No MapQuery scores yet — run 'Transfer labels (MapQuery)'."},
-    {"fr": "Comparative — compareCluster (inter-contrastes)", "en": "Comparative — compareCluster (across contrasts)"},
-    {"fr": "Gènes par contraste", "en": "Genes per contrast"},
-    {"fr": "Seuil FDR (sélection DE comparative)", "en": "FDR threshold (comparative DE selection)"},
-    {"fr": "Compare les enrichissements des contrastes chargés (au moins 2 contrastes avec des gènes significatifs au seuil requis).", "en": "Compares enrichment of the loaded contrasts (at least 2 contrasts with significant genes at the required threshold)."},
-    {"fr": "Comparative (compareCluster) en cours...", "en": "Comparative (compareCluster) running..."},
-    {"fr": "✅ Comparative (compareCluster) : {n} voies", "en": "✅ Comparative (compareCluster): {n} pathways"},
-    {"fr": "❌ Erreur comparative: {msg}", "en": "❌ Comparative error: {msg}"},
-    {"fr": "⚠️ Comparative : au moins 2 contrastes avec des gènes significatifs au seuil requis — lancez l'étape 2 (Analyse Différentielle) sur plusieurs contrastes.", "en": "⚠️ Comparative: at least 2 contrasts with significant genes at the required threshold — run step 2 (Differential Analysis) on several contrasts first."},
-    {"fr": "ℹ️ Aucune voie comparative sous les seuils.", "en": "ℹ️ No comparative pathway below the thresholds."},
-    {"fr": "Comparative", "en": "Comparative"},
-    {"fr": "Librairies de packs", "en": "Pack libraries"},
-    {"fr": "Sélectionnez une ou plusieurs librairies", "en": "Select one or more libraries"},
-    {"fr": "Aucun pack de librairies installé — déposez un dossier dans data_sc/packs/ (effectif à la session suivante).", "en": "No library pack installed — drop a folder into data_sc/packs/ (active next session)."},
-    {"fr": "Packs : sélectionnez au moins une librairie.", "en": "Packs: select at least one library."},
-    {"fr": "Packs : orthologie souris en attente de l'arbitrage D4 (GEMS D5) — librairies symboles humains uniquement.", "en": "Packs: mouse orthology awaits arbitration D4 (GEMS D5) — human-symbol libraries only."}
+    {
+      "fr": "Reference mapping (MapQuery)",
+      "en": "Reference mapping (MapQuery)"
+    },
+    {
+      "fr": "Transfère les étiquettes d'un objet annoté de la session vers l'objet actif (FindTransferAnchors + MapQuery, voie native Seurat 5).",
+      "en": "Transfer labels from an annotated session object to the active object (FindTransferAnchors + MapQuery, native Seurat 5 path)."
+    },
+    {
+      "fr": "Objet de référence (session)",
+      "en": "Reference object (session)"
+    },
+    {
+      "fr": "Colonne d'étiquettes",
+      "en": "Label column"
+    },
+    {
+      "fr": "Transférer les étiquettes (MapQuery)",
+      "en": "Transfer labels (MapQuery)"
+    },
+    {
+      "fr": "Query projetée sur l'UMAP de référence (ref.umap)",
+      "en": "Query projected onto the reference UMAP (ref.umap)"
+    },
+    {
+      "fr": "Scores de confiance (max par cellule)",
+      "en": "Confidence scores (max per cell)"
+    },
+    {
+      "fr": "Erreur: objet de référence introuvable dans la session.",
+      "en": "Error: reference object not found in the session."
+    },
+    {
+      "fr": "Erreur: l'objet de référence et l'objet actif sont le même objet — chargez/activez un second dataset.",
+      "en": "Error: the reference object and the active object are the same — load/activate a second dataset."
+    },
+    {
+      "fr": "Scores de cycle cellulaire (S/G2M)",
+      "en": "Cell cycle scores (S/G2M)"
+    },
+    {
+      "fr": "Régression dans ScaleData",
+      "en": "Regression in ScaleData"
+    },
+    {
+      "fr": "CC.Difference (S − G2M, préserve le cyclage)",
+      "en": "CC.Difference (S − G2M, preserves cycling)"
+    },
+    {
+      "fr": "S.Score + G2M.Score (complète)",
+      "en": "S.Score + G2M.Score (complete)"
+    },
+    {
+      "fr": "Reference mapping (MapQuery)...",
+      "en": "Reference mapping (MapQuery)..."
+    },
+    {
+      "fr": "Ancres + transfert...",
+      "en": "Anchors + transfer..."
+    },
+    {
+      "fr": "Dimensions PCA",
+      "en": "PCA dimensions"
+    },
+    {
+      "fr": "Aucun transfert MapQuery — lancez 'Transférer les étiquettes (MapQuery)'.",
+      "en": "No MapQuery transfer yet — run 'Transfer labels (MapQuery)'."
+    },
+    {
+      "fr": "Aucun score MapQuery — lancez 'Transférer les étiquettes (MapQuery)'.",
+      "en": "No MapQuery scores yet — run 'Transfer labels (MapQuery)'."
+    },
+    {
+      "fr": "Comparative — compareCluster (inter-contrastes)",
+      "en": "Comparative — compareCluster (across contrasts)"
+    },
+    {
+      "fr": "Gènes par contraste",
+      "en": "Genes per contrast"
+    },
+    {
+      "fr": "Seuil FDR (sélection DE comparative)",
+      "en": "FDR threshold (comparative DE selection)"
+    },
+    {
+      "fr": "Compare les enrichissements des contrastes chargés (au moins 2 contrastes avec des gènes significatifs au seuil requis).",
+      "en": "Compares enrichment of the loaded contrasts (at least 2 contrasts with significant genes at the required threshold)."
+    },
+    {
+      "fr": "Comparative (compareCluster) en cours...",
+      "en": "Comparative (compareCluster) running..."
+    },
+    {
+      "fr": "✅ Comparative (compareCluster) : {n} voies",
+      "en": "✅ Comparative (compareCluster): {n} pathways"
+    },
+    {
+      "fr": "❌ Erreur comparative: {msg}",
+      "en": "❌ Comparative error: {msg}"
+    },
+    {
+      "fr": "⚠️ Comparative : au moins 2 contrastes avec des gènes significatifs au seuil requis — lancez l'étape 2 (Analyse Différentielle) sur plusieurs contrastes.",
+      "en": "⚠️ Comparative: at least 2 contrasts with significant genes at the required threshold — run step 2 (Differential Analysis) on several contrasts first."
+    },
+    {
+      "fr": "ℹ️ Aucune voie comparative sous les seuils.",
+      "en": "ℹ️ No comparative pathway below the thresholds."
+    },
+    {
+      "fr": "Comparative",
+      "en": "Comparative"
+    },
+    {
+      "fr": "Librairies de packs",
+      "en": "Pack libraries"
+    },
+    {
+      "fr": "Sélectionnez une ou plusieurs librairies",
+      "en": "Select one or more libraries"
+    },
+    {
+      "fr": "Aucun pack de librairies installé — déposez un dossier dans data_sc/packs/ (effectif à la session suivante).",
+      "en": "No library pack installed — drop a folder into data_sc/packs/ (active next session)."
+    },
+    {
+      "fr": "Packs : sélectionnez au moins une librairie.",
+      "en": "Packs: select at least one library."
+    },
+    {
+      "fr": "Packs : orthologie souris en attente de l'arbitrage D4 (GEMS D5) — librairies symboles humains uniquement.",
+      "en": "Packs: mouse orthology awaits arbitration D4 (GEMS D5) — human-symbol libraries only."
+    },
+    {
+      "fr": "Convergence",
+      "en": "Convergence"
+    },
+    {
+      "fr": "La convergence s'applique aux runs Packs multi-librairies (≥ 2 librairies sélectionnées).",
+      "en": "Convergence applies to multi-library Packs runs (≥ 2 libraries selected)."
+    },
+    {
+      "fr": "BH globale sur l'union des tests (toutes librairies confondues) + effondrement de redondance (similarité de Jaccard enrichplot) — 1 cluster = 1 vote.",
+      "en": "Global BH over the union of tests (all libraries pooled) + redundancy collapse (enrichplot Jaccard similarity) — 1 cluster = 1 vote."
+    },
+    {
+      "fr": "Librairie",
+      "en": "Library"
+    },
+    {
+      "fr": "p (brut)",
+      "en": "p (raw)"
+    },
+    {
+      "fr": "p.adjust GLOBAL",
+      "en": "Global p.adjust"
+    },
+    {
+      "fr": "p.adjust PK-2 (run)",
+      "en": "PK-2 p.adjust (run)"
+    },
+    {
+      "fr": "Score (librairies)",
+      "en": "Score (libraries)"
+    },
+    {
+      "fr": "Librairies convergentes",
+      "en": "Convergent libraries"
+    }
   ]
 }

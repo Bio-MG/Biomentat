@@ -1737,3 +1737,351 @@ run_packs_enrichment <- function(genes, term2gene, term2name = NULL,
   res_df
 }
 
+# =============================================================================
+# PK-3 (pilier 3 — couche de convergence, fiche PROPOSAL_PACKS_ECOSYSTEM_
+# 2026-11-09.md §3 jalon PK-3 ; note de conception PACKS_PK3_CONVERGENCE_
+# DESIGN_2026-11-10.md — D5 GO opérateur 2026-11-10 = OPTION A).
+# =============================================================================
+# PK-3 consomme les sorties PK-2 SANS re-définir ni re-runner les moteurs
+# (pilier 4 fgsea/fry/camera = GEMS PB, JAMAIS double-owner, fiche §4/D1) :
+#   1. les p BRUTES sont déjà portées par le contrat PK-2 (colonne `pvalue`) ;
+#   2. la BH GLOBALE est recalculée UNE fois sur l'union des tests
+#      (terme, librairie) — un terme testé dans 3 librairies = 3 tests ;
+#   3. l'effondrement de redondance consomme enrichplot::pairwise_termsim
+#      (déjà au lock, voie nominale du contrat STAT-S2 : l'objet enrichResult
+#      brut porté par l'attribut `enrich_obj` de run_packs_enrichment) —
+#      1 cluster = 1 vote ;
+#   4. le score de convergence = nombre de librairies DISTINCTES où le terme
+#      (ou son cluster) est significatif sous le seuil global.
+# Trois pièges neutralisés (idéation §5) : FDR par librairie ≠ globale (BH
+# globale), librairies redondantes ≠ votes indépendants (clusters termsim),
+# biais de taille (dénominateur BgRatio déjà l'univers commun PK-2 au niveau
+# du TEST). Limitation HONNÊTE documentée : l'union des tests est celle PORTÉE
+# par les tables PK-2 — avec les cutoffs par défaut d'enricher(), les tests
+# éliminés ne sont pas dans le contrat ; la BH globale recalculée sur les
+# survivants est moins conservatrice que la BH PK-2 (qui couvre tous les
+# tests), la colonne `p.adjust_pk2` porte l'original pour l'audit. En v1 le
+# run multi-librairies PK-2 est COMBINÉ (un seul enricher(), IDs préfixés
+# pack::fichier::terme — mod_bulk_pathways/mod_sc_pathways) : un seul
+# `enrich_obj` couvre toutes les librairies et les arêtes de similarité
+# traversent les librairies ; le flux à objets PAR librairie (N enrichResult
+# distincts) reste supporté, sans arête inter-objets (0-fill conservateur).
+# Zéro dépendance nouvelle : enrichplot/clusterProfiler/igraph sont au lock
+# (igraph déjà consommé par bulk_network.R et mod_sc_corr.R).
+# =============================================================================
+
+#' Préfixe librairie d'un ID PK-2 (« pack::fichier:: » des 2 premières
+#' composantes) — NA si l'ID ne porte pas la forme (terme peut contenir « :: »,
+#' seules les 2 premières composantes sont consommées).
+#'
+#' @param ids Character : vecteur d'IDs PK-2.
+#' @return Character même longueur : « pack::fichier » ou NA.
+#' @noRd
+.packs_lib_prefix <- function(ids) {
+  ids <- as.character(ids)
+  out <- rep(NA_character_, length(ids))
+  m <- regmatches(ids, regexec("^([^:]+)::([^:]+)::", ids))
+  ok <- vapply(m, function(x) length(x) == 3L, logical(1))
+  out[ok] <- vapply(m[ok], function(x) paste0(x[2], "::", x[3]), character(1))
+  out
+}
+
+#' Découpe la table PK-2 d'un run combiné multi-librairies en tables
+#' par-librairie (clé « pack::fichier » tirée du préfixe des IDs), chacune
+#' ré-étampée avec l'attribut `enrich_obj` du run (contrat STAT-S2 — l'objet
+#' brut ne survit pas au `[.data.frame`).
+#'
+#' @param res data.frame au contrat PK-2 (run combiné de run_packs_enrichment).
+#' @param enrich_obj objet enrichResult porté par défaut par
+#'   `attr(res, "enrich_obj")` ; NULL admis (les parts sortent sans objet).
+#' @return liste nommée (clé = « pack::fichier », ordre de première
+#'   apparition) de data.frames PK-2 ; liste vide si `res` est vide (jamais
+#'   NULL).
+#' @refusals pathway_error : table sans colonne ID, IDs sans préfixe
+#'   pack::fichier:: (run non-Packs ou non multi-librairies).
+packs_split_libraries <- function(res, enrich_obj = attr(res, "enrich_obj")) {
+  if (!is.data.frame(res) || !("ID" %in% names(res))) {
+    stop(errorCondition(
+      "Packs : split multi-librairies attendu (data.frame au contrat PK-2 avec colonne ID) — cf. run_packs_enrichment().",
+      class = "pathway_error"))
+  }
+  if (nrow(res) == 0L) return(list())
+  lib <- .packs_lib_prefix(res$ID)
+  if (anyNA(lib)) {
+    bad <- unique(trimws(as.character(res$ID[is.na(lib)])))
+    stop(errorCondition(sprintf(
+      "Packs : la table n'est pas un run Packs multi-librairies — %d ID sans préfixe pack::fichier:: (ex. : %s).",
+      length(bad), paste(utils::head(bad, 3), collapse = ", ")),
+      class = "pathway_error"))
+  }
+  keys <- unique(lib) # ordre de première apparition — déterministe
+  out <- lapply(keys, function(k) {
+    part <- res[lib == k, , drop = FALSE]
+    rownames(part) <- NULL
+    if (!is.null(enrich_obj)) attr(part, "enrich_obj") <- enrich_obj
+    part
+  })
+  names(out) <- keys
+  out
+}
+
+#' Convergence multi-librairies des résultats PK-2 (option A, D5 GO 2026-11-10)
+#'
+#' Produit la table « convergent evidence » (note de conception
+#' PACKS_PK3_CONVERGENCE_DESIGN_2026-11-10.md §3) à partir des tables PK-2
+#'
+#' @param results liste NOMMÉE de tables PK-2 (clés = librairies, idéalement
+#'   « pack::fichier » via packs_split_libraries()). Chaque table porte le
+#'   contrat PK-2 (ID/Description/pvalue au minimum) et l'attribut
+#'   `enrich_obj` (contrat STAT-S2) couvrant ses IDs.
+#' @param p_adjust_method méthode stats::p.adjust de la correction GLOBALE
+#'   (défaut "BH" — option A).
+#' @param p_threshold seuil de significativité GLOBALE qui GATE le vote du
+#'   score de convergence (défaut 0.05).
+#' @param sim_cutoff seuil de similarité pour l'effondrement en clusters
+#'   (défaut 0.2 = min_edge du emapplot enrichplot).
+#' @param method méthode de similarité enrichplot — v1 : "JC" seul (Jaccard
+#'   sur les gènes, sans semData ; les mesures GO/DO exigeraient semData).
+#' @return data.frame : une ligne par test (terme, librairie) — ID préfixé,
+#'   Description, library, pvalue (brut), p.adjust (GLOBALE, recalculée sur
+#'   l'union des tests), p.adjust_pk2 (valeur PK-2 du run, audit), cluster
+#'   (entier 1..K, renuméroté dans l'ordre d'apparition), n_libraries (score =
+#'   librairies DISTINCTES significatives du cluster), cluster_libraries
+#'   (libellé des librairies convergentes). Lignes triées score desc puis
+#'   p.adjust/ID/library (ordre radix — déterministe). Attribut
+#'   `converge_params` : paramètres d'audit. L'union des tests est celle
+#'   PORTÉE par les tables PK-2 (cf. note de bloc ci-dessus).
+#' @refusals pathway_error (style PK-2) : entrée vide, liste non nommée,
+#'   moins de 2 librairies, colonne pvalue/ID/Description absente, lignes
+#'   malformées (ID vide, pvalue NA ou hors [0;1]), doublon
+#'   (librairie, terme), méthode ≠ "JC", enrich_obj absent ou couverture
+#'   incomplète (similarité incalculable sans re-run — interdit), p_threshold
+#'   / sim_cutoff hors bornes.
+packs_converge <- function(results, p_adjust_method = "BH",
+                           p_threshold = 0.05, sim_cutoff = 0.2,
+                           method = "JC") {
+  # -- méthode de similarité (v1 : JC, sans semData) --------------------------
+  if (!is.character(method) || length(method) != 1L || is.na(method) ||
+      !identical(method, "JC")) {
+    stop(errorCondition(sprintf(
+      "Packs : méthode de similarité « %s » non supportée en PK-3 v1 — seul « JC » (Jaccard enrichplot, sans semData) est livré.",
+      paste(as.character(method), collapse = ", ")), class = "pathway_error"))
+  }
+  # -- paramètres numériques --------------------------------------------------
+  p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
+  p_threshold <- suppressWarnings(as.numeric(p_threshold))
+  if (length(p_threshold) != 1L || is.na(p_threshold) ||
+      p_threshold < 0 || p_threshold > 1) {
+    stop(errorCondition(
+      "Packs : p_threshold doit être un nombre dans [0, 1].", class = "pathway_error"))
+  }
+  sim_cutoff <- suppressWarnings(as.numeric(sim_cutoff))
+  if (length(sim_cutoff) != 1L || is.na(sim_cutoff) ||
+      sim_cutoff < 0 || sim_cutoff > 1) {
+    stop(errorCondition(
+      "Packs : sim_cutoff doit être un nombre dans [0, 1] (défaut = min_edge emapplot : 0.2).",
+      class = "pathway_error"))
+  }
+  # -- entrée : liste NOMMÉE de tables PK-2 (clés = librairies) ----------------
+  if (is.null(results) || !is.list(results) || length(results) == 0L) {
+    stop(errorCondition(
+      "Packs : convergence impossible — aucune table de résultats fournie (entrée vide).",
+      class = "pathway_error"))
+  }
+  keys <- names(results)
+  if (is.null(keys) || anyNA(keys) || any(!nzchar(trimws(keys)))) {
+    stop(errorCondition(
+      "Packs : convergence impossible — la liste doit être NOMMÉE par librairie (clé pack::fichier, cf. packs_split_libraries()).",
+      class = "pathway_error"))
+  }
+  libs <- trimws(keys)
+  if (length(unique(libs)) < 2L) {
+    stop(errorCondition(sprintf(
+      "Packs : convergence impossible — au moins 2 librairies sont requises (reçu : %d).",
+      length(unique(libs))), class = "pathway_error"))
+  }
+  # -- validations par table (contrat PK-2) + union des tests -----------------
+  parts <- vector("list", length(results))
+  for (i in seq_along(results)) {
+    t <- results[[i]]
+    if (!is.data.frame(t)) {
+      stop(errorCondition(sprintf(
+        "Packs : la librairie « %s » ne fournit pas une table (data.frame attendu, contrat PK-2).",
+        libs[i]), class = "pathway_error"))
+    }
+    missing_cols <- setdiff(c("ID", "Description", "pvalue"), names(t))
+    if (length(missing_cols) > 0L) {
+      stop(errorCondition(sprintf(
+        "Packs : la librairie « %s » n'a pas la/les colonne(s) attendue(s) (contrat PK-2 : ID/Description/GeneRatio/BgRatio/pvalue/p.adjust/qvalue/geneID/Count) — manquant : %s.",
+        libs[i], paste(missing_cols, collapse = ", ")), class = "pathway_error"))
+    }
+    if (nrow(t) == 0L) next # contrat « 0 hit » : la librairie ne vote pas
+    idv <- trimws(as.character(t$ID))
+    pv <- suppressWarnings(as.numeric(t$pvalue))
+    bad_id <- is.na(idv) | !nzchar(idv)
+    bad_pv <- is.na(pv) | pv < 0 | pv > 1
+    if (any(bad_id) || any(bad_pv)) {
+      j <- which(bad_id | bad_pv)[1]
+      what <- if (bad_id[j]) sprintf("ID vide (ligne %d)", j) else
+        sprintf("pvalue « %s » hors [0;1] (ligne %d)", format(t$pvalue[j]), j)
+      stop(errorCondition(sprintf(
+        "Packs : lignes malformées dans la librairie « %s » — %s (contrat PK-2 violé).",
+        libs[i], what), class = "pathway_error"))
+    }
+    dupd <- duplicated(paste0(libs[i], "\u0001", idv))
+    if (any(dupd)) {
+      stop(errorCondition(sprintf(
+        "Packs : la paire (librairie, terme) « %s :: %s » est dupliquée dans la table fournie — le contrat PK-2 rend une ligne par terme.",
+        libs[i], idv[which(dupd)[1]]), class = "pathway_error"))
+    }
+    parts[[i]] <- data.frame(
+      ID = idv, Description = as.character(t$Description),
+      library = libs[i], pvalue = pv,
+      p.adjust_pk2 = if ("p.adjust" %in% names(t)) as.numeric(t$p.adjust)
+                      else rep(NA_real_, nrow(t)),
+      stringsAsFactors = FALSE)
+  }
+  parts <- parts[vapply(parts, function(p) !is.null(p), logical(1))]
+  if (length(parts) == 0L) {
+    stop(errorCondition(
+      "Packs : convergence impossible — les tables fournies ne portent aucun test (toutes vides).",
+      class = "pathway_error"))
+  }
+  union <- do.call(rbind, parts)
+  n <- nrow(union)
+  # -- objets enrichResult (STAT-S2) : moisson, dédoublonnage -----------------
+  objs_raw <- lapply(results, attr, "enrich_obj")
+  objs_raw <- objs_raw[vapply(objs_raw, function(o) !is.null(o), logical(1))]
+  objs <- list(); objs_df <- list()
+  for (o in objs_raw) {
+    dfo <- tryCatch(as.data.frame(o), error = function(e) NULL)
+    if (is.null(dfo)) {
+      stop(errorCondition(
+        "Packs : attribut `enrich_obj` non coercible en data.frame (contrat STAT-S2 attendu : enrichResult de run_packs_enrichment).",
+        class = "pathway_error"))
+    }
+    if (nrow(dfo) == 0L) next # table vide → pas d'objet (contrat PK-2)
+    if (!any(vapply(objs, function(k) identical(k, o), logical(1)))) {
+      objs[[length(objs) + 1L]] <- o
+      objs_df[[length(objs_df) + 1L]] <- dfo
+    }
+  }
+  if (length(objs) == 0L) {
+    stop(errorCondition(
+      "Packs : convergence impossible — aucun attribut `enrich_obj` (contrat STAT-S2 de run_packs_enrichment) : la similarité enrichplot::pairwise_termsim est incalculable sans re-run des moteurs, interdit par le contrat PK-3 (pilier 4 = GEMS PB, jamais double-owner).",
+      class = "pathway_error"))
+  }
+  if (!requireNamespace("enrichplot", quietly = TRUE)) {
+    stop(errorCondition(
+      "Package 'enrichplot' requis (déjà au lock — fiche packs §5, étape 3).",
+      class = "pathway_error"))
+  }
+  # -- similarité enrichplot par objet, alignement POSITIONNEL ----------------
+  # pairwise_termsim.enrichResult étiquette la matrice par Description MAIS la
+  # remplit dans l'ordre des lignes de as.data.frame(x) (positions 1..n,
+  # showCategory numérique = min(n, nrow) → on passe n : le défaut 200
+  # tronquerait silencieusement la matrice). L'alignement est donc
+  # POSITIONNEL : w[i, j] = JC(terme ligne i, terme ligne j) de l'objet —
+  # robuste aux Descriptions dupliquées entre librairies.
+  own <- rep(NA_integer_, n) # premier objet couvrant chaque ligne (first-wins)
+  mats <- vector("list", length(objs))
+  for (k in seq_along(objs)) {
+    ids_k <- as.character(objs_df[[k]]$ID)
+    hit <- which(is.na(own) & union$ID %in% ids_k)
+    if (length(hit) == 0L) next
+    o2 <- enrichplot::pairwise_termsim(objs[[k]], method = method,
+                                       semData = NULL,
+                                       showCategory = nrow(objs_df[[k]]))
+    w <- o2@termsim
+    if (is.null(w) || !is.matrix(w)) {
+      stop(errorCondition(
+        "Packs : enrichplot::pairwise_termsim n'a pas produit de matrice de similarité (contrat enrichplot inattendu).",
+        class = "pathway_error"))
+    }
+    pos <- match(union$ID[hit], ids_k)
+    mats[[k]] <- list(idx = hit, pos = pos, w = w)
+    own[hit] <- k
+  }
+  uncovered <- which(is.na(own))
+  if (length(uncovered) > 0L) {
+    stop(errorCondition(sprintf(
+      "Packs : l'objet enrich_obj ne couvre pas %d terme(s) du run (ex. : %s) — la similarité est incalculable sans re-run (interdit par le contrat PK-3).",
+      length(uncovered),
+      paste(utils::head(union$ID[uncovered], 3), collapse = ", ")),
+      class = "pathway_error"))
+  }
+  # -- matrice de similarité de l'union (arêtes inter-objets = 0, doc bloc) ---
+  S <- matrix(0, nrow = n, ncol = n)
+  for (mk in mats) {
+    if (is.null(mk)) next
+    S[mk$idx, mk$idx] <- mk$w[mk$pos, mk$pos, drop = FALSE]
+  }
+  S <- pmax(S, t(S)) # symétrisation défensive (JC est déjà symétrique)
+  diag(S) <- 0
+  # -- effondrement de redondance : composantes connexes (1 cluster = 1 vote) -
+  if (!requireNamespace("igraph", quietly = TRUE)) {
+    stop(errorCondition(
+      "Package 'igraph' requis (déjà au lock — dépendance enrichplot/ggraph).",
+      class = "pathway_error"))
+  }
+  A <- S >= sim_cutoff
+  diag(A) <- FALSE
+  g <- igraph::graph_from_adjacency_matrix(A, mode = "undirected", diag = FALSE)
+  comp <- as.integer(igraph::components(g)$membership)
+  cluster <- match(comp, unique(comp)) # renumérotation déterministe
+  # -- BH GLOBALE (option A) : recalcul UNE fois sur l'union des tests --------
+  padj <- stats::p.adjust(union$pvalue, method = p_adjust_method)
+  # -- score de convergence : librairies DISTINCTES significatives du cluster -
+  sig <- padj <= p_threshold
+  n_libs <- integer(n)
+  lib_lbl <- character(n)
+  for (c in unique(cluster)) {
+    ii <- which(cluster == c)
+    lib_sig <- sort(unique(union$library[ii][sig[ii]]), method = "radix")
+    n_libs[ii] <- length(lib_sig)
+    lib_lbl[ii] <- paste(lib_sig, collapse = ", ")
+  }
+  out <- data.frame(
+    ID = union$ID, Description = union$Description, library = union$library,
+    pvalue = union$pvalue, p.adjust = padj, p.adjust_pk2 = union$p.adjust_pk2,
+    cluster = as.integer(cluster), n_libraries = as.integer(n_libs),
+    cluster_libraries = lib_lbl, stringsAsFactors = FALSE)
+  ord <- order(-out$n_libraries, out$p.adjust, out$ID, out$library,
+               method = "radix")
+  out <- out[ord, , drop = FALSE]
+  rownames(out) <- NULL
+  attr(out, "converge_params") <- list(
+    p_adjust_method = p_adjust_method, p_threshold = p_threshold,
+    sim_cutoff = sim_cutoff, method = method, n_tests = n,
+    n_libraries_input = length(unique(libs)))
+  out
+}
+
+#' Table DT de convergence (style maison — miroir build_pathway_dt)
+#'
+#' Rend la table packs_converge() en DT : colonnes renommées via l'injecteur
+#' i18n, même palette P-adj que la table PK-2 (cohérence visuelle), export
+#' CSV/clipboard ts_datatable.
+#'
+#' @param df data.frame produit par packs_converge().
+#' @param tr injecteur i18n (défaut : identité — la chaîne FR est la clé).
+#' @return widget DT (ts_datatable).
+#' @refusals aucune — les colonnes sont garanties par le contrat
+#'   packs_converge ; une colonne manquante est simplement absente du rendu.
+build_convergence_dt <- function(df, tr = NULL) {
+  tr <- tr %||% function(x) x
+  need <- c("ID", "Description", "library", "pvalue", "p.adjust",
+            "p.adjust_pk2", "cluster", "n_libraries", "cluster_libraries")
+  cols <- intersect(need, colnames(df))
+  df_display <- df[, cols, drop = FALSE]
+  named <- c("ID", "Description", tr("Librairie"), tr("p (brut)"),
+             tr("p.adjust GLOBAL"), tr("p.adjust PK-2 (run)"), tr("Cluster"),
+             tr("Score (librairies)"), tr("Librairies convergentes"))
+  colnames(df_display) <- named[seq_along(cols)]
+  ts_datatable(df_display, page_length = 15L,
+               filename_base = "packs_convergence") %>%
+    DT::formatStyle(tr("p.adjust GLOBAL"),
+                    color = DT::styleInterval(c(0.001, 0.01, 0.05),
+                                              c("darkgreen", "green", "orange", "red")))
+}
+

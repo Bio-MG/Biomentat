@@ -137,6 +137,13 @@ mod_bulk_pathways_output_ui <- function(id) {
       # STAT-S2 — réseau d'enrichissement (descriptif : similarité de gènes / appartenance)
       nav_panel(i18n$t("Réseau"),         uiOutput(ns("network_ui"))),
       nav_panel(i18n$t("Table"),          DTOutput(ns("pathway_table"))),
+      # PK-3 (pilier 3 convergence, fiche PROPOSAL_PACKS_ECOSYSTEM_2026-11-09.md
+      # §3 jalon PK-3 ; note PACKS_PK3_CONVERGENCE_DESIGN_2026-11-10, D5 GO
+      # opérateur 2026-11-10 = option A) — « convergent evidence » des runs
+      # Packs multi-librairies (≥ 2) ; calcul pur côté serveur
+      # (packs_split_libraries → packs_converge), aucun moteur re-run.
+      nav_panel(i18n$t("Convergence"), value = "tab_convergence",
+                uiOutput(ns("convergence_ui"))),
       nav_panel(i18n$t("Courbe GSEA"),    uiOutput(ns("gsea_curve_ui"))),
       # PB (GEMS D5) — ORA directionnelle : table goana/kegga + barcodeplot
       nav_panel(i18n$t("Directionnelle"), value = "tab_dir",
@@ -1032,6 +1039,49 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       global_data$language                     # i18n trigger
       req(shared_rv$pathway_results)
       build_pathway_dt(shared_rv$pathway_results, tr = .tr_fn(global_data))
+    })
+
+    # ── PK-3 (pilier 3 convergence ; note PACKS_PK3_CONVERGENCE_DESIGN_2026-11-
+    # 10, D5 GO opérateur 2026-11-10 = option A) — vue « Convergence » ────────
+    # Calcul À LA VOLÉE depuis le run Packs en mémoire : packs_split_libraries
+    # découpe la table combinée par préfixe pack::fichier:: puis packs_converge
+    # recalcule la BH GLOBALE des p brutes portées par le contrat PK-2 et
+    # effondre la redondance (enrichplot::pairwise_termsim) — AUCUN moteur
+    # re-run (pilier 4 = GEMS PB, jamais double-owner, fiche §4/D1). Le
+    # p.adjust PK-2 déjà affiché dans l'onglet Table reste la valeur PAR RUN du
+    # contrat (inchangée) ; l'onglet Convergence porte la valeur GLOBALE en
+    # colonne dédiée (`p.adjust GLOBAL`) et l'original en audit
+    # (`p.adjust PK-2 (run)`). Refus honnêtes (classe pathway_error) affichés
+    # tels quels : < 2 librairies, run non-Packs, contrat violé.
+    convergence_data <- reactive({
+      global_data$language                     # i18n trigger (comme pathway_table)
+      res <- shared_rv$pathway_results
+      if (is.null(res) || !is.data.frame(res) || nrow(res) == 0L) {
+        return(list(ok = FALSE,
+                    msg = .tr("La convergence s'applique aux runs Packs multi-librairies (≥ 2 librairies sélectionnées).")))
+      }
+      tbl <- tryCatch(packs_converge(packs_split_libraries(res)),
+                      error = function(e) e)
+      if (inherits(tbl, "error")) return(list(ok = FALSE, msg = conditionMessage(tbl)))
+      list(ok = TRUE, tbl = tbl)
+    })
+    output$convergence_ui <- renderUI({
+      cd <- convergence_data()
+      if (!isTRUE(cd$ok)) {
+        return(tags$div(class = "small text-muted", style = "margin:15px;",
+                        icon("info-circle"), " ", cd$msg))
+      }
+      tagList(
+        tags$div(class = "small text-muted", style = "margin: 6px 15px;",
+                 icon("info-circle"), " ",
+                 .tr("BH globale sur l'union des tests (toutes librairies confondues) + effondrement de redondance (similarité de Jaccard enrichplot) — 1 cluster = 1 vote.")),
+        DTOutput(ns("convergence_table"))
+      )
+    })
+    output$convergence_table <- renderDT({
+      cd <- convergence_data()
+      req(isTRUE(cd$ok))
+      build_convergence_dt(cd$tbl, tr = .tr_fn(global_data))
     })
 
     # ── PB (GEMS D5) — résultats ORA directionnelle (goana/kegga) ────────────

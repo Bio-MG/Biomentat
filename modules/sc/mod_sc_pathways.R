@@ -183,7 +183,14 @@ mod_sc_pathways_output_ui <- function(id) {
       nav_panel(i18n$t("Dotplot"),        plotOutput(ns("pathway_dotplot"), height="500px")),
       # STAT-S2 — réseau d'enrichissement (descriptif : similarité de gènes / appartenance)
       nav_panel(i18n$t("Réseau"),         uiOutput(ns("network_ui"))),
-      nav_panel(i18n$t("Table"),          DTOutput(ns("pathway_table")))
+      nav_panel(i18n$t("Table"),          DTOutput(ns("pathway_table"))),
+      # PK-3 (pilier 3 convergence, fiche PROPOSAL_PACKS_ECOSYSTEM_2026-11-09.md
+      # §3 jalon PK-3 ; note PACKS_PK3_CONVERGENCE_DESIGN_2026-11-10, D5 GO
+      # opérateur 2026-11-10 = option A) — « convergent evidence » des runs
+      # Packs multi-librairies (≥ 2) ; calcul pur côté serveur
+      # (packs_split_libraries → packs_converge), aucun moteur re-run.
+      nav_panel(i18n$t("Convergence"), value = "tab_convergence",
+                uiOutput(ns("convergence_ui")))
     )
   )
 }
@@ -436,6 +443,48 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
     })
     output$pathway_table <- renderDT({
       req(pathway_rv()); build_pathway_dt(pathway_rv(), tr = .tr)
+    })
+
+    # ── PK-3 (pilier 3 convergence ; note PACKS_PK3_CONVERGENCE_DESIGN_2026-11-
+    # 10, D5 GO opérateur 2026-11-10 = option A) — vue « Convergence », même
+    # contrat que bulk : pathway_rv est la copie locale sync de
+    # shared_rv$pathway_results (écrite par CE module OU par le run bulk,
+    # observeEvent plus haut) — packs_split_libraries découpe par préfixe
+    # pack::fichier::, packs_converge recalcule la BH GLOBALE des p brutes du
+    # contrat PK-2 et effondre la redondance (pairwise_termsim) — AUCUN moteur
+    # re-run (pilier 4 = GEMS PB, jamais double-owner). Le p.adjust PK-2 déjà
+    # affiché dans l'onglet Table reste la valeur PAR RUN du contrat (inchangée) ;
+    # l'onglet Convergence porte la valeur GLOBALE + l'original en audit. Refus
+    # honnêtes (pathway_error) affichés tels quels : < 2 librairies, etc.
+    convergence_data <- reactive({
+      global_data$language                     # i18n trigger (re-rendu au switch)
+      res <- pathway_rv()
+      if (is.null(res) || !is.data.frame(res) || nrow(res) == 0L) {
+        return(list(ok = FALSE,
+                    msg = .tr("La convergence s'applique aux runs Packs multi-librairies (≥ 2 librairies sélectionnées).")))
+      }
+      tbl <- tryCatch(packs_converge(packs_split_libraries(res)),
+                      error = function(e) e)
+      if (inherits(tbl, "error")) return(list(ok = FALSE, msg = conditionMessage(tbl)))
+      list(ok = TRUE, tbl = tbl)
+    })
+    output$convergence_ui <- renderUI({
+      cd <- convergence_data()
+      if (!isTRUE(cd$ok)) {
+        return(tags$div(class = "small text-muted", style = "margin:15px;",
+                        icon("info-circle"), " ", cd$msg))
+      }
+      tagList(
+        tags$div(class = "small text-muted", style = "margin: 6px 15px;",
+                 icon("info-circle"), " ",
+                 .tr("BH globale sur l'union des tests (toutes librairies confondues) + effondrement de redondance (similarité de Jaccard enrichplot) — 1 cluster = 1 vote.")),
+        DTOutput(ns("convergence_table"))
+      )
+    })
+    output$convergence_table <- renderDT({
+      cd <- convergence_data()
+      req(isTRUE(cd$ok))
+      build_convergence_dt(cd$tbl, tr = .tr)
     })
 
     # ── STAT-S2 : réseau d'enrichissement (emapplot / cnetplot) ─────────────
