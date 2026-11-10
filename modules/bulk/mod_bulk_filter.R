@@ -204,13 +204,25 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     }
 
     # ── i18n: push translated labels/choices on language switch ──────────
+    # PK-4 (pilier 5) : les palettes de packs (hex embarqués, scan PK-1)
+    # s'ajoutent aux 5 presets legacy — valeur « <pack_id>::<palette> »,
+    # résolue côté resolvers via TS_PACKS_REGISTRY. Le bloc une-fois ci-
+    # dessous couvre l'init (l'observer n'a pas d'init pass — ignoreInit).
+    updateSelectInput(session, "palette_choice",
+      choices = c(
+        stats::setNames(c("default","okabeito","viridis","set2","manual"),
+          c(.tr("D\u00e9faut (ggplot)"), .tr("Okabe-Ito (daltonien)"), "Viridis",
+            .tr("Set2 (ColorBrewer)"), .tr("Manuel (choisir chaque couleur)"))),
+        packs_palette_choices(shiny::isolate(global_data$packs %||% list()))))
     observeEvent(global_data$language, {
       updateNumericInput(session, "min_samples",         label = .tr("Nb \u00e9chantillons min. au-dessus du seuil"))
       updateNumericInput(session, "min_count_per_sample",label = .tr("Seuil par \u00e9chantillon"))
       updateSelectInput(session, "palette_choice",
-        choices = stats::setNames(c("default","okabeito","viridis","set2","manual"),
-          c(.tr("D\u00e9faut (ggplot)"), .tr("Okabe-Ito (daltonien)"), "Viridis",
-            .tr("Set2 (ColorBrewer)"), .tr("Manuel (choisir chaque couleur)"))))
+        choices = c(
+          stats::setNames(c("default","okabeito","viridis","set2","manual"),
+            c(.tr("D\u00e9faut (ggplot)"), .tr("Okabe-Ito (daltonien)"), "Viridis",
+              .tr("Set2 (ColorBrewer)"), .tr("Manuel (choisir chaque couleur)"))),
+          packs_palette_choices(shiny::isolate(global_data$packs %||% list()))))
       updateSelectizeInput(session, "pca_color_by",  label = .tr("Colorer par"))
       updateSelectizeInput(session, "pca_shape_by",  label = .tr("Forme par (optionnel)"))
       updateCheckboxInput(session, "pca_interactive", label = .tr("Interactif (Plotly \u2014 survol pour identifier l'\u00e9chantillon)"))

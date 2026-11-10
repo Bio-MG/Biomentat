@@ -96,6 +96,16 @@ sc_discrete_scale <- function(palette = "default", manual_colors = NULL, aesthet
   fn_v <- if (aesthetic == "color") ggplot2::scale_color_viridis_d else ggplot2::scale_fill_viridis_d
   fn_b <- if (aesthetic == "color") ggplot2::scale_color_brewer   else ggplot2::scale_fill_brewer
 
+  # PK-4 (palettes de packs) : un choix « <pack_id>::<palette> » résout via le
+  # registre TS_PACKS_REGISTRY — repli honnête « default » (warning, jamais
+  # d'erreur) si le registre est absent ou le choix inconnu. Les presets
+  # legacy (sans `::`) ne touchent JAMAIS au registre.
+  if (.packs_is_pack_palette(palette)) {
+    hex <- .packs_palette_lookup(palette)
+    if (!is.null(hex)) return(fn_m(values = hex))
+    palette <- "default"
+  }
+
   if (identical(palette, "manual") && length(manual_colors) > 0)
     return(fn_m(values = manual_colors))
 
@@ -164,6 +174,15 @@ sc_discrete_colors <- function(levels, palette = "default", manual_colors = NULL
     }
     return(stats::setNames(base, levels))
   }
+  # PK-4 (palettes de packs) : choix « <pack_id>::<palette> » → hex du pack
+  # répétés à n (motif okabeito), nommés par niveaux. Repli honnête « default »
+  # (warning, jamais d'erreur) si le registre TS_PACKS_REGISTRY est absent ou
+  # le choix inconnu ; les presets legacy ne touchent JAMAIS au registre.
+  if (.packs_is_pack_palette(palette)) {
+    hex <- .packs_palette_lookup(palette)
+    if (!is.null(hex)) return(stats::setNames(rep(hex, length.out = n), levels))
+    palette <- "default"
+  }
   switch(palette %||% "default",
     okabeito = rep(.sc_okabe, length.out = n),
     viridis  = {
@@ -184,6 +203,16 @@ sc_discrete_colors <- function(levels, palette = "default", manual_colors = NULL
 # ---------------------------------------------------------------------------
 
 bulk_color_scale <- function(palette = "default", manual_colors = NULL) {
+  # PK-4 (palettes de packs) : choix « <pack_id>::<palette> » → échelle manual
+  # sur le vecteur hex du pack (motif du cas « manual »). Repli honnête
+  # « default » (warning, jamais d'erreur) si le registre TS_PACKS_REGISTRY
+  # est absent ou le choix inconnu ; les presets legacy ne touchent JAMAIS au
+  # registre.
+  if (.packs_is_pack_palette(palette)) {
+    hex <- .packs_palette_lookup(palette)
+    if (!is.null(hex)) return(ggplot2::scale_color_manual(values = hex))
+    palette <- "default"
+  }
   if (identical(palette, "manual") && !is.null(manual_colors) && length(manual_colors) > 0)
     return(ggplot2::scale_color_manual(values = manual_colors))
   switch(palette %||% "default",
@@ -349,4 +378,151 @@ dynamic_manual_color_picker_ui <- function(ns, kind, levels, current_colors = NU
             tags$span(lv, style = "font-size:0.78em;"))
       })
   )
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PACKS — palettes de packs dans les resolvers (PK-4, pilier 5)
+# fiche docs/proposals/PROPOSAL_PACKS_ECOSYSTEM_2026-11-09.md §3 jalon PK-4 ·
+# détail docs/ideation/PACKS_ECOSYSTEM_ENRICHR_PALETTES.md §7.
+#
+# Les palettes de packs sont des vecteurs HEX validés au scan (PK-1 — le type
+# « palette » exige attribution + license, fiche §9). Choix = chaîne
+# « <pack_id>::<palette> » : les resolvers (sc_discrete_scale /
+# sc_discrete_colors / bulk_color_scale) consultent le registre
+# options("TS_PACKS_REGISTRY") — posé au boot app.R à côté du scan PK-1 —
+# SEULEMENT pour ces chaînes ; les 5 presets legacy ne touchent JAMAIS au
+# registre (zéro changement visuel, philosophie theme.R).
+# Registre = options() : arbitrage O6 (1 utilisateur / 1 processus, severité
+# des options() globaux re-arbitrée 2026-10-18 — docs/STATUS.md en-tête).
+# Repli honnête : registre absent ou choix inconnu = warning + comportement
+# « default », JAMAIS une erreur — un mauvais selectInput ne doit pas blanchir
+# tous les plots d'un module.
+# ═════════════════════════════════════════════════════════════════════════════
+
+#' Choix de palettes disponibles dans le registre des packs
+#'
+#' @param packs Registre session (named list de biomentat_pack — scan PK-1) ;
+#'   NULL/vide tolérés. Les packs dont le type n'est pas « palette » sont
+#'   ignorés (les librairies GMT ne sont pas des palettes).
+#' @return named character : valeur = « <pack_id>::<palette_name> » (le motif
+#'   `::` est le déclencheur de résolution côté resolvers), label =
+#'   « <pack_name> — <palette_name> ». Vecteur vide quand aucun pack.
+packs_palette_choices <- function(packs) {
+  if (is.null(packs) || !is.list(packs) || length(packs) == 0L) return(character(0))
+  vals <- character(0)
+  for (e in packs) {
+    if (!is.list(e) || !identical(e$type, "palette")) next
+    pals <- e$palettes
+    if (!is.list(pals) || length(pals) == 0L) next
+    pid <- if (is.character(e$id) && length(e$id) == 1L && nzchar(e$id)) e$id else "pack"
+    pname <- e$name %||% pid
+    for (pal_nm in names(pals)) {
+      if (!is.character(pal_nm) || length(pal_nm) != 1L || !nzchar(pal_nm)) next
+      vals[[paste0(pid, "::", pal_nm)]] <- sprintf("%s — %s", pname, pal_nm)
+    }
+  }
+  vals
+}
+
+#' Vecteur hex d'une palette de pack (verbatim, tel que validé au scan PK-1)
+#'
+#' @param packs Registre session (cf. packs_palette_choices).
+#' @param choice Chaîne « <pack_id>::<palette_name> ».
+#' @return Character vector hex (#RRGGBB ou #RRGGBBAA) — jamais réordonné.
+#' @refusals pathway_error : choix malformé (sans `::`), pack inconnu,
+#'   palette absente du pack.
+packs_palette_hex <- function(packs, choice) {
+  if (missing(choice) || !is.character(choice) || length(choice) != 1L ||
+      is.na(choice) || !grepl("::", choice)) {
+    stop(errorCondition(
+      "Packs : choix de palette attendu sous la forme « <pack_id>::<palette_name> ».",
+      class = "pathway_error"))
+  }
+  pid <- sub("::.*$", "", choice)
+  pal_nm <- sub("^.*::", "", choice)
+  e <- NULL
+  for (cand in packs) {
+    if (is.list(cand) && identical(cand$id, pid)) { e <- cand; break }
+  }
+  if (is.null(e)) {
+    stop(errorCondition(sprintf(
+      "Packs : le pack « %s » est introuvable dans le registre — ré-ouvrez le sélecteur (le registre a peut-être changé).",
+      pid), class = "pathway_error"))
+  }
+  pals <- e$palettes
+  if (!is.list(pals) || is.null(pals[[pal_nm]])) {
+    stop(errorCondition(sprintf(
+      "Packs : la palette « %s » est absente du pack « %s ».",
+      pal_nm, pid), class = "pathway_error"))
+  }
+  hex <- pals[[pal_nm]]
+  if (!is.character(hex) || length(hex) == 0L) {
+    stop(errorCondition(sprintf(
+      "Packs : la palette « %s » du pack « %s » est malformée (vecteur hex attendu).",
+      pal_nm, pid), class = "pathway_error"))
+  }
+  hex
+}
+
+#' Attribution + license d'une palette de pack (fiche §9 — surfacée, pas
+#' seulement stockée : un hex redistribué doit rester attribué là où on le voit)
+#'
+#' @return Chaîne « attribution — license » (ou attribution seule si la
+#'   license est absente — possible pour les types non palette, mais le type
+#'   palette l'exige dès le scan PK-1).
+#' @refusals pathway_error : pack/palette inconnus (cf. packs_palette_hex).
+packs_palette_attribution <- function(packs, choice) {
+  if (missing(choice) || !is.character(choice) || length(choice) != 1L ||
+      is.na(choice) || !grepl("::", choice)) {
+    stop(errorCondition(
+      "Packs : choix de palette attendu sous la forme « <pack_id>::<palette_name> ».",
+      class = "pathway_error"))
+  }
+  pid <- sub("::.*$", "", choice)
+  pal_nm <- sub("^.*::", "", choice)
+  e <- NULL
+  for (cand in packs) {
+    if (is.list(cand) && identical(cand$id, pid)) { e <- cand; break }
+  }
+  if (is.null(e)) {
+    stop(errorCondition(sprintf(
+      "Packs : le pack « %s » est introuvable dans le registre.", pid),
+      class = "pathway_error"))
+  }
+  pals <- e$palettes
+  if (!is.list(pals) || is.null(pals[[pal_nm]])) {
+    stop(errorCondition(sprintf(
+      "Packs : la palette « %s » est absente du pack « %s ».", pal_nm, pid),
+      class = "pathway_error"))
+  }
+  att <- if (is.character(e$attribution) && length(e$attribution) == 1L) e$attribution else ""
+  lic <- if (is.character(e$license) && length(e$license) == 1L) e$license else ""
+  if (nzchar(att) && nzchar(lic)) sprintf("%s — %s", att, lic)
+  else if (nzchar(att)) att
+  else if (nzchar(lic)) lic
+  else "(attribution non renseignée)"
+}
+
+# -- résolution côté resolvers (usage interne) --------------------------------
+
+#' Un choix de pack ? (motif `::` — les presets legacy ne le contiennent jamais)
+.packs_is_pack_palette <- function(palette) {
+  is.character(palette) && length(palette) == 1L && !is.na(palette) &&
+    grepl("::", palette)
+}
+
+#' Résolution registre via options("TS_PACKS_REGISTRY") — repli honnête.
+#' @return vecteur hex, ou NULL + warning (registre absent, pack ou palette
+#'   inconnu) : l'appelant replie vers « default », jamais d'erreur.
+.packs_palette_lookup <- function(choice) {
+  reg <- getOption("TS_PACKS_REGISTRY")
+  if (is.null(reg) || !is.list(reg)) {
+    warning("Palettes de packs : registre TS_PACKS_REGISTRY absent du boot — repli sur la palette par défaut (le sélecteur a peut-être été rempli avant le scan).")
+    return(NULL)
+  }
+  tryCatch(packs_palette_hex(reg, choice), error = function(e) {
+    warning(sprintf("Palettes de packs : %s — repli sur la palette par défaut.",
+                    conditionMessage(e)))
+    NULL
+  })
 }

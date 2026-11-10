@@ -325,14 +325,32 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       )
       updateSelectInput(session, "sc_palette",
         label = NULL,
-        choices = setNames(
-          c("default", "okabeito", "viridis", "set2", "manual"),
-          c(.tr("Défaut (Seurat/ggplot)"), .tr("Okabe-Ito (daltonien)"), "Viridis", "Set2 (ColorBrewer)", .tr("Manuel"))
+        choices = c(
+          setNames(
+            c("default", "okabeito", "viridis", "set2", "manual"),
+            c(.tr("Défaut (Seurat/ggplot)"), .tr("Okabe-Ito (daltonien)"), "Viridis", "Set2 (ColorBrewer)", .tr("Manuel"))
+          ),
+          # PK-4 (pilier 5) : palettes de packs (hex embarqués, scan PK-1)
+          packs_palette_choices(shiny::isolate(global_data$packs %||% list()))
         ),
         selected = isolate(input$sc_palette) %||% "default"
       )
       updateSliderInput(session, "pt_size", label = .tr("Taille points"))
     }, ignoreInit = TRUE)
+
+    # PK-4 : init des choix (l'observer i18n ci-dessus est ignoreInit=TRUE) —
+    # le scan des packs (app.R, avant les servers de modules) est déjà passé.
+    updateSelectInput(session, "sc_palette",
+      label = NULL,
+      choices = c(
+        setNames(
+          c("default", "okabeito", "viridis", "set2", "manual"),
+          c(.tr("Défaut (Seurat/ggplot)"), .tr("Okabe-Ito (daltonien)"), "Viridis", "Set2 (ColorBrewer)", .tr("Manuel"))
+        ),
+        packs_palette_choices(shiny::isolate(global_data$packs %||% list()))
+      ),
+      selected = isolate(input$sc_palette) %||% "default"
+    )
 
     ns <- session$ns
 

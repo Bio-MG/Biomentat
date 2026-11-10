@@ -872,6 +872,12 @@ server <- function(input, output, session) {
   .packs_scan <- pack_scan_directory()
   global_data$packs <- .packs_scan$packs
   global_data$packs_refusals <- .packs_scan$refusals
+  # PK-4 (pilier 5) : les resolvers de palettes (palettes.R) lisent le
+  # registre via options("TS_PACKS_REGISTRY") pour les choix
+  # « <pack_id>::<palette> » — options() = arbitrage O6 (1 utilisateur /
+  # 1 processus, sévérité re-arbitrée 2026-10-18). Les presets legacy ne
+  # consultent JAMAIS cette option (zéro changement visuel).
+  options(TS_PACKS_REGISTRY = .packs_scan$packs)
   .drive <- ts_drive_attach(session, input)
   # ASR-5 (D7, en-tête test-asr5-drive.R) : le token drive est posé sur la
   # surface userData de la session — un champ littéral session$token est
