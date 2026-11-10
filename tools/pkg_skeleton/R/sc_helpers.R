@@ -1194,15 +1194,18 @@ sc_map_query <- function(reference, query, label_col, dims = 30L, seed = 1) {
 #' les deux scores indépendamment). La régression elle-même est OPTIONNELLE
 #' et vit côté pipeline (`smart_scale_data(vars.to.regress = ...)`).
 #'
-#' Limites honnêtes : les gènes cc.genes de Seurat sont des SYMBOLES HUMAINS
-#' — un objet souris (ENSMUSG) produit un refus classé actionnable (le
-#' mapping orthologue souris = chantier séparé, cohérent avec la décision
-#' orthologie de la fiche PACKS) ; un objet en IDs ENSG non remappés produit
-#' aussi un refus (hint remappage d'import).
+#' Orthologie souris : AU NIVEAU DU SYMBOLE par convention de casse MGI
+#' (MCM5 -> Mcm5 : première lettre capitale, reste minuscule — règle standard
+#' de la communauté Seurat). PAS d'orthologie Ensembl ni de mapping orthologue
+#' réel : les listes humaines de Seurat (cc.genes) sont recasées, puis un
+#' contrôle d'overlap >= min_overlap contre rownames(obj) refuse classé si
+#' les IDs ne sont pas des symboles (ex. ENSG/ENSMUSG non remappés — hint
+#' remappage d'import), quel que soit l'organisme.
 #'
 #' @param obj Seurat object (couche "data" normalisée exigée — normalisation
 #'   silencieuse si absente).
-#' @param organism "human" (seul supporté au jalon SF).
+#' @param organism "human" ou "mouse" (mouse = orthologie symbol-level par
+#'   convention de casse MGI, voir ci-dessus).
 #' @param min_overlap Nombre minimal de gènes présents par liste (S et G2M).
 #' @param ctrl Contrôles AddModuleScore par bin (défaut Seurat : 100). ⚠️ Un
 #'   objet doit avoir ~24×ctrl gènes pour peupler chaque bin d'expression —
@@ -1213,20 +1216,43 @@ sc_cell_cycle_scores <- function(obj, organism = c("human", "mouse"),
                                  min_overlap = 10L, ctrl = 100L) {
   .err <- function(msg) stop(errorCondition(msg, class = "sc_helpers_error"))
   organism <- match.arg(organism)
-  if (identical(organism, "mouse")) {
-    .err(paste0("Cell cycle : les listes cc.genes de Seurat sont des symboles HUMAINS. ",
-                "Le mapping orthologue souris est un chantier séparé (cohérent avec la ",
-                "décision orthologie de la fiche PACKS) — scoring non disponible pour 'mouse' au jalon SF."))
-  }
   cc <- tryCatch(get("cc.genes", envir = asNamespace("Seurat")),
                  error = function(e) .err("Cell cycle : listes cc.genes introuvables dans Seurat."))
+  if (identical(organism, "mouse")) {
+    # Orthologie AU NIVEAU DU SYMBOLE, convention de casse MGI (MCM5 -> Mcm5 :
+    # première lettre capitale, reste minuscule — règle standard de la
+    # communauté Seurat ; PAS d'orthologie Ensembl ni mapping orthologue réel).
+    mgi_case <- function(g) sub("^(.)", "\\U\\1", tolower(trimws(g)), perl = TRUE)
+    mouse_s   <- mgi_case(cc$s.genes)
+    mouse_g2m <- mgi_case(cc$g2m.genes)
+    # Contrat : la recase ne doit pas fusionner deux symboles humains en un
+    # même symbole souris (listes silencieusement faussées sinon) — refus
+    # explicite (mesuré 2026-11-10 : aucune collision dans cc.genes).
+    for (chk in list(list(mouse_s, "S"), list(mouse_g2m, "G2M"))) {
+      dups <- unique(chk[[1]][duplicated(chk[[1]])])
+      if (length(dups) > 0) {
+        .err(sprintf(paste0("Cell cycle (mouse) : la convention de casse MGI fusionne plusieurs symboles ",
+                            "humains en un même symbole souris (%s) — orthologie symbol-level impossible, ",
+                            "utilisez un mapping orthologue réel."),
+                     paste(dups, collapse = ", ")))
+      }
+    }
+    cc$s.genes <- mouse_s
+    cc$g2m.genes <- mouse_g2m
+  }
   n_s   <- length(intersect(cc$s.genes,   rownames(obj)))
   n_g2m <- length(intersect(cc$g2m.genes, rownames(obj)))
   if (n_s < min_overlap || n_g2m < min_overlap) {
-    .err(sprintf(paste0("Cell cycle : seulement %d/%d gènes S et %d/%d gènes G2M présents dans l'objet ",
-                        "(min. %d chacun). Vos identifiants sont probablement des IDs ENSG non remappés — ",
-                        "utilisez le remappage Symbol de l'import (Step 0) avant le scoring."),
-                 n_s, length(cc$s.genes), n_g2m, length(cc$g2m.genes), min_overlap))
+    hint <- if (identical(organism, "mouse"))
+      paste0("L'orthologie est symbol-level par casse MGI (Mcm5, Pcna...) : vos identifiants ne sont ",
+             "probablement pas des symboles souris MGI (IDs ENSMUSG non remappés ?) — utilisez le ",
+             "remappage Symbol de l'import (Step 0) avant le scoring.")
+    else
+      paste0("Vos identifiants sont probablement des IDs ENSG non remappés — ",
+             "utilisez le remappage Symbol de l'import (Step 0) avant le scoring.")
+    .err(sprintf(paste0("Cell cycle (%s) : seulement %d/%d gènes S et %d/%d gènes G2M présents dans l'objet ",
+                        "(min. %d chacun). %s"),
+                 organism, n_s, length(cc$s.genes), n_g2m, length(cc$g2m.genes), min_overlap, hint))
   }
   has_data <- tryCatch(inherits(SeuratObject::GetAssayData(obj, layer = "data"), "AnyMatrix") ||
                          is.matrix(SeuratObject::GetAssayData(obj, layer = "data")),

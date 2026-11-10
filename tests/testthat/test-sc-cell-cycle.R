@@ -3,9 +3,10 @@
 # (fiche PROPOSAL_SEURAT_V56_GEMS §3-SF, moteur sc_cell_cycle_scores)
 # =============================================================================
 # Contrats : scoring en metadata (S.Score/G2M.Score/Phase + CC.Difference),
-# régression ScaleData optionnelle via smart_scale_data(vars.to.regress=),
-# refus classés (mouse sans mapping orthologue, IDs non-remappés), défaut
-# pipeline OFF (zéro changement).
+# orthologie mouse AU NIVEAU DU SYMBOLE par convention de casse MGI
+# (MCM5 -> Mcm5), régression ScaleData optionnelle via
+# smart_scale_data(vars.to.regress=), refus classés (IDs ni humains ni
+# souris — overlap manquant), défaut pipeline OFF (zéro changement).
 # =============================================================================
 
 source_project_file("tools/pkg_skeleton/R/sc_helpers.R")
@@ -59,22 +60,72 @@ test_that("SF : scoring en metadata — S.Score, G2M.Score, Phase, CC.Difference
             mean(res$obj$S.Score[((2 * ncol(obj) %/% 3) + 1):ncol(obj)]))
 })
 
-test_that("SF : refus classés — mouse (pas d'orthologue) et IDs non-remappés", {
+# fixture mouse aux symboles MGI (convention de casse : première lettre
+# capitale, reste minuscule). Liste curatée de la fiche GEMS §3-SF : certains
+# symboles (Top2a, Ccne1, Ccnb1, Ccna2, Plk1, Ccnf) ne sont PAS dans les
+# listes cc.genes de Seurat — l'overlap attendu est 12/15 (S) et 9/12 (G2M),
+# d'où le min_overlap abaissé dans le test mouse.
+.mouse_s <- c("Mcm5", "Pcna", "Top2a", "Ccne1", "Ccnb1", "Mcm2", "Rrm2", "Ung",
+              "Cdc45", "Cdc6", "Exo1", "Tipin", "Dscc1", "Blm", "Casp8ap2")
+.mouse_g2m <- c("Ccna2", "Cdc20", "Plk1", "Aurkb", "Bub1", "Ccnb2", "Tpx2",
+                "Ndc80", "Nusap1", "Ccnf", "Kif20b", "Ube2c")
+.mouse_fixture <- function(n_cells = 80) {
+  genes <- c(.mouse_s, .mouse_g2m, paste0("filler", 1:600))
+  # mêmes lambdas hétérogènes que le fixture human (MESURE : fillers uniformes
+  # => gènes S/G2M seuls dans leur bin d'expression => AddModuleScore échoue)
+  lambdas <- c(rep(2, length(.mouse_s) + length(.mouse_g2m)),
+               0.5 + (seq_len(600) %% 40) * 0.25)
+  counts <- matrix(stats::rpois(length(genes) * n_cells,
+                                lambda = rep(lambdas, times = n_cells)),
+                   length(genes),
+                   dimnames = list(genes, paste0("cell", 1:n_cells)))
+  # cycle réel : 1/3 des cellules en S (gènes S hauts), 1/3 en G2M
+  s_cells <- 1:(n_cells %/% 3)
+  g2m_cells <- (n_cells %/% 3 + 1):(2 * n_cells %/% 3)
+  counts[seq_along(.mouse_s), s_cells] <-
+    counts[seq_along(.mouse_s), s_cells] + 8
+  counts[length(.mouse_s) + seq_along(.mouse_g2m), g2m_cells] <-
+    counts[length(.mouse_s) + seq_along(.mouse_g2m), g2m_cells] + 8
+  obj <- CreateSeuratObject(counts)
+  obj <- NormalizeData(obj, verbose = FALSE)
+  obj
+}
+
+test_that("SF mouse : orthologie symbol-level MGI — S.Score, G2M.Score, Phase, CC.Difference", {
+  obj <- .mouse_fixture()
+  res <- sc_cell_cycle_scores(obj, organism = "mouse", ctrl = 10, min_overlap = 8)
+  expect_s4_class(res$obj, "Seurat")
+  expect_true(all(c("S.Score", "G2M.Score", "Phase", "CC.Difference") %in%
+                  colnames(res$obj@meta.data)))
+  expect_true(all(is.numeric(res$obj$S.Score), is.numeric(res$obj$G2M.Score)))
+  expect_identical(as.numeric(res$obj$CC.Difference),
+                   as.numeric(res$obj$S.Score - res$obj$G2M.Score))
+  # 12/15 symboles S et 9/12 G2M du fixture matchent les listes recasées MGI
+  expect_gte(res$n_s, 10)
+  expect_gte(res$n_g2m, 8)
+  # les cellules "S" du fixture portent des scores S majoritairement hauts :
+  expect_gt(mean(res$obj$S.Score[1:(ncol(obj) %/% 3)]),
+            mean(res$obj$S.Score[((2 * ncol(obj) %/% 3) + 1):ncol(obj)]))
+})
+
+test_that("SF : refus classés — IDs ni humains ni souris (overlap manquant)", {
   obj <- .cc_fixture()
-  e1 <- tryCatch(sc_cell_cycle_scores(obj, organism = "mouse"),
-                 error = function(e) e)
-  expect_s3_class(e1, "sc_helpers_error")
-  expect_match(conditionMessage(e1), "orthologue")
-  # objet aux gènes renommés (IDs non-humains) : overlap insuffisant
+  # gènes renommés ENSG : ni symboles humains ni symboles souris MGI
   obj_bad <- obj
   counts <- GetAssayData(obj_bad, layer = "counts")
   rownames(counts) <- paste0("ENSG", seq_len(nrow(counts)))
   obj_bad <- CreateSeuratObject(counts)
   obj_bad <- NormalizeData(obj_bad, verbose = FALSE)
+  # côté human : hint remappage d'import
   e2 <- tryCatch(sc_cell_cycle_scores(obj_bad, organism = "human"),
                  error = function(e) e)
   expect_s3_class(e2, "sc_helpers_error")
   expect_match(conditionMessage(e2), "remapp")
+  # côté mouse : recase MGI puis overlap = 0 -> refus actionnable
+  e3 <- tryCatch(sc_cell_cycle_scores(obj_bad, organism = "mouse"),
+                 error = function(e) e)
+  expect_s3_class(e3, "sc_helpers_error")
+  expect_match(conditionMessage(e3), "MGI")
 })
 
 test_that("SF : régression optionnelle — smart_scale_data(vars.to.regress) pose la régression", {
