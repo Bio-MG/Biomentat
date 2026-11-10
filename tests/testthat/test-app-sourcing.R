@@ -218,9 +218,16 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # modules/session/mod_tour.R bloc 13 juste après mod_session_checkpoint.R ;
   # satellites slice S6 mission A ; tests test-tour-registry.R FAIL 0 /
   # PASS 140 + test-mod-tour.R FAIL 0 / PASS 36).
+  # PK-1 PACKS (2026-11-10) : re-basage 170 -> 171 (+1 moteur
+  # tools/pkg_skeleton/R/packs.R, bloc 03 juste après dataset_health.R —
+  # lecteur pur des manifest.json de packs data_sc/packs/<pack>/ (décision
+  # D2), scan passif lecture-seule + registre session (motif sc_multi.R) ;
+  # fiche docs/proposals/PROPOSAL_PACKS_ECOSYSTEM_2026-11-09.md §3 jalon
+  # PK-1 ; freeze test test-packs-manifest.R, RED mesuré avant
+  # implémentation : fail=0 pass=0 err=1 « Fichier projet introuvable »).
   expect_identical(
-    length(.app_explicit(.app_src)), 170L,
-    info = paste("app.R doit porter exactement 170 source() explicites",
+    length(.app_explicit(.app_src)), 171L,
+    info = paste("app.R doit porter exactement 171 source() explicites",
                  "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
                  "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29,",
                  "+ 1 moteur session_checkpoint ASR câblage O29,",
@@ -232,7 +239,8 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
                  "+ 1 moteur dataset_health N5 dataset-doctor S2,",
                  "+ 1 moteur job_timebox N7 timebox S3,",
                  "+ 1 registre tour_registry N4 biomentat-tour S6,",
-                 "+ 1 module mod_tour N4 biomentat-tour S6)",
+                 "+ 1 module mod_tour N4 biomentat-tour S6,",
+                 "+ 1 moteur packs PK-1)",
                  "-- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,

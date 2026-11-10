@@ -125,6 +125,18 @@ source("tools/pkg_skeleton/R/dataset_directory.R")
 # DÉLÉGUÉE à l'O16 bulk_counts_transformed_signature, jamais bloquant (AC2.4) ;
 # consommé par mod_import_bulk aux 3 sites .warn_if_transformed_bulk.
 source("tools/pkg_skeleton/R/dataset_health.R")
+# PK-1 PACKS (fiche docs/proposals/PROPOSAL_PACKS_ECOSYSTEM_2026-11-09.md §3,
+# jalon PK-1) : lecteur PUR des manifest.json de packs (data_sc/packs/<pack>/,
+# décision D2 — zone utilisateur, même philosophie que datasets/) — validation
+# stricte + refus honnêtes classés (packs_error, chaque refus dit POURQUOI),
+# scan passif STRICTEMENT lecture seule d'UNE profondeur (motif
+# dataset_directory.R), registre session pur (motif sc_multi.R). ZÉRO nouvelle
+# dépendance (jsonlite déjà au lock, décision D6). Le scan est appelé au
+# démarrage de CHAQUE session (voir global_data) — déposer un dossier =
+# installer une capacité. Ni enricher() (PK-2), ni palettes->ts_theme (PK-4),
+# ni convergence (PK-3), ni outil MCP (non-goal §5) : ce fichier est le socle
+# lecteur ; types validés ici = libraries | palette (fiche idéation §3/§7.1).
+source("tools/pkg_skeleton/R/packs.R")
 # N7 timebox (satellites slice S3, jalon round8, 2026-11-03) : helpers PURS du
 # timebox des jobs — budget déclaré (TS_JOB_BUDGET_S_*, defaults.R) lu par
 # ts_job_budget(), libellé « en cours — … (typique …) » par
@@ -785,6 +797,10 @@ server <- function(input, output, session) {
     bulk_datasets = list(),  # MD-1 : jeux bulk nommés (comparaison multi-jeux)
     # — docs/contracts/BULK_MULTI_CONTRACT.md ; bulk_obj reste le jeu "actif"
 
+    packs = list(),          # PK-1 : registre session des packs valides (clé = pack id) — motif sc_datasets ; fiche PROPOSAL_PACKS_ECOSYSTEM_2026-11-09.md §3
+
+    packs_refusals = list(), # PK-1 : refus honnêtes du scan des packs (manifest invalide = message isolé, JAMAIS un crash — fiche idéation §9) ; les jalons PK-2+ en font un statut visible
+
     spatial_obj = NULL,  # Spatial : liste (sketch, bpcells_dir, coords, ...) — voir tools/pkg_skeleton/R/spatial_io.R (ex-R/utils_spatial_io.R)
     # — POINTE TOUJOURS vers l'echantillon "actif" (voir spatial_datasets ci-dessous)
     
@@ -845,6 +861,17 @@ server <- function(input, output, session) {
   # It lives here, not in a global environment, so two tabs can never share a
   # counter (spec §2.1).
   global_data$drive_registry <- new.env(parent = emptyenv())
+
+  # ── PACKS (PK-1, fiche docs/proposals/PROPOSAL_PACKS_ECOSYSTEM_2026-11-09.md §3) ──
+  # Scan des packs au démarrage de la session — data_sc/packs/*/manifest.json,
+  # STRICTEMENT lecture seule (décision D2 ; motif AC2 dataset_directory.R).
+  # Un manifest invalide = refus ISOLÉ dans packs_refusals, porteur du
+  # « pourquoi » (état classé packs_error + message) — JAMAIS un crash
+  # (fiche idéation §9) ; les packs valides entrent dans le registre session
+  # (motif sc_datasets) que les jalons PK-2+/PK-4 liront via l'API pure packs_*.
+  .packs_scan <- pack_scan_directory()
+  global_data$packs <- .packs_scan$packs
+  global_data$packs_refusals <- .packs_scan$refusals
   .drive <- ts_drive_attach(session, input)
   # ASR-5 (D7, en-tête test-asr5-drive.R) : le token drive est posé sur la
   # surface userData de la session — un champ littéral session$token est

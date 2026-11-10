@@ -416,8 +416,20 @@ check_writers_run <- function(minutes = 30, register = FALSE) {
 # (source sous testthat -> PAS de run ; Rscript -> run). En source in-process,
 # le mode par defaut ne s'execute plus : utiliser check_writers_run() /
 # swarm_check().
-.CWR_IS_CLI <- identical(environment(), globalenv()) && sys.nframe() == 0L &&
-  !interactive() && length(grep("--file=", commandArgs(trailingOnly = FALSE))) > 0
+# (PK-1 2026-11-10) : le meta-gate deterministe du workflow invoque ce garde
+# via `Rscript -e "setwd(...); source('tools/check_writers.R')"` — forme -e
+# SANS --file= : l'ancien garde refusait d'y tourner (stdout vide -> gate
+# deterministe rouge sur du vide, mesure 2 rounds de gate). On accepte AUSSI
+# le point d'entree -e, avec les protections restantes (globalenv,
+# non interactif, bouclier testthat explicite). NOTE MESUREE : sous -e,
+# sys.nframe() vaut 4 DANS le fichier source() (la pile -e+source pousse des
+# frames) — la condition sys.nframe()==0L de l'ancien garde etait donc
+# inviolable dans cette forme ; on la retire, les sites connus de source()
+# in-process restant couverts par globalenv (helper-ast.R:274,
+# test-bulk-import-engine.R:245 sourcent dans un env dedie) et par TESTTHAT.
+.CWR_IS_CLI <- identical(environment(), globalenv()) &&
+  !interactive() && !identical(Sys.getenv("TESTTHAT"), "true") &&
+  length(grep("--file=|^-e$", commandArgs(trailingOnly = FALSE))) > 0
 
 if (.CWR_IS_CLI) {
   if ("--swarm" %in% args) {

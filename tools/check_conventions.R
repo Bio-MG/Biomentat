@@ -1553,9 +1553,21 @@ run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
 
 # ---------------------------------------------------------------------------
 # Point d'entrée — ne s'exécute qu'en `Rscript` (jamais au source()).
+# (PK-1 2026-11-10) : le meta-gate deterministe du workflow invoque ce garde
+# via `Rscript -e "setwd(...); source('tools/check_conventions.R')"` — forme
+# -e SANS --file= : l'ancien garde refusait d'y tourner (stdout vide -> gate
+# deterministe rouge sur du vide, mesure 2 rounds de gate). On accepte AUSSI
+# le point d'entree -e, avec les protections restantes (globalenv,
+# non interactif, bouclier testthat explicite). NOTE MESUREE : sous -e,
+# sys.nframe() vaut 4 DANS le fichier source() (la pile -e+source pousse des
+# frames) — la condition sys.nframe()==0L de l'ancien garde etait donc
+# inviolable dans cette forme ; on la retire, les sites connus de source()
+# in-process restant couverts par globalenv (helper-ast.R:274,
+# test-bulk-import-engine.R:245 sourcent dans un env dedie) et par TESTTHAT.
 # ---------------------------------------------------------------------------
-if (identical(environment(), globalenv()) && sys.nframe() == 0L &&
-    !interactive() && length(grep("--file=", commandArgs(trailingOnly = FALSE))) > 0) {
+if (identical(environment(), globalenv()) &&
+    !interactive() && !identical(Sys.getenv("TESTTHAT"), "true") &&
+    length(grep("--file=|^-e$", commandArgs(trailingOnly = FALSE))) > 0) {
   argv <- commandArgs(trailingOnly = TRUE)
   status <- run_check(strict = "--strict" %in% argv,
                       use_git = !("--no-git" %in% argv),
