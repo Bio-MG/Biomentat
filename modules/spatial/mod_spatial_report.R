@@ -236,10 +236,20 @@ mod_spatial_report_server <- function(id, global_data, shared_rv) {
         # livré DANS le fichier téléchargé (les notifications pendant un
         # download n'atteignent pas le client — mesuré).
         if (!rmarkdown::pandoc_available()) {
-          writeLines(c("⚠️ Rapport impossible : Pandoc est introuvable dans cet environnement R.",
-                       "Correctif : installer RStudio (fournit pandoc) ou définir RSTUDIO_PANDOC,",
-                       "puis relancer l'application."),
-                     file)
+          msg_lines <- c("⚠️ Rapport impossible : Pandoc est introuvable dans cet environnement R.",
+                         "Correctif : installer RStudio (fournit pandoc) ou définir RSTUDIO_PANDOC,",
+                         "puis relancer l'application.")
+          # PC-4 (2026-11-10, hint pré-vol PASSIF — fiche GEMS §PC) : si le format
+          # demandé inclut le PDF et que le paquet tinytex est présent sans
+          # installation TinyTeX, on AJOUTE une ligne au message actionnable
+          # ci-dessus. Aucun refus de plus que le garde P1-21 lui-même : ce bloc
+          # ne s'exécute que si le refus pandoc a déjà tiré.
+          if ("pdf" %in% (input$formats %||% character(0)) &&
+              requireNamespace("tinytex", quietly = TRUE) &&
+              !tinytex::is_tinytex()) {
+            msg_lines <- c(msg_lines, "PDF : LaTeX (TinyTeX) absent — installer via tinytex::install_tinytex()")
+          }
+          writeLines(msg_lines, file)
           return()
         }
         ds_list <- tryCatch(.gather_datasets(), error = function(e) {
