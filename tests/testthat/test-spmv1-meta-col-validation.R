@@ -387,7 +387,9 @@ test_that("T6 SPMV-1 pins d'arbre : app.R source, test-app-sourcing 163->164, ma
   pins_src <- paste(readLines(
     file.path(ts_project_root(), "tests", "testthat", "test-app-sourcing.R"),
     warn = FALSE), collapse = "\n")
-  expect_true(grepl("170L", pins_src, fixed = TRUE),
+  # RE-BASAGE 170 -> 171 (2026-11-10, jalon PK-1 186e88c : manifeste
+  # 170 -> 171 avec packs.R) — même leçon que test-biostat-m3-ui (run #10).
+  expect_true(grepl("171L", pins_src, fixed = TRUE),
               info = "test-app-sourcing.R doit etre re-base 164 -> 170 (S6 998a98c : manifeste 168 -> 170)")
 
   # (c) Manifeste des sources contient le chemin (Rscript tools/sources_manifest.R --build).

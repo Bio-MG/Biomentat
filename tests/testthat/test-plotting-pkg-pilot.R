@@ -243,8 +243,16 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           # défaut PRÉEXISTANT au rename, constaté par la
                           # passe de validation du jalon.
                           "dataset_health.R", "job_timebox.R",
-                          "tour_registry.R")),
-                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 10 core (J1 : +biomentat_handoff) + 2 config + 27 sc (M4 : +sc_qc_doublets) + 1 resilience (ASR-1 : +session_checkpoint) + 1 biostat M2 (O27 : +biostat_tree) + 1 PoC datasets P0 (+dataset_directory) + 1 dataset-doctor (S3) + 1 timebox (S3) + 1 tour (S6) = 89")
+                          "tour_registry.R",
+                          # PK-1 SYSTÈME DE PACKS (2026-11-10, 186e88c) :
+                          # lecteur manifest.json pur + scan + registre
+                          # session (fiche PROPOSAL_PACKS_ECOSYSTEM
+                          # §3 jalon PK-1 ; freeze test test-packs-manifest.R).
+                          # RE-BASAGE 89 -> 90 mesuré au run complet #10 —
+                          # l'ancien pin ratait le jalon PK-1 (même leçon
+                          # RENAME 2026-11-05 documentée ci-dessus).
+                          "packs.R")),
+                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 10 core (J1 : +biomentat_handoff) + 2 config + 27 sc (M4 : +sc_qc_doublets) + 1 resilience (ASR-1 : +session_checkpoint) + 1 biostat M2 (O27 : +biostat_tree) + 1 PoC datasets P0 (+dataset_directory) + 1 dataset-doctor (S3) + 1 timebox (S3) + 1 tour (S6) + 1 packs (PK-1) = 90")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────

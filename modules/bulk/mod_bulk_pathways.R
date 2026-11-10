@@ -1053,36 +1053,15 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
     # colonne dédiée (`p.adjust GLOBAL`) et l'original en audit
     # (`p.adjust PK-2 (run)`). Refus honnêtes (classe pathway_error) affichés
     # tels quels : < 2 librairies, run non-Packs, contrat violé.
+    # (run #10 2026-11-10) : cœur extrait dans le moteur (packs_converge_result
+    # + packs_convergence_outputs) — le branchement PK-3 était dupliqué à ~25
+    # lignes identiques bulk/sc (ERREUR catégorie 4, garde check_duplication).
     convergence_data <- reactive({
       global_data$language                     # i18n trigger (comme pathway_table)
-      res <- shared_rv$pathway_results
-      if (is.null(res) || !is.data.frame(res) || nrow(res) == 0L) {
-        return(list(ok = FALSE,
-                    msg = .tr("La convergence s'applique aux runs Packs multi-librairies (≥ 2 librairies sélectionnées).")))
-      }
-      tbl <- tryCatch(packs_converge(packs_split_libraries(res)),
-                      error = function(e) e)
-      if (inherits(tbl, "error")) return(list(ok = FALSE, msg = conditionMessage(tbl)))
-      list(ok = TRUE, tbl = tbl)
+      packs_converge_result(shared_rv$pathway_results, .tr)
     })
-    output$convergence_ui <- renderUI({
-      cd <- convergence_data()
-      if (!isTRUE(cd$ok)) {
-        return(tags$div(class = "small text-muted", style = "margin:15px;",
-                        icon("info-circle"), " ", cd$msg))
-      }
-      tagList(
-        tags$div(class = "small text-muted", style = "margin: 6px 15px;",
-                 icon("info-circle"), " ",
-                 .tr("BH globale sur l'union des tests (toutes librairies confondues) + effondrement de redondance (similarité de Jaccard enrichplot) — 1 cluster = 1 vote.")),
-        DTOutput(ns("convergence_table"))
-      )
-    })
-    output$convergence_table <- renderDT({
-      cd <- convergence_data()
-      req(isTRUE(cd$ok))
-      build_convergence_dt(cd$tbl, tr = .tr_fn(global_data))
-    })
+    output$convergence_ui <- renderUI(packs_convergence_content(ns, convergence_data, .tr))
+    output$convergence_table <- renderDT(packs_convergence_dt(convergence_data, .tr_fn(global_data)))
 
     # ── PB (GEMS D5) — résultats ORA directionnelle (goana/kegga) ────────────
     # Tables limma natives (colonne db estampillée par le moteur) empilées en

@@ -323,12 +323,15 @@ test_that("les deux modules pathway portent la vue « Convergence » PK-3 (garde
     src <- .mod_src(m)
     expect_match(src, 'i18n$t("Convergence")', fixed = TRUE,
                  info = paste(m, "— nav_panel Convergence absent"))
-    expect_match(src, "packs_split_libraries(", fixed = TRUE,
-                 info = paste(m, "— appel packs_split_libraries absent"))
-    expect_match(src, "packs_converge(", fixed = TRUE,
-                 info = paste(m, "— appel packs_converge absent"))
-    expect_match(src, "build_convergence_dt(", fixed = TRUE,
-                 info = paste(m, "— appel build_convergence_dt absent"))
+    # (run #10 2026-11-10 : le cœur data+UI est extrait dans le moteur
+# packs_converge_result / packs_convergence_outputs — garde de régression
+# anti-duplication catégorie 4 ; les marqueurs suivent le branchement.)
+    expect_match(src, "packs_converge_result(", fixed = TRUE,
+                 info = paste(m, "— appel packs_converge_result absent"))
+    expect_match(src, "packs_convergence_content(", fixed = TRUE,
+                 info = paste(m, "— appel packs_convergence_content absent"))
+    expect_match(src, "packs_convergence_dt(", fixed = TRUE,
+                 info = paste(m, "— appel packs_convergence_dt absent"))
     expect_match(src, "PK-3", fixed = TRUE,
                  info = paste(m, "— marqueur jalon PK-3 absent"))
   }

@@ -428,8 +428,13 @@ check_writers_run <- function(minutes = 30, register = FALSE) {
 # in-process restant couverts par globalenv (helper-ast.R:274,
 # test-bulk-import-engine.R:245 sourcent dans un env dedie) et par TESTTHAT.
 .CWR_IS_CLI <- identical(environment(), globalenv()) &&
-  !interactive() && !identical(Sys.getenv("TESTTHAT"), "true") &&
+  !interactive() &&
   length(grep("--file=|^-e$", commandArgs(trailingOnly = FALSE))) > 0
+# (run #10 2026-11-10) : la clause TESTTHAT ajoutée par PK-1 POISONNAIT les
+# enfants CLI spawnés depuis test-check-writers.R (ils héritent TESTTHAT=true
+# du parent testthat -> garde muet, exit 0 sur sortie vide, 3 FAIL au run #10).
+# Le bouclier in-process est déjà assuré par globalenv (les source() de test
+# s'exécutent dans des envs dédiés) — clause redondante et nuisible, retirée.
 
 if (.CWR_IS_CLI) {
   if ("--swarm" %in% args) {

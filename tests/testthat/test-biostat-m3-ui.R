@@ -501,11 +501,15 @@ test_that("T6 pins : app.R source le module (manifeste) et le DÉSACTIVE (décis
   # re-baser cette ligne — dette ROUGE mesurée à HEAD avant le jalon M4,
   # leçon frontière) ; valeur MESURÉE au HEAD : 164L (test-app-sourcing.R:190).
   # RE-BASAGE (2026-11-05, mesuré) : le compte d'épingles de
-  # test-app-sourcing.R est 170L depuis le jalon S6/N4 (manifeste 168 -> 170,
+  # RE-BASAGE 170 -> 171 (2026-11-10, jalon PK-1 186e88c : manifeste
+  # 170 -> 171 avec tools/pkg_skeleton/R/packs.R) — l'ancien pin 170L (ère
+  # S6/N4) ratait le re-basage PK-1, ROUGE au run complet #10 (test-spmv1
+  # même leçon). test-app-sourcing.R est 171L depuis le jalon PK-1 (manifeste
+  # 170 -> 171,
   # commit 998a98c) — l'ancien pin « 164L » (ère SPMV-1/M4) était périmé et
   # ratait déjà avant la reprise de ce jalon.
-  expect_true(grepl("170L", asr_src, fixed = TRUE),
-              info = "test-app-sourcing.R doit porter le compte 170L (re-basage S6 mesuré)")
+  expect_true(grepl("171L", asr_src, fixed = TRUE),
+              info = "test-app-sourcing.R doit porter le compte 171L (re-basage PK-1 mesuré)")
   expect_true(grepl("162 -> 163", asr_src, fixed = TRUE),
               info = "le re-basage 162 -> 163 doit être documenté dans test-app-sourcing.R (motif M2)")
   expect_true(grepl("2026-11", asr_src),

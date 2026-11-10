@@ -1637,6 +1637,78 @@ packs_term2gene <- function(packs, selected) {
        term2name = do.call(rbind, t2n_parts))
 }
 
+#' Résultat de convergence prêt pour le rendu (cœur partagé bulk/sc — PK-3)
+#'
+#' (run #10 2026-11-10 : extraction — le branchement PK-3 était dupliqué à
+#' ~25 lignes identiques entre mod_bulk_pathways et mod_sc_pathways, ERREUR
+#' catégorie 4 du garde check_duplication.) Cœur PUR : refus honnêtes
+#' identiques aux deux modules, un seul point de maintenance.
+#'
+#' @param res Table résultat PK-2 (contrat run_packs_enrichment) ou NULL.
+#' @param tr Fonction de traduction du module (défaut identité).
+#' @return list(ok = TRUE, tbl = <convergence>) ou list(ok = FALSE, msg).
+packs_converge_result <- function(res, tr = function(x) x) {
+  if (is.null(res) || !is.data.frame(res) || nrow(res) == 0L) {
+    return(list(ok = FALSE,
+                msg = tr("La convergence s'applique aux runs Packs multi-librairies (≥ 2 librairies sélectionnées).")))
+  }
+  tbl <- tryCatch(packs_converge(packs_split_libraries(res)), error = function(e) e)
+  if (inherits(tbl, "error")) return(list(ok = FALSE, msg = conditionMessage(tbl)))
+  list(ok = TRUE, tbl = tbl)
+}
+
+#' Rendu de l'onglet Convergence (sorties UI partagées bulk/sc — PK-3)
+#'
+#' (run #10 2026-11-10 : extraction du bloc renderUI/renderDT dupliqué — même
+#' catégorie 4. Assigne output$convergence_ui + output$convergence_table ;
+#' les deux modules gardent leur .tr propre. Précédent UI-helper dans un
+#' moteur : manual_color_picker_ui dans palettes.R.)
+#'
+#' @param output Le object output du module.
+#' @param ns Namespace du module.
+#' @param convergence_data Reactive retournant list(ok, tbl, msg) — cf.
+#'   packs_converge_result.
+#' @param tr Traduction des libellés (fonction du module).
+#' @param dt_tr Traduction passée à build_convergence_dt.
+# (run #11 2026-11-10 — LEÇON C2 : la première extraction portait renderUI +
+# output$ DANS le moteur → 3 ERREURS C2 sur l'arbre R du paquet (le contrat
+# « R/ sans Shiny », test-conventions-c2-nested : renderUI(/output$ = SHINY_HARD).
+# La couche rendu vit donc dans des shells de 3 lignes par module, et le moteur
+# expose le CONTENU — valeurs pures, aucun token SHINY_HARD.)
+# NB : dt_tr = le traducteur passé à build_convergence_dt (bulk: .tr_fn(global_data),
+# sc: .tr) ; tr = le traducteur des libellés.
+
+#' Contenu UI de l'onglet Convergence (rendu par renderUI côté module — PK-3)
+#'
+#' @param ns Namespace du module.
+#' @param convergence_data Reactive retournant list(ok, tbl, msg) — cf.
+#'   packs_converge_result.
+#' @param tr Traduction des libellés (fonction du module).
+#' @return tagList (info repli ou header + DTOutput) — valeur de renderUI.
+packs_convergence_content <- function(ns, convergence_data, tr) {
+  cd <- convergence_data()
+  if (!isTRUE(cd$ok)) {
+    return(tags$div(class = "small text-muted", style = "margin:15px;",
+                    icon("info-circle"), " ", cd$msg))
+  }
+  tagList(
+    tags$div(class = "small text-muted", style = "margin: 6px 15px;",
+             icon("info-circle"), " ",
+             tr("BH globale sur l'union des tests (toutes librairies confondues) + effondrement de redondance (similarité de Jaccard enrichplot) — 1 cluster = 1 vote.")),
+    DTOutput(ns("convergence_table"))
+  )
+}
+
+#' Table DT de l'onglet Convergence (rendu par renderDT côté module — PK-3)
+#'
+#' @return datatable build_convergence_dt (ou req sur repli — appelé DANS le
+#'   contexte de rendu du module, où req est légal).
+packs_convergence_dt <- function(convergence_data, dt_tr) {
+  cd <- convergence_data()
+  req(isTRUE(cd$ok))
+  build_convergence_dt(cd$tbl, tr = dt_tr)
+}
+
 #' ORA locale sur les librairies de packs — enricher(), contrat inchangé
 #'
 #' Même famille de sorties que run_pathway_enrichment() : data.frame
@@ -1680,7 +1752,9 @@ run_packs_enrichment <- function(genes, term2gene, term2name = NULL,
       "Package 'clusterProfiler' requis. Installez-le via BiocManager.",
       class = "pathway_error"))
   }
-  library(clusterProfiler)
+  # (run #10 2026-11-10) : PAS de library() imbriqué ici — l'appel est
+  # qualifié clusterProfiler::enricher() ; le library() ajouté par PK-2
+  # faisait passer le compteur C6 témoin de 15 à 16 (test-conventions-c6).
   genes <- strip_composite_gene_ids(genes)
   genes <- unique(trimws(genes[!is.na(genes) & nchar(trimws(genes)) > 0]))
   if (length(genes) == 0L) {
@@ -1712,7 +1786,7 @@ run_packs_enrichment <- function(genes, term2gene, term2name = NULL,
     t2n <- t2n[nzchar(t2n$term) & nzchar(t2n$name), , drop = FALSE]
     if (nrow(t2n) == 0L) t2n <- NULL
   }
-  enrich_result <- enricher(
+  enrich_result <- clusterProfiler::enricher(
     gene          = genes,
     TERM2GENE     = t2g,
     TERM2NAME     = t2n,
