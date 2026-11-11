@@ -12238,14 +12238,6 @@
       "en": "FDR Down"
     },
     {
-      "fr": "Colonne statut (0 = censurC), 1 = C)vC)nement)",
-      "en": "Status column (0 = censored, 1 = event)"
-    },
-    {
-      "fr": "1/2 (1 = censurC), 2 = C)vC)nement)",
-      "en": "1/2 (1 = censored, 2 = event)"
-    },
-    {
       "fr": "GC(nes (VST)",
       "en": "Genes (VST)"
     },
@@ -12278,10 +12270,6 @@
       "en": "Waiting — run Filtering & VST (step 1) first."
     },
     {
-      "fr": "⚠️ SÃ©lectionnez au moins une variable pour les Cox.",
-      "en": "⚠️ Select at least one variable for the Cox models."
-    },
-    {
       "fr": "Lancez d'abord Kaplan-Meier (panneau de gauche). DC)coupes mC)diane/quartiles uniquement b",
       "en": "Run Kaplan-Meier first (left panel). Median/quartile splits only — no optimal cutpoint search."
     },
@@ -12304,10 +12292,6 @@
     {
       "fr": "Si renseignC), le jeu importC) est aussi enregistrC) sous ce nom pour la comparaison multi-jeux (Bulk > Multi-jeux).",
       "en": "If filled, the imported dataset is also registered under this name for multi-dataset comparison (Bulk > Multi-datasets)."
-    },
-    {
-      "fr": "b\u001a o8\u000f Dataset non enregistrC) (multi-jeux) : %s",
-      "en": "b\u001a o8\u000f Dataset not registered (multi-dataset): %s"
     },
     {
       "fr": "p\u001f\u0013& Import enregistrC) pour la comparaison multi-jeux : B+ %s B;.",

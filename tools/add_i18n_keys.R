@@ -2,6 +2,29 @@
 # ONLY for keys not already present (duplicate FR keys crash app startup —
 # guarded by test-i18n-integrity.R). Idempotent.
 # Usage: Rscript tools/add_i18n_keys.R
+#
+# ⚠️ TRIPWIRE LOCALE (2026-11-12) — ce fichier contient des RAW BYTES UTF-8
+# (é, —, ✅...) mélangés aux échappements \u. Si R démarre sous une locale
+# cassée (Git Bash sur cet hôte : « Setting LC_CTYPE=C.UTF-8 failed »), le
+# parser lit les raw bytes comme du natif → MOJIBAKE en mémoire → les clés
+# apposées sont CORROMPUES (« censurC) », « SÃ©lection... »). Le landmine a
+# DÉJÀ TIRÉ une fois (4 entrées mojibake commées historiquement, réparées
+# le 2026-11-12 — doublons corrompus de clés déjà présentes, supprimés).
+# Le garde ci-dessous REFUSE de tourner dans cet état ; remède mesuré :
+#   LC_ALL= LANG=en_US.UTF-8 Rscript tools/add_i18n_keys.R
+# (ou flush direct JSON UTF-8 côté Python — précédent bc9c09a).
+# DISCRIMINANT mesuré : sous locale cassée le raw « é » (C3 A9) est lu comme
+# DEUX caractères natifs (Ã©) — nchar() = 2 ; sous UTF-8 il vaut 1. (charToRaw
+# ne DISCRIMINE PAS : les octets C3 A9 sont identiques dans les deux lectures.)
+if (nchar("é", type = "chars") != 1L) {
+  stop(paste0(
+    "[add_i18n_keys] Locale cassée détectée (nchar('é') != 1) : les raw ",
+    "bytes UTF-8 du fichier seraient lus comme du natif et l'apposition ",
+    "écrirait des clés MOJIBAKE dans translation.json. Relancer avec : ",
+    "LC_ALL= LANG=en_US.UTF-8 Rscript tools/add_i18n_keys.R — ou flusher ",
+    "directement le JSON en UTF-8 (précédent bc9c09a)."), call. = FALSE)
+}
+
 json_path <- file.path(getwd(), "i18n", "translation.json")
 j <- jsonlite::fromJSON(json_path, simplifyVector = FALSE)
 
