@@ -17,7 +17,20 @@
 # selectInput ne doit pas blanchir tous les plots d'un module).
 # =============================================================================
 
+# HYGIÈNE GLOBALENV (fix flake in-suite mesuré 2026-11-11) : ce test source
+# palettes.R en GLOBALENV (convention M5 pour les tests hors domaine plotting)
+# — mais palettes.R porte bulk_diverging_ramp/bulk_sequential_ramp que le
+# garde D2-M4 épingle « source unique = paquet, PAS globalenv »
+# (test-plotting-pkg-pilot.R:295-296). Sans nettoyage, le flake pkg-pilot ×2
+# des runs #11/#12/#13 apparaît dès que ce fichier passe AVANT lui (ordre
+# alphabétique packs < plotting ; vert standalone ×5, rouge en-suite ×3 —
+# reproduit et capturé 2026-11-11 sur la span packs→plot→pkg). Motif du
+# nettoyage : le propre bloc « contraste » du pilote fait pareil
+# (« On constate, puis on NETTOIE », test-plotting-pkg-pilot.R:56-58).
+.pp_gv_before <- ls(envir = globalenv())
 source_project_file("tools/pkg_skeleton/R/palettes.R")
+on.exit(rm(list = setdiff(ls(envir = globalenv()), .pp_gv_before),
+           envir = globalenv()), add = TRUE)
 
 # -- fixture ------------------------------------------------------------------
 
