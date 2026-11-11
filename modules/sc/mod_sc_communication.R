@@ -437,20 +437,19 @@ mod_sc_communication_output_ui <- function(id) {
                h5(id = ns("comm_drawer_title"), class = "offcanvas-title",
                   icon("list-ul"), " ", i18n$t("Navigation CCC")),
                tags$button(type = "button", class = "btn-close",
-                           `data-bs-dismiss` = "offcanvas", `aria-label` = "Close")),
+                           `data-bs-dismiss` = "offcanvas",
+                           `aria-label` = i18n$t("Fermer"))),
       tags$div(class = "offcanvas-body",
         h6(i18n$t("Filtres d'interaction")),
-        div(class = "small text-muted", textOutput(ns("comm_filter_summary_drawer"))),
+        # P4 (CCC-DRAW-OPT 2026-11-11) : aria-live — les lecteurs d'écran
+        # annoncent les changements de filtrage résumés ici.
+        div(class = "small text-muted", `aria-live` = "polite",
+            textOutput(ns("comm_filter_summary_drawer"))),
         hr(),
-        lapply(names(.comm_drawer_groups), function(grp) {
-          tags$div(class = "mb-3",
-            h6(i18n$t(grp)),
-            lapply(.comm_drawer_groups[[grp]], function(pn) {
-              actionButton(ns(paste0("comm_jump_", pn$value)),
-                           label = i18n$t(pn$label),
-                           class = "btn btn-link btn-sm text-start p-0 d-block")
-            }))
-        })
+        # P1+P2 (CCC-DRAW-OPT 2026-11-11) : navigation rendue DYNAMIQUEMENT
+        # (serveur, output$comm_drawer_nav) — marqueur « où suis-je ? » sur le
+        # panneau courant + compteur de panneaux par groupe.
+        uiOutput(ns("comm_drawer_nav"))
       )
     )
   )
@@ -727,6 +726,36 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
 
     output$comm_filter_summary <- renderText({ .filter_summary_txt() })
     output$comm_filter_summary_drawer <- renderText({ .filter_summary_txt() })
+
+    # ── CCC-DRAW-OPT (2026-11-11, boost mode) : P1 « où suis-je ? » + P2
+    # compteur par groupe — la navigation du tiroir 2L est rendue
+    # DYNAMIQUEMENT : input$comm_tabs (le `value` ASCII posé par 2F,
+    # indépendant de la traduction) pilote le marqueur du panneau courant ;
+    # le tiroir reste ouvert après le saut (verdict re-sweep 1920) et le
+    # marqueur se met à jour à chaque navigation. Les compteur badges P2
+    # densifient les 4 groupes (14 panneaux). JUMELLE de la carte côté UI
+    # (égalité verrouillée test-mod-sc-communication-ui.R) consommée telle
+    # quelle — aucune divergence possible sur le contenu.
+    output$comm_drawer_nav <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      sel <- input$comm_tabs %||% ""
+      lapply(names(.comm_drawer_groups), function(grp) {
+        items <- .comm_drawer_groups[[grp]]
+        tags$div(class = "mb-3",
+          h6(.tr(grp),
+             tags$span(class = "badge text-bg-secondary ms-1", length(items))),
+          lapply(items, function(pn) {
+            active <- identical(sel, pn$value)
+            actionButton(ns(paste0("comm_jump_", pn$value)),
+                         label = if (active)
+                           tagList(tags$span(class = "text-primary", "\u25B8 "),
+                                   .tr(pn$label))
+                         else .tr(pn$label),
+                         class = paste("btn btn-link btn-sm text-start p-0 d-block",
+                                       if (active) "fw-bold"))
+          }))
+      })
+    })
 
     # ── 3F (O28, spéc §2.18 point 4) : normalisation contextuelle des filtres
     # score / rang selon la source détectée. Un rang n'est pas un score

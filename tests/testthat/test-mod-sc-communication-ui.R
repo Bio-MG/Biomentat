@@ -212,6 +212,43 @@ test_that("2L : tiroir offcanvas secondaire — pastille, .offcanvas, sauts, zé
                    info = "occurrences comm_f_score_min (1 UI + 2 resets + 1 input$ + 4 updates 3F)")
 })
 
+# =============================================================================
+# CCC-DRAW-OPT (2026-11-11, boost mode) — optimisation du tiroir AVANT toute
+# généralisation (gate 1 de CCC_NAV_DRAWER_GENERALIZATION, auto-revue datée
+# docs/ideation/CCC_NAV_DRAWER_AUTOREVIEW_2026-11-11.md) : P1 marqueur du
+# panneau courant, P2 compteur par groupe, P4 aria-live + libellé Fermer i18n.
+# P3 (résumé compact) DIFFÉRÉ — noté dans l'auto-revue.
+# =============================================================================
+
+test_that("CCC-DRAW-OPT : tiroir optimisé — nav dynamique (marqueur actif), compteurs, aria-live, Fermer i18n", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCC_UI_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # P1 : la navigation du tiroir est rendue DYNAMIQUEMENT (uiOutput + renderUI)
+  # et marque le panneau courant (bold) — l'utilisateur sait où il est.
+  expect_match(src, 'uiOutput(ns("comm_drawer_nav"))', fixed = TRUE,
+               info = "P1 : le rendu dynamique du nav tiroir est absent")
+  expect_match(src, "output$comm_drawer_nav <- renderUI(", fixed = TRUE,
+               info = "P1 : le serveur ne rend pas le nav tiroir")
+  expect_match(src, "identical(sel, pn$value)", fixed = TRUE,
+               info = "P1 : le marqueur du panneau courant est absent")
+  expect_match(src, "fw-bold", fixed = TRUE,
+               info = "P1 : le style du marqueur actif est absent")
+  # P2 : compteur de panneaux par groupe (badge)
+  # P2 : compteur de panneaux par groupe — style BS 5.3 text-bg-* DELIBÉRÉMENT
+  # distinct des badges 2G (« badge bg-secondary », compteur épingle à 2 au
+  # bloc 2G) : deux rôles, deux classes, zéro collision de pin.
+  expect_match(src, "badge text-bg-secondary", fixed = TRUE,
+               info = "P2 : le compteur de panneaux par groupe est absent")
+  # P4 : aria-live sur le résumé du tiroir (SR annoncent les changements de
+  # filtrage) + libellé Fermer i18n (l'anglais hardcoded « Close » disparaît)
+  expect_match(src, 'aria-live', fixed = TRUE,
+               info = "P4 : aria-live absent du tiroir")
+  expect_match(src, '`aria-label` = i18n$t("Fermer")', fixed = TRUE,
+               info = "P4 : le libellé du btn-close n'est pas i18n")
+  expect_false(grepl('"Close"', src, fixed = TRUE),
+               info = "P4 : le aria-label anglais hardcoded « Close » persiste")
+})
+
 
 # =============================================================================
 # B2 (O28, 2026-10-31) — item 3D : la bannière « Limites » est alignée sur le
