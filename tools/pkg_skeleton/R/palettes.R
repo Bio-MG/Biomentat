@@ -250,6 +250,17 @@ bulk_annotation_colors <- function(levels, palette = "default", manual_colors = 
 #' by Bulk volcano/MA/Up-Down, SC volcano, and (via role_colors_generic())
 #' Spatial hotspots/Ripley's K.
 bulk_role_colors <- function(palette = "default", manual_colors = NULL) {
+  # PK-4bis (palettes de packs) : un choix « <pack_id>::<palette> » résout via
+  # le registre TS_PACKS_REGISTRY — hex du pack répétés sur les 3 rôles
+  # (motif okabeito des helpers à n niveaux). Repli honnête : registre absent
+  # ou choix inconnu = warning + preset « default », JAMAIS une erreur. Les
+  # presets legacy ne touchent JAMAIS au registre (zéro changement visuel).
+  if (.packs_is_pack_palette(palette)) {
+    hex <- .packs_palette_lookup(palette)
+    if (!is.null(hex))
+      return(stats::setNames(rep(hex, length.out = 3L), c("Up", "Down", "NS")))
+    palette <- "default"
+  }
   presets <- list(
     default  = c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7"),
     okabeito = c(Up = "#D55E00", Down = "#0072B2", NS = "#999999"),
@@ -338,6 +349,16 @@ spatial_diverging_scale <- function(shared_rv, aesthetic = "fill", na.value = "g
 spatial_color_ramp_hex <- function(shared_rv) {
   pal  <- state_get(shared_rv, "color_palette") %||% "default"
   grad <- state_get(shared_rv, "manual_gradient")
+  # PK-4bis (palettes de packs) : un choix « <pack_id>::<palette> » résout via
+  # le registre TS_PACKS_REGISTRY — rampe continue 256 stops sur les hex du
+  # pack (motif du cas « manual »). Repli honnête : registre absent ou choix
+  # inconnu = warning + rampe « viridis » (comportement default du switch),
+  # JAMAIS une erreur. Les presets legacy ne touchent JAMAIS au registre.
+  if (.packs_is_pack_palette(pal)) {
+    hex <- .packs_palette_lookup(pal)
+    if (!is.null(hex)) return(grDevices::colorRampPalette(hex)(256))
+    pal <- "default"
+  }
   switch(pal,
     manual   = grDevices::colorRampPalette(c(grad$low %||% "#2166AC", grad$high %||% "#B2182B"))(256),
     okabeito = grDevices::colorRampPalette(c("#FFFFFF", "#D55E00"))(256),

@@ -409,6 +409,26 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
 
+    # ── PK-4bis (pilier 5) : palettes de packs dans le sélecteur Spatial ─────
+    # La fonction UI ne porte que les 5 presets (elle n'a pas accès au
+    # registre de session) ; ce bloc une-fois au montage ajoute les palettes
+    # de packs (« <pack_id>::<palette> », résolues côté resolvers —
+    # spatial_color_ramp_hex / bulk_role_colors / cluster_palette). Même
+    # pattern que mod_bulk_filter.R (PK-4). isolate() OBLIGATOIRE sur tout le
+    # bloc : .tr lit global_data$i18n SANS isolate interne ici (le fix
+    # a7a94ba n'a isolé que le .tr de mod_bulk_filter) — un appel .tr au
+    # montage, hors consommateur réactif, aborterait et tuerait le montage
+    # des modules suivants (même classe que le bug mesuré live 2026-11-10).
+    shiny::isolate({
+      updateSelectInput(session, "color_palette",
+        choices = c(
+          stats::setNames(
+            c("default", "okabeito", "viridis", "set2", "manual"),
+            c(.tr("Defaut"), .tr("Okabe-Ito (daltonien)"),
+              "Viridis", "Set2", .tr("Manuel"))),
+          packs_palette_choices(global_data$packs %||% list())))
+    })
+
     # --------------------------------------------------------------------------
     # DSTV-2 B1 (2026-10-31) — SONDE DE VOCABULAIRE du module Spatial
     #
@@ -497,10 +517,12 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         label = .tr("Opacite des points (hors mode Gene)"))
       updateSelectInput(session, "color_palette",
         label = .tr("Jeu de couleurs"),
-        choices = stats::setNames(
-          c("default", "okabeito", "viridis", "set2", "manual"),
-          c(.tr("Defaut"), .tr("Okabe-Ito (daltonien)"),
-            "Viridis", "Set2", .tr("Manuel"))))
+        choices = c(
+          stats::setNames(
+            c("default", "okabeito", "viridis", "set2", "manual"),
+            c(.tr("Defaut"), .tr("Okabe-Ito (daltonien)"),
+              "Viridis", "Set2", .tr("Manuel"))),
+          packs_palette_choices(shiny::isolate(global_data$packs %||% list()))))
       updateCheckboxInput(session, "fixed_scale",
         label = .tr("Echelle de couleur fixe (point fixe min/max)"))
       updateCheckboxInput(session, "show_histology",

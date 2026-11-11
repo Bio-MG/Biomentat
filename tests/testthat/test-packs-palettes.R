@@ -107,14 +107,50 @@ test_that("repli honnête : registre absent ou choix inconnu = warning + comport
   expect_identical(unname(out2), unname(sc_discrete_colors(c("A", "B"), "default")))
 })
 
+# -- PK-4bis : le sélecteur Spatial (color_palette) résout les packs ----------
+
+test_that("spatial_color_ramp_hex résout un choix de pack (rampe 256 stops, bornes = hex du pack)", {
+  old <- options(TS_PACKS_REGISTRY = .pack_reg())
+  on.exit(options(old), add = TRUE)
+  ramp <- spatial_color_ramp_hex(list(color_palette = "wes_packs::GrandBudapest"))
+  expect_length(ramp, 256)
+  # bornes de la rampe = première/dernière couleur du pack (colorRampPalette)
+  expect_identical(ramp[1], "#F1BB7B")
+  expect_identical(ramp[256], "#5B7254")
+})
+
+test_that("spatial_color_ramp_hex : repli honnête pack inconnu = warning + rampe viridis", {
+  old <- options(TS_PACKS_REGISTRY = .pack_reg())
+  on.exit(options(old), add = TRUE)
+  expect_warning(ramp <- spatial_color_ramp_hex(list(color_palette = "wes_packs::Inconnu")),
+                 "pack")
+  expect_identical(ramp, "viridis")
+})
+
+test_that("bulk_role_colors résout un choix de pack (hex répétés sur Up/Down/NS)", {
+  old <- options(TS_PACKS_REGISTRY = .pack_reg())
+  on.exit(options(old), add = TRUE)
+  cols <- bulk_role_colors("wes_packs::GrandBudapest")
+  expect_identical(names(cols), c("Up", "Down", "NS"))
+  expect_identical(unname(cols), c("#F1BB7B", "#FD5E53", "#5B7254"))
+})
+
+test_that("bulk_role_colors : repli honnête pack inconnu = warning + preset default", {
+  old <- options(TS_PACKS_REGISTRY = .pack_reg())
+  on.exit(options(old), add = TRUE)
+  expect_warning(cols <- bulk_role_colors("wes_packs::Inconnu"), "pack")
+  expect_identical(unname(cols), unname(bulk_role_colors("default")))
+})
+
 # -- câblage (assertions source-level, style freeze tests) --------------------
 
-test_that("boot + les deux sélecteurs référencés portent les palettes de packs", {
+test_that("boot + les trois sélecteurs référencés portent les palettes de packs", {
   .src <- function(p) paste(readLines(file.path(ts_project_root(), p), warn = FALSE), collapse = "\n")
   app_src <- .src("app.R")
   expect_match(app_src, "TS_PACKS_REGISTRY", fixed = TRUE,
                info = "app.R ne pose pas le registre TS_PACKS_REGISTRY au boot")
-  for (m in c("modules/bulk/mod_bulk_filter.R", "modules/sc/mod_sc_viz.R")) {
+  for (m in c("modules/bulk/mod_bulk_filter.R", "modules/sc/mod_sc_viz.R",
+              "modules/spatial/mod_spatial_viz.R")) {
     src <- .src(m)
     expect_match(src, "packs_palette_choices(", fixed = TRUE,
                  info = paste(m, "— choix de packs absents du sélecteur"))
