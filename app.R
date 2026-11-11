@@ -625,7 +625,8 @@ ui <- page_navbar(
     
     fileInput("load_session_file", i18n$t("📂 Charger Session (.rds)"),
 
-              accept = c(".rds", ".rda", ".RData"), width = "100%"),
+              accept = c(".rds", ".rda", ".RData"), width = "100%",
+              buttonLabel = i18n$t("Parcourir...")),
     
     div(class = "small text-muted", style = "font-size:0.75rem;",
         
