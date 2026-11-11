@@ -290,7 +290,21 @@ if (I18N_AVAILABLE) {
 
 .ts_dt_set_language <- function(tr) {
   if (is.null(tr)) return(invisible(NULL))
-  trd <- function(k) tryCatch(tr$t(k), error = function(e) k)
+  # FIX 2026-11-11 (boot-fail mesuré, session velocity) : au BUILD TIME le
+  # traducteur global $t() renvoie un shiny.tag <span class="i18n"> de
+  # longueur 3 (name/attribs/children) — vapply(character(1)) crashait
+  # ("FUN(X[[1]]) result is length 3") et haltait le boot (CQF-3 e4537fe).
+  # Strip du span inline (mêmes sémantiques que .strip_i18n_html, définie
+  # plus bas dans ce fichier — inutilisable ici avant sa définition) :
+  # DataTables exige des libellés PLAIN, jamais du HTML i18n.
+  trd <- function(k) {
+    res <- tryCatch(tr$t(k), error = function(e) k)
+    if (inherits(res, c("shiny.tag", "shiny.tag.list")) || length(res) > 1L) {
+      flat <- paste(as.character(res), collapse = "")
+      return(gsub("^<span[^>]*>|</span\\s*>$", "", flat))
+    }
+    res
+  }
   rec <- function(x) {
     if (is.list(x)) return(lapply(x, rec))
     if (is.character(x)) return(unname(vapply(x, trd, character(1))))
