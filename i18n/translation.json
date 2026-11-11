@@ -13160,6 +13160,26 @@
     {
       "fr": "Retirées — auto-interactions",
       "en": "Dropped — self-interactions"
+    },
+    {
+      "fr": "Navigation Milo",
+      "en": "Milo navigation"
+    },
+    {
+      "fr": "État du résultat",
+      "en": "Result state"
+    },
+    {
+      "fr": "Vues & table DA",
+      "en": "Views & DA table"
+    },
+    {
+      "fr": "Voisinages",
+      "en": "Neighbourhoods"
+    },
+    {
+      "fr": "Cellules couvertes",
+      "en": "Cells covered"
     }
   ]
 }

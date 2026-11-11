@@ -49,28 +49,55 @@ mod_sc_da_milo_ui <- function(id) {
 
 mod_sc_da_milo_output_ui <- function(id) {
   ns <- NS(id)
+  # CCC_NAV_DRAWER vague A jalon 1 (2026-11-11) : généralisation du pattern
+  # tiroir optimisé du CCC (5f0a906 + bc9c09a) au panneau Milo (8d) —
+  # candidat C2 du packet gate 2. JUMELLE : la carte .milo_drawer_groups est
+  # redéclarée EN LOCAL dans mod_sc_da_milo_server (gel
+  # test-milo-contract-freeze.R:111 — aucune constante top-level) ; égalité
+  # verrouillée par test-mod-sc-da-milo-ui.R. Les `value` ASCII ci-dessous
+  # sont les cibles des sauts (indépendantes de la traduction).
+  .milo_drawer_groups <- list(
+    "Vues & table DA" = list(
+      list(value = "milo_tab_embed", label = "Signal sur embedding"),
+      list(value = "milo_tab_logfc", label = "Distribution logFC"),
+      list(value = "milo_tab_compo", label = "Composition échantillons"),
+      list(value = "milo_tab_table", label = "Table DA (voisinages)")),
+    "Limites" = list(
+      list(value = "milo_tab_limites", label = "Limites")))
   card(
     full_screen = TRUE,
-    card_header(i18n$t("Abondance différentielle — Milo (voisinages)")),
+    # Pastille ouvrant le tiroir (motif 2L CCC : dans l'en-tête de carte,
+    # aucune rangée verticale ajoutée) :
+    card_header(
+      div(class = "d-flex justify-content-between align-items-center gap-2",
+          tags$span(i18n$t("Abondance différentielle — Milo (voisinages)")),
+          tags$button(type = "button",
+                      class = "btn btn-sm btn-outline-secondary flex-shrink-0",
+                      `data-bs-toggle` = "offcanvas",
+                      `data-bs-target` = paste0("#", ns("milo_drawer")),
+                      `aria-controls` = ns("milo_drawer"),
+                      icon("list-ul"), " ", i18n$t("Navigation & filtres")))
+    ),
     navset_tab(
-      nav_panel(i18n$t("Signal sur embedding"),
+      id = ns("milo_out_tabs"),
+      nav_panel(i18n$t("Signal sur embedding"), value = "milo_tab_embed",
                 plotOutput(ns("milo_embed"), height = "520px"),
                 div(class = "m-1",
                     downloadButton(ns("dl_milo_embed_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_milo_embed_pdf"), "PDF", class = "btn-sm btn-outline-secondary"))),
-      nav_panel(i18n$t("Distribution logFC"),
+      nav_panel(i18n$t("Distribution logFC"), value = "milo_tab_logfc",
                 plotOutput(ns("milo_dist"), height = "520px"),
                 div(class = "m-1",
                     downloadButton(ns("dl_milo_dist_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_milo_dist_pdf"), "PDF", class = "btn-sm btn-outline-secondary"))),
-      nav_panel(i18n$t("Composition échantillons"),
+      nav_panel(i18n$t("Composition échantillons"), value = "milo_tab_compo",
                 plotOutput(ns("milo_compo"), height = "520px"),
                 div(class = "m-1",
                     downloadButton(ns("dl_milo_compo_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_milo_compo_pdf"), "PDF", class = "btn-sm btn-outline-secondary"))),
-      nav_panel(i18n$t("Table DA (voisinages)"),
+      nav_panel(i18n$t("Table DA (voisinages)"), value = "milo_tab_table",
                 DT::dataTableOutput(ns("milo_table"), height = "460px")),
-      nav_panel(i18n$t("Limites"),
+      nav_panel(i18n$t("Limites"), value = "milo_tab_limites",
                 div(class = "alert alert-danger m-3", style = "font-size:0.9em;",
                     i18n$t("Le signal Milo est NIVEAU VOISINAGE (région du graphe) : l'identité d'un voisinage (fraction ≥ 0.7) est descriptive et ne constitue PAS un DA par type cellulaire.")),
                 div(class = "alert alert-warning m-3", style = "font-size:0.9em;",
@@ -79,7 +106,32 @@ mod_sc_da_milo_output_ui <- function(id) {
                     uiOutput(ns("milo_contrast_note"))),
                 div(class = "alert alert-light m-3", style = "font-size:0.9em;",
                     i18n$t("Milo n'interprète PAS la composition d'un type cellulaire — pour la DA compositionnelle par échantillon, voir scCODA (4E-2, à venir).")))
+    ),
+    # Tiroir offcanvas (DEUXIÈME enfant de la carte — motif comm_drawer ;
+    # résumé d'état aria-live + sauts directs SANS replier la sidebar ni
+    # dérouler les onglets) :
+    tags$div(
+    id = ns("milo_drawer"), class = "offcanvas offcanvas-end", tabindex = "-1",
+    `aria-labelledby` = ns("milo_drawer_title"),
+    tags$div(class = "offcanvas-header",
+             h5(id = ns("milo_drawer_title"), class = "offcanvas-title",
+                icon("list-ul"), " ", i18n$t("Navigation Milo")),
+             # .tr_plain (strip span) — JAMAIS de $t() brut en contexte
+             # attribut (BUG A11Y « Fermer », motif bc9c09a) :
+             tags$button(type = "button", class = "btn-close",
+                         `data-bs-dismiss` = "offcanvas",
+                         `aria-label` = .tr_plain("Fermer"))),
+    tags$div(class = "offcanvas-body",
+      h6(i18n$t("État du résultat")),
+      # aria-live : les SR annoncent les changements d'état résumés ici
+      # (motif P4 CCC) ; le résumé est rendu serveur (renderUI) :
+      div(class = "small text-muted", `aria-live` = "polite",
+          uiOutput(ns("milo_drawer_summary"))),
+      hr(),
+      # Marqueur « où suis-je ? » + compteurs par groupe (motif P1+P2 CCC) :
+      uiOutput(ns("milo_drawer_nav"))
     )
+  )
   )
 }
 
@@ -101,6 +153,80 @@ mod_sc_da_milo_server <- function(id, global_data, shared_rv = NULL) {
     milo_status_rv <- reactiveVal(.tr("En attente : validez d'abord le design (panel 8c), puis lancez Milo."))
 
     output$milo_status <- renderText({ milo_status_rv() })
+
+    # ── CCC_NAV_DRAWER vague A jalon 1 (2026-11-11) : tiroir « Navigation » ──
+    # Pattern optimisé 5f0a906 + bc9c09a (marqueur ▸ bold du panneau courant,
+    # compteurs par groupe, aria-live, .tr_plain) généralisé au panel Milo.
+    # JUMELLE de la déclaration output_ui (égalité verrouillée
+    # test-mod-sc-da-milo-ui.R) — aucune constante top-level (gel
+    # test-milo-contract-freeze.R:111).
+    .milo_drawer_groups <- list(
+      "Vues & table DA" = list(
+        list(value = "milo_tab_embed", label = "Signal sur embedding"),
+        list(value = "milo_tab_logfc", label = "Distribution logFC"),
+        list(value = "milo_tab_compo", label = "Composition échantillons"),
+        list(value = "milo_tab_table", label = "Table DA (voisinages)")),
+      "Limites" = list(
+        list(value = "milo_tab_limites", label = "Limites")))
+
+    # Résumé d'état du tiroir : 4 métriques DU CONTRAT (assert_milo_result) —
+    # statut, contraste testé, n voisinages, couverture cellules. JAMAIS de
+    # métrique inventée (aucun seuil de significativité fabriqué ici).
+    output$milo_drawer_summary <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      r <- milo_state$result
+      li <- function(n, lab) tags$li(tags$strong(n), " ", lab)
+      if (is.null(r)) {
+        return(tags$ul(class = "list-unstyled mb-0",
+                       tags$li(milo_status_rv())))
+      }
+      nh <- r$neighbourhood_summary %||% NULL
+      tc <- r$tested_contrast %||% list()
+      nh_n <- if (!is.null(nh)) nh$n_neighbourhoods else NA_integer_
+      nh_frac <- if (!is.null(nh)) nh$fraction_cells_in_nhoods else NA_real_
+      tags$ul(class = "list-unstyled mb-0",
+              style = "column-count:2;column-gap:1.5rem;",
+              li(.status_label(r$status %||% ""), .tr("Statut")),
+              li(paste0(tc$target %||% "\u2014", " / ", tc$reference %||% "\u2014"),
+                 .tr("Contraste")),
+              li(nh_n, .tr("Voisinages")),
+              li(paste0(round(100 * as.numeric(nh_frac), 1), " %"),
+                 .tr("Cellules couvertes")))
+    })
+
+    # Navigation du tiroir rendue DYNAMIQUEMENT (motif P1+P2 comm_drawer) :
+    # input$milo_out_tabs (value ASCII) pilote le marqueur ▸ + fw-bold du
+    # panneau courant ; le tiroir reste ouvert après le saut.
+    output$milo_drawer_nav <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      sel <- input$milo_out_tabs %||% ""
+      lapply(names(.milo_drawer_groups), function(grp) {
+        items <- .milo_drawer_groups[[grp]]
+        tags$div(class = "mb-3",
+          h6(.tr(grp),
+             tags$span(class = "badge text-bg-secondary ms-1", length(items))),
+          lapply(items, function(pn) {
+            active <- identical(sel, pn$value)
+            actionButton(ns(paste0("milo_jump_", pn$value)),
+                         label = if (active)
+                           tagList(tags$span(class = "text-primary", "\u25B8 "),
+                                   .tr(pn$label))
+                         else .tr(pn$label),
+                         class = paste("btn btn-link btn-sm text-start p-0 d-block",
+                                       if (active) "fw-bold"))
+          }))
+      })
+    })
+
+    # Sauts directs : un observateur par panneau, ciblant les `value` posés
+    # par l'output_ui (motif 2L CCC verbatim).
+    lapply(.milo_drawer_groups, function(grp) {
+      lapply(grp, function(pn) {
+        observeEvent(input[[paste0("milo_jump_", pn$value)]], {
+          nav_select("milo_out_tabs", selected = pn$value)
+        })
+      })
+    })
 
     .check_fingerprint <- function() {
       req(global_data$sc_obj)
