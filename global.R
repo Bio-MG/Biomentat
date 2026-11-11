@@ -273,7 +273,7 @@ if (I18N_AVAILABLE) {
 .ts_dt_language_keys <- function() {
   list(
     search       = "Recherche :",
-    lengthMenu   = "Afficher _MENU_ lignes par page",
+    lengthMenu   = "Afficher _MENU_ lignes",
     info         = "Lignes _START_ à _END_ sur _TOTAL_",
     infoEmpty    = "Aucune ligne",
     infoFiltered = "(filtrées à partir de _MAX_ lignes)",

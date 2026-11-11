@@ -101,7 +101,7 @@ ts_datatable_public_api <- function() {
   # adf274 / LC_CTYPE=C), contrairement a un literal UTF-8 sous pkgload.
   list(
     search       = "Recherche :",
-    lengthMenu   = "Afficher _MENU_ lignes par page",
+    lengthMenu   = "Afficher _MENU_ lignes",
     info         = "Lignes _START_ \u00e0 _END_ sur _TOTAL_",
     infoEmpty    = "Aucune ligne",
     infoFiltered = "(filtr\u00e9es \u00e0 partir de _MAX_ lignes)",

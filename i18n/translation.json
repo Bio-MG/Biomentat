@@ -13074,8 +13074,8 @@
       "en": "Search:"
     },
     {
-      "fr": "Afficher _MENU_ lignes par page",
-      "en": "Show _MENU_ rows per page"
+      "fr": "Afficher _MENU_ lignes",
+      "en": "Show _MENU_ rows"
     },
     {
       "fr": "Lignes _START_ à _END_ sur _TOTAL_",

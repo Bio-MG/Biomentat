@@ -382,7 +382,7 @@ test_that("CQF-3 : appel nu = language FR par defaut (search/lengthMenu/info/bou
     got <- ts_datatable(df, page_length = 15, filename_base = "x")
     lang <- got$x$options$language
     expect_identical(lang$search, "Recherche :")
-    expect_identical(lang$lengthMenu, "Afficher _MENU_ lignes par page")
+    expect_identical(lang$lengthMenu, "Afficher _MENU_ lignes")
     expect_identical(lang$info, "Lignes _START_ à _END_ sur _TOTAL_")
     expect_identical(lang$infoEmpty, "Aucune ligne")
     expect_identical(lang$infoFiltered, "(filtrées à partir de _MAX_ lignes)")
