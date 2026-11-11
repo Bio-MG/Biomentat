@@ -180,9 +180,10 @@ test_that("2I : la zone de filtres statique est un accordéon FERMÉ par défaut
                      info = paste0("input filtre ", id, " absent ou dupliqué"))
   }
   # Le résumé de filtrage est factorisé : une source réactive, deux sorties
-  # (ligne sous les filtres + tiroir 2L) — une seule source de vérité.
+  # (ligne sous les filtres 2I = phrase + tiroir 2L = liste compacte P3,
+  # CCC-DRAW-OPT suite 2026-11-11 — la phrase n'a PLUS qu'UNE sortie).
   expect_match(src, ".filter_summary_txt <- reactive(", fixed = TRUE)
-  expect_identical(.n_hits(src, "renderText({ .filter_summary_txt() })"), 2L)
+  expect_identical(.n_hits(src, "renderText({ .filter_summary_txt() })"), 1L)
 })
 
 test_that("2L : tiroir offcanvas secondaire — pastille, .offcanvas, sauts, zéro duplication (spéc §2.23)", {
@@ -240,13 +241,60 @@ test_that("CCC-DRAW-OPT : tiroir optimisé — nav dynamique (marqueur actif), c
   expect_match(src, "badge text-bg-secondary", fixed = TRUE,
                info = "P2 : le compteur de panneaux par groupe est absent")
   # P4 : aria-live sur le résumé du tiroir (SR annoncent les changements de
-  # filtrage) + libellé Fermer i18n (l'anglais hardcoded « Close » disparaît)
+  # filtrage) + libellé Fermer i18n. RE-ÉPINGLÉ CCC-DRAW-OPT suite (2026-11-11)
+  # : le raw $t() en contexte ATTRIBUT posait le span i18n brut dans
+  # l'attribut (BUG A11Y reporté STATUS §0 CQF-V ; même famille que le
+  # boot-fail CQF-3 173c43e) — le libellé passe par .tr_plain (strip span).
   expect_match(src, 'aria-live', fixed = TRUE,
                info = "P4 : aria-live absent du tiroir")
-  expect_match(src, '`aria-label` = i18n$t("Fermer")', fixed = TRUE,
-               info = "P4 : le libellé du btn-close n'est pas i18n")
+  expect_match(src, '`aria-label` = .tr_plain("Fermer")', fixed = TRUE,
+               info = "le aria-label du btn-close ne passe pas par .tr_plain")
   expect_false(grepl('"Close"', src, fixed = TRUE),
                info = "P4 : le aria-label anglais hardcoded « Close » persiste")
+})
+
+# =============================================================================
+# CCC-DRAW-OPT SUITE (2026-11-11, GO opérateur gate 2 : « aria fix + P3 +
+# Vague A ») — FIX BUG A11Y Fermer + P3 résumé compact. Fix : dans un
+# ATTRIBUT, le $t() BUILD-TIME renvoie un shiny.tag span (le shim JS i18n ne
+# passe pas sur les attributs) → l'attribut portait le HTML brut
+# <span class="i18n" ...> au lieu du texte « Fermer ». P3 (auto-revue O3) :
+# le résumé du tiroir passe de la phrase sprintf dense (8 métriques en une
+# ligne, wrap dense à 400 px) à une liste compacte 2 colonnes — la ligne sous
+# les filtres 2I garde la phrase (sortie inchangée, P4 aria-live survit sur
+# le CONTAINER du tiroir).
+# =============================================================================
+test_that("CCC-DRAW-OPT suite : aria-label Fermer texte plat (.tr_plain) + P3 liste compacte 2 colonnes", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCC_UI_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # FIX A11Y : le btn-close consomme .tr_plain (strip span, motif global.R /
+  # 173c43e) — plus JAMAIS de $t() brut en contexte attribut dans ce fichier :
+  expect_identical(.n_hits(src, '`aria-label` = i18n$t('), 0L,
+                   info = "un aria-label consomme encore le $t() brut (span i18n dans l'attribut)")
+  # P3 : le tiroir rend une LISTE compacte (uiOutput + renderUI serveur,
+  # tags$ul 2 colonnes) ; la phrase sprintf reste UNIQUEMENT sur la ligne 2I.
+  expect_match(src, 'uiOutput(ns("comm_filter_summary_drawer"))', fixed = TRUE,
+               info = "P3 : le tiroir ne rend pas le résumé en uiOutput")
+  expect_match(src, "output$comm_filter_summary_drawer <- renderUI(", fixed = TRUE,
+               info = "P3 : le résumé compact du tiroir n'est pas rendu côté serveur")
+  expect_match(src, 'class = "list-unstyled', fixed = TRUE,
+               info = "P3 : la liste compacte est absente")
+  expect_match(src, "column-count:2", fixed = TRUE,
+               info = "P3 : les 2 colonnes compactes sont absentes")
+  # Les 8 métriques du résumé sont TOUJOURS portées (labels i18n listés) :
+  for (lab in c("Interactions affich\u00e9es", "Retir\u00e9es par score",
+                "Retir\u00e9es par rang", "Retir\u00e9es par p-value",
+                "Retir\u00e9es par pathway", "Retir\u00e9es par sender",
+                "Retir\u00e9es par receiver", "Retir\u00e9es \u2014 auto-interactions")) {
+    expect_match(src, paste0('.tr("', lab, '")'), fixed = TRUE,
+                 info = paste0("P3 : label résumé absent — ", lab))
+  }
+  # La ligne 2I garde la phrase (sortie inchangée) :
+  expect_match(src, "output$comm_filter_summary <- renderText({ .filter_summary_txt() })",
+               fixed = TRUE)
+  # aria-live SURVIT à P3 (container du tiroir) :
+  expect_match(src, '`aria-live` = "polite"', fixed = TRUE,
+               info = "P4 : aria-live perdu au passage P3")
 })
 
 

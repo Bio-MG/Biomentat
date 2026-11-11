@@ -438,13 +438,25 @@ mod_sc_communication_output_ui <- function(id) {
                   icon("list-ul"), " ", i18n$t("Navigation CCC")),
                tags$button(type = "button", class = "btn-close",
                            `data-bs-dismiss` = "offcanvas",
-                           `aria-label` = i18n$t("Fermer"))),
+                           # FIX A11Y (CCC-DRAW-OPT suite, 2026-11-11) : dans un
+                           # ATTRIBUT, le $t() BUILD-TIME renvoie un shiny.tag
+                           # span → le HTML brut <span class="i18n"> atterrissait
+                           # dans l'attribut (le shim JS i18n ne passe pas sur les
+                           # attributs ; même famille que le boot-fail CQF-3
+                           # 173c43e ; reporté STATUS §0 CQF-V). .tr_plain = strip
+                           # span (global.R) — texte plat au build, motif des
+                           # choices radioButtons plus haut.
+                           `aria-label` = .tr_plain("Fermer"))),
       tags$div(class = "offcanvas-body",
         h6(i18n$t("Filtres d'interaction")),
         # P4 (CCC-DRAW-OPT 2026-11-11) : aria-live — les lecteurs d'écran
         # annoncent les changements de filtrage résumés ici.
+        # P3 (CCC-DRAW-OPT suite, 2026-11-11) : le résumé du tiroir est la
+        # LISTE COMPACTE serveur (uiOutput, tags$ul 2 colonnes — auto-revue
+        # O3 : la phrase sprintf dense wrappe mal à 400 px). aria-live reste
+        # sur le CONTAINER.
         div(class = "small text-muted", `aria-live` = "polite",
-            textOutput(ns("comm_filter_summary_drawer"))),
+            uiOutput(ns("comm_filter_summary_drawer"))),
         hr(),
         # P1+P2 (CCC-DRAW-OPT 2026-11-11) : navigation rendue DYNAMIQUEMENT
         # (serveur, output$comm_drawer_nav) — marqueur « où suis-je ? » sur le
@@ -725,7 +737,28 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     })
 
     output$comm_filter_summary <- renderText({ .filter_summary_txt() })
-    output$comm_filter_summary_drawer <- renderText({ .filter_summary_txt() })
+
+    # P3 (CCC-DRAW-OPT suite, 2026-11-11) : résumé du TIROIR en liste compacte
+    # 2 colonnes (auto-revue O3 — la phrase sprintf 8-métriques wrappe mal à
+    # 400 px) ; chaque li = compteur fort + label i18n. Même source réactive
+    # (.filter_summary_txt / comm_filtered) — zéro divergence possible sur les
+    # CHIFFRES, seule la FORME diffère (phrase 2I vs liste tiroir).
+    output$comm_filter_summary_drawer <- renderUI({
+      req(comm_state$result)
+      fs <- comm_filtered()$summary
+      li <- function(n, lab) tags$li(tags$strong(n), " ", lab)
+      tags$ul(class = "list-unstyled mb-0",
+              style = "column-count:2;column-gap:1.5rem;",
+              li(paste0(fs$n_after, " / ", fs$n_before),
+                 .tr("Interactions affichées")),
+              li(fs$dropped_score, .tr("Retirées par score")),
+              li(fs$dropped_rank, .tr("Retirées par rang")),
+              li(fs$dropped_p_value, .tr("Retirées par p-value")),
+              li(fs$dropped_pathway, .tr("Retirées par pathway")),
+              li(fs$dropped_sender, .tr("Retirées par sender")),
+              li(fs$dropped_receiver, .tr("Retirées par receiver")),
+              li(fs$dropped_self, .tr("Retirées — auto-interactions")))
+    })
 
     # ── CCC-DRAW-OPT (2026-11-11, boost mode) : P1 « où suis-je ? » + P2
     # compteur par groupe — la navigation du tiroir 2L est rendue

@@ -13120,8 +13120,7 @@
     {
       "fr": "Tout afficher",
       "en": "Show all"
-    }
-,
+    },
     {
       "fr": "Aperçu du jeu de données",
       "en": "Dataset Overview"
@@ -13129,6 +13128,38 @@
     {
       "fr": "Gènes spatialement variables (Moran's I)",
       "en": "Spatially Variable Genes (Moran's I)"
+    },
+    {
+      "fr": "Interactions affichées",
+      "en": "Interactions displayed"
+    },
+    {
+      "fr": "Retirées par score",
+      "en": "Dropped by score"
+    },
+    {
+      "fr": "Retirées par rang",
+      "en": "Dropped by rank"
+    },
+    {
+      "fr": "Retirées par p-value",
+      "en": "Dropped by p-value"
+    },
+    {
+      "fr": "Retirées par pathway",
+      "en": "Dropped by pathway"
+    },
+    {
+      "fr": "Retirées par sender",
+      "en": "Dropped by sender"
+    },
+    {
+      "fr": "Retirées par receiver",
+      "en": "Dropped by receiver"
+    },
+    {
+      "fr": "Retirées — auto-interactions",
+      "en": "Dropped — self-interactions"
     }
   ]
 }
