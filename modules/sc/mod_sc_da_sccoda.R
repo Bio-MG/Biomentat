@@ -43,27 +43,52 @@ mod_sc_da_sccoda_ui <- function(id) {
 
 mod_sc_da_sccoda_output_ui <- function(id) {
   ns <- NS(id)
+  # CCC_NAV_DRAWER vague A jalon 2 (2026-11-11) : généralisation du pattern
+  # tiroir optimisé du CCC (5f0a906 + bc9c09a) au panneau scCODA (8e) —
+  # candidat C3 du packet gate 2, même famille DA que Milo (jalon 1
+  # 6c8eb84). JUMELLE : la carte .sccoda_drawer_groups est redéclarée EN
+  # LOCAL dans mod_sc_da_sccoda_server (gel test-sccoda-contract-freeze.R —
+  # aucune constante top-level) ; égalité verrouillée par
+  # test-mod-sc-da-sccoda-ui.R.
+  .sccoda_drawer_groups <- list(
+    "Effets & diagnostics" = list(
+      list(value = "sccoda_tab_effects", label = "Effets crédibles"),
+      list(value = "sccoda_tab_compo", label = "Composition échantillons"),
+      list(value = "sccoda_tab_hdi", label = "Incertitude (HDI)")),
+    "Limites" = list(
+      list(value = "sccoda_tab_limites", label = "Limites")))
   card(
     full_screen = TRUE,
-    card_header(i18n$t("Abondance différentielle — scCODA (composition)")),
+    # Pastille ouvrant le tiroir (motif 2L CCC : dans l'en-tête de carte) :
+    card_header(
+      div(class = "d-flex justify-content-between align-items-center gap-2",
+          tags$span(i18n$t("Abondance différentielle — scCODA (composition)")),
+          tags$button(type = "button",
+                      class = "btn btn-sm btn-outline-secondary flex-shrink-0",
+                      `data-bs-toggle` = "offcanvas",
+                      `data-bs-target` = paste0("#", ns("sccoda_drawer")),
+                      `aria-controls` = ns("sccoda_drawer"),
+                      icon("list-ul"), " ", i18n$t("Navigation & filtres")))
+    ),
     navset_tab(
-      nav_panel(i18n$t("Effets crédibles"),
+      id = ns("sccoda_out_tabs"),
+      nav_panel(i18n$t("Effets crédibles"), value = "sccoda_tab_effects",
                 plotOutput(ns("sccoda_effects"), height = "480px"),
                 div(class = "m-1",
                     downloadButton(ns("dl_sccoda_effects_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_sccoda_effects_pdf"), "PDF", class = "btn-sm btn-outline-secondary")),
                 DT::dataTableOutput(ns("sccoda_table"), height = "320px")),
-      nav_panel(i18n$t("Composition échantillons"),
+      nav_panel(i18n$t("Composition échantillons"), value = "sccoda_tab_compo",
                 plotOutput(ns("sccoda_compo"), height = "480px"),
                 div(class = "m-1",
                     downloadButton(ns("dl_sccoda_compo_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_sccoda_compo_pdf"), "PDF", class = "btn-sm btn-outline-secondary"))),
-      nav_panel(i18n$t("Incertitude (HDI)"),
+      nav_panel(i18n$t("Incertitude (HDI)"), value = "sccoda_tab_hdi",
                 plotOutput(ns("sccoda_uncert"), height = "480px"),
                 div(class = "m-1",
                     downloadButton(ns("dl_sccoda_uncert_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_sccoda_uncert_pdf"), "PDF", class = "btn-sm btn-outline-secondary"))),
-      nav_panel(i18n$t("Limites"),
+      nav_panel(i18n$t("Limites"), value = "sccoda_tab_limites",
                 div(class = "alert alert-danger m-3", style = "font-size:0.9em;",
                     i18n$t("Les effets scCODA sont des INTERVALLES DE CRÉDIBILITÉ bayésiens (prior spike-and-slab) — pas des p-values ; \"crédible\" désigne une probabilité postérieure directe au seuil FDR enregistré.")),
                 div(class = "alert alert-warning m-3", style = "font-size:0.9em;",
@@ -72,6 +97,28 @@ mod_sc_da_sccoda_output_ui <- function(id) {
                     i18n$t("Le modèle porte sur la paire de conditions choisie ; scCODA n'interprète pas les voisinages Milo — les deux méthodes restent des résultats distincts (vues croisées descriptives à l'étape 16).")),
                 div(class = "alert alert-light m-3", style = "font-size:0.9em;",
                     uiOutput(ns("sccoda_spec_note"))))
+    ),
+    # Tiroir offcanvas (DEUXIÈME enfant de la carte — motif comm_drawer /
+    # milo_drawer ; résumé d'état aria-live + sauts directs SANS replier la
+    # sidebar ni dérouler les onglets) :
+    tags$div(
+      id = ns("sccoda_drawer"), class = "offcanvas offcanvas-end", tabindex = "-1",
+      `aria-labelledby` = ns("sccoda_drawer_title"),
+      tags$div(class = "offcanvas-header",
+               h5(id = ns("sccoda_drawer_title"), class = "offcanvas-title",
+                  icon("list-ul"), " ", i18n$t("Navigation scCODA")),
+               # .tr_plain (strip span) — JAMAIS de $t() brut en contexte
+               # attribut (BUG A11Y « Fermer », motif bc9c09a) :
+               tags$button(type = "button", class = "btn-close",
+                           `data-bs-dismiss` = "offcanvas",
+                           `aria-label` = .tr_plain("Fermer"))),
+      tags$div(class = "offcanvas-body",
+        h6(i18n$t("État du résultat")),
+        div(class = "small text-muted", `aria-live` = "polite",
+            uiOutput(ns("sccoda_drawer_summary"))),
+        hr(),
+        uiOutput(ns("sccoda_drawer_nav"))
+      )
     )
   )
 }
@@ -94,6 +141,73 @@ mod_sc_da_sccoda_server <- function(id, global_data, shared_rv = NULL) {
     sccoda_status_rv <- reactiveVal(.tr("En attente : validez d'abord le design (panel 8c), puis lancez scCODA."))
 
     output$sccoda_status <- renderText({ sccoda_status_rv() })
+
+    # ── CCC_NAV_DRAWER vague A jalon 2 (2026-11-11) : tiroir « Navigation » ──
+    # Pattern optimisé 5f0a906 + bc9c09a, généralisé comme Milo (jalon 1
+    # 6c8eb84). JUMELLE de la déclaration output_ui (égalité verrouillée
+    # test-mod-sc-da-sccoda-ui.R) — aucune constante top-level (gel
+    # test-sccoda-contract-freeze.R).
+    .sccoda_drawer_groups <- list(
+      "Effets & diagnostics" = list(
+        list(value = "sccoda_tab_effects", label = "Effets crédibles"),
+        list(value = "sccoda_tab_compo", label = "Composition échantillons"),
+        list(value = "sccoda_tab_hdi", label = "Incertitude (HDI)")),
+      "Limites" = list(
+        list(value = "sccoda_tab_limites", label = "Limites")))
+
+    # Résumé d'état du tiroir : métriques DU CONTRAT — statut, contraste
+    # (cible/référence), effets crédibles LA CONVENTION DU MODULE
+    # (length(credible_effects), motif du message de verdict), référence
+    # d'identité. JAMAIS de seuil réinventé.
+    output$sccoda_drawer_summary <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      r <- sccoda_state$result
+      li <- function(n, lab) tags$li(tags$strong(n), " ", lab)
+      if (is.null(r)) {
+        return(tags$ul(class = "list-unstyled mb-0",
+                       tags$li(sccoda_status_rv())))
+      }
+      prm <- r$parameters %||% list()
+      tags$ul(class = "list-unstyled mb-0",
+              style = "column-count:2;column-gap:1.5rem;",
+              li(.status_label(r$status %||% ""), .tr("Statut")),
+              li(paste0(prm$target_condition %||% "\u2014", " / ",
+                        prm$reference_condition %||% "\u2014"),
+                 .tr("Contraste")),
+              li(length(r$credible_effects %||% list()), .tr("Effets crédibles")),
+              li(r$reference_identity %||% "\u2014", .tr("Référence d'identité")))
+    })
+
+    # Navigation du tiroir rendue DYNAMIQUEMENT (motif P1+P2 comm_drawer) :
+    output$sccoda_drawer_nav <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      sel <- input$sccoda_out_tabs %||% ""
+      lapply(names(.sccoda_drawer_groups), function(grp) {
+        items <- .sccoda_drawer_groups[[grp]]
+        tags$div(class = "mb-3",
+          h6(.tr(grp),
+             tags$span(class = "badge text-bg-secondary ms-1", length(items))),
+          lapply(items, function(pn) {
+            active <- identical(sel, pn$value)
+            actionButton(ns(paste0("sccoda_jump_", pn$value)),
+                         label = if (active)
+                           tagList(tags$span(class = "text-primary", "\u25B8 "),
+                                   .tr(pn$label))
+                         else .tr(pn$label),
+                         class = paste("btn btn-link btn-sm text-start p-0 d-block",
+                                       if (active) "fw-bold"))
+          }))
+      })
+    })
+
+    # Sauts directs : un observateur par panneau (motif 2L CCC verbatim).
+    lapply(.sccoda_drawer_groups, function(grp) {
+      lapply(grp, function(pn) {
+        observeEvent(input[[paste0("sccoda_jump_", pn$value)]], {
+          nav_select("sccoda_out_tabs", selected = pn$value)
+        })
+      })
+    })
 
     .check_fingerprint <- function() {
       req(global_data$sc_obj)

@@ -13180,6 +13180,18 @@
     {
       "fr": "Cellules couvertes",
       "en": "Cells covered"
+    },
+    {
+      "fr": "Navigation scCODA",
+      "en": "scCODA navigation"
+    },
+    {
+      "fr": "Effets & diagnostics",
+      "en": "Effects & diagnostics"
+    },
+    {
+      "fr": "Référence d'identité",
+      "en": "Reference identity"
     }
   ]
 }
