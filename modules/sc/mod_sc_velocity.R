@@ -145,19 +145,65 @@ mod_sc_velocity_ui <- function(id) {
 
 mod_sc_velocity_output_ui <- function(id) {
   ns <- NS(id)
-    card(
+  # CCC_NAV_DRAWER vague B jalon J3 (2026-11-12) : généralisation du pattern
+  # tiroir optimisé du CCC (5f0a906 + bc9c09a) au panneau Velocity — candidat
+  # C1 du packet gate 2 (GO opérateur vague B « GO J3 + J4 »). ⚠️ CE FICHIER
+  # est EN VOL lane scvelo (fix opt-in loom, session concurrente) : le commit
+  # J3 stage SES SEULS HUNKS (le hunk étranger loom reste NON commité).
+  # JUMELLE : la carte .velocity_drawer_groups est redéclarée EN LOCAL dans
+  # mod_sc_velocity_server (gel test-velocity-contract-freeze.R:152 — aucune
+  # constante top-level) ; égalité verrouillée par test-mod-sc-velocity-ui.R.
+  .velocity_drawer_groups <- list(
+    "Vues velocity" = list(
+      list(value = "velocity_tab_phase", label = "Phase portrait"),
+      list(value = "velocity_tab_vectors", label = "Vecteurs UMAP"),
+      list(value = "velocity_tab_coverage", label = "Couverture vecteurs"),
+      list(value = "velocity_tab_qc", label = "QC alignement")))
+  card(
     full_screen = TRUE,
-    card_header(i18n$t("RNA Velocity — Phase portrait & vecteurs pre-calcules")),
+    # Pastille ouvrant le tiroir (motif 2L CCC : dans l'en-tête de carte) :
+    card_header(
+      div(class = "d-flex justify-content-between align-items-center gap-2",
+          tags$span(i18n$t("RNA Velocity — Phase portrait & vecteurs pre-calcules")),
+          tags$button(type = "button",
+                      class = "btn btn-sm btn-outline-secondary flex-shrink-0",
+                      `data-bs-toggle` = "offcanvas",
+                      `data-bs-target` = paste0("#", ns("velocity_drawer")),
+                      `aria-controls` = ns("velocity_drawer"),
+                      icon("list-ul"), " ", i18n$t("Navigation & filtres")))
+    ),
     navset_tab(
-      nav_panel(i18n$t("Phase portrait"),
+      id = ns("velocity_out_tabs"),
+      nav_panel(i18n$t("Phase portrait"), value = "velocity_tab_phase",
                 plotOutput(ns("velocity_phase_plot"), height = "500px")),
-      nav_panel(i18n$t("Vecteurs UMAP"),
+      nav_panel(i18n$t("Vecteurs UMAP"), value = "velocity_tab_vectors",
                 plotOutput(ns("velocity_embedding_plot"), height = "550px"),
                 div(class = "small text-muted", textOutput(ns("velocity_vector_status")))),
-      nav_panel(i18n$t("Couverture vecteurs"),
+      nav_panel(i18n$t("Couverture vecteurs"), value = "velocity_tab_coverage",
                 plotOutput(ns("velocity_coverage_plot"), height = "450px")),
-      nav_panel(i18n$t("QC alignement"),
+      nav_panel(i18n$t("QC alignement"), value = "velocity_tab_qc",
                 plotOutput(ns("velocity_qc_plot"), height = "450px"))
+    ),
+    # Tiroir offcanvas (DEUXIÈME enfant de la carte — motif comm_drawer /
+    # milo_drawer / sccoda_drawer / cross_drawer) :
+    tags$div(
+      id = ns("velocity_drawer"), class = "offcanvas offcanvas-end", tabindex = "-1",
+      `aria-labelledby` = ns("velocity_drawer_title"),
+      tags$div(class = "offcanvas-header",
+               h5(id = ns("velocity_drawer_title"), class = "offcanvas-title",
+                  icon("list-ul"), " ", i18n$t("Navigation Velocity")),
+               # .tr_plain (strip span) — JAMAIS de $t() brut en contexte
+               # attribut (BUG A11Y « Fermer », motif bc9c09a) :
+               tags$button(type = "button", class = "btn-close",
+                           `data-bs-dismiss` = "offcanvas",
+                           `aria-label` = .tr_plain("Fermer"))),
+      tags$div(class = "offcanvas-body",
+        h6(i18n$t("État du résultat")),
+        div(class = "small text-muted", `aria-live` = "polite",
+            uiOutput(ns("velocity_drawer_summary"))),
+        hr(),
+        uiOutput(ns("velocity_drawer_nav"))
+      )
     )
   )
 }
@@ -332,6 +378,62 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     velocity_status_rv <- reactiveVal(.tr("En attente d'import velocity..."))
 
     output$velocity_status <- renderText({ velocity_status_rv() })
+
+    # ── CCC_NAV_DRAWER vague B jalon J3 (2026-11-12) : tiroir « Navigation » ──
+    # Pattern 5f0a906 + bc9c09a, généralisé comme Milo/scCODA/Vues croisées.
+    # JUMELLE de la déclaration output_ui (égalité verrouillée
+    # test-mod-sc-velocity-ui.R) — aucune constante top-level (gel
+    # test-velocity-contract-freeze.R:152).
+    .velocity_drawer_groups <- list(
+      "Vues velocity" = list(
+        list(value = "velocity_tab_phase", label = "Phase portrait"),
+        list(value = "velocity_tab_vectors", label = "Vecteurs UMAP"),
+        list(value = "velocity_tab_coverage", label = "Couverture vecteurs"),
+        list(value = "velocity_tab_qc", label = "QC alignement")))
+
+    # Résumé d'état du tiroir : le statut VIVANT du panneau (MÊME source
+    # velocity_status_rv — zéro divergence possible) + disponibilité des
+    # vecteurs opt-in consommée de l'état (jamais inventée).
+    output$velocity_drawer_summary <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      li <- function(n, lab) tags$li(tags$strong(n), " ", lab)
+      vec_ok <- !is.null(velocity_state$umap_vectors)
+      tags$ul(class = "list-unstyled mb-0",
+              tags$li(velocity_status_rv()),
+              li(if (vec_ok) "\u2713" else "\u2014", .tr("Vecteurs UMAP")))
+    })
+
+    # Navigation du tiroir rendue DYNAMIQUEMENT (motif P1+P2 comm_drawer) :
+    output$velocity_drawer_nav <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      sel <- input$velocity_out_tabs %||% ""
+      lapply(names(.velocity_drawer_groups), function(grp) {
+        items <- .velocity_drawer_groups[[grp]]
+        tags$div(class = "mb-3",
+          h6(.tr(grp),
+             tags$span(class = "badge text-bg-secondary ms-1", length(items))),
+          lapply(items, function(pn) {
+            active <- identical(sel, pn$value)
+            actionButton(ns(paste0("velocity_jump_", pn$value)),
+                         label = if (active)
+                           tagList(tags$span(class = "text-primary", "\u25B8 "),
+                                   .tr(pn$label))
+                         else .tr(pn$label),
+                         class = paste("btn btn-link btn-sm text-start p-0 d-block",
+                                       if (active) "fw-bold"))
+          }))
+      })
+    })
+
+    # Sauts directs : un observateur par panneau (motif 2L CCC verbatim).
+    lapply(.velocity_drawer_groups, function(grp) {
+      lapply(grp, function(pn) {
+        observeEvent(input[[paste0("velocity_jump_", pn$value)]], {
+          nav_select("velocity_out_tabs", selected = pn$value)
+        })
+      })
+    })
+
     output$velocity_vector_status <- renderText({
       parts <- character(0)
       res <- velocity_state$result

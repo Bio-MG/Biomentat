@@ -13216,6 +13216,14 @@
     {
       "fr": "réserves",
       "en": "caveats"
+    },
+    {
+      "fr": "Navigation Velocity",
+      "en": "Velocity navigation"
+    },
+    {
+      "fr": "Vues velocity",
+      "en": "Velocity views"
     }
   ]
 }
