@@ -13192,6 +13192,30 @@
     {
       "fr": "Référence d'identité",
       "en": "Reference identity"
+    },
+    {
+      "fr": "Milo (8d)",
+      "en": "Milo (8d)"
+    },
+    {
+      "fr": "scCODA (8e)",
+      "en": "scCODA (8e)"
+    },
+    {
+      "fr": "Comparabilité",
+      "en": "Comparability"
+    },
+    {
+      "fr": "Vues croisées",
+      "en": "Cross-views"
+    },
+    {
+      "fr": "Navigation Vues croisées",
+      "en": "Cross-views navigation"
+    },
+    {
+      "fr": "réserves",
+      "en": "caveats"
     }
   ]
 }

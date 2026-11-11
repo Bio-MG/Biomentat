@@ -27,35 +27,83 @@ mod_sc_da_cross_ui <- function(id) {
 
 mod_sc_da_cross_output_ui <- function(id) {
   ns <- NS(id)
+  # CCC_NAV_DRAWER vague B jalon J4 (2026-11-12) : généralisation du pattern
+  # tiroir optimisé du CCC (5f0a906 + bc9c09a) au panneau Vues croisées (8f)
+  # — candidat C4 du packet gate 2 (GO opérateur vague B après vérité-terrain
+  # live ; J4 AVANT J3 : mod_sc_velocity.R EN VOL lane scvelo). JUMELLE : la
+  # carte .cross_drawer_groups est redéclarée EN LOCAL dans
+  # mod_sc_da_cross_server (gel test-da-cross-views-contract-freeze.R —
+  # aucune constante top-level) ; égalité verrouillée par
+  # test-mod-sc-da-cross-ui.R.
+  .cross_drawer_groups <- list(
+    "Vues croisées" = list(
+      list(value = "cross_tab_concordance", label = "Concordance par identité"),
+      list(value = "cross_tab_map", label = "Mappage voisinages → identités"),
+      list(value = "cross_tab_compo", label = "Composition échantillons"),
+      list(value = "cross_tab_effects", label = "Effets scCODA (rappel)")),
+    "Limites" = list(
+      list(value = "cross_tab_limites", label = "Limites")))
   card(
     full_screen = TRUE,
-    card_header(i18n$t("Abondance différentielle — vues croisées (Milo × scCODA)")),
+    # Pastille ouvrant le tiroir (motif 2L CCC : dans l'en-tête de carte) :
+    card_header(
+      div(class = "d-flex justify-content-between align-items-center gap-2",
+          tags$span(i18n$t("Abondance différentielle — vues croisées (Milo × scCODA)")),
+          tags$button(type = "button",
+                      class = "btn btn-sm btn-outline-secondary flex-shrink-0",
+                      `data-bs-toggle` = "offcanvas",
+                      `data-bs-target` = paste0("#", ns("cross_drawer")),
+                      `aria-controls` = ns("cross_drawer"),
+                      icon("list-ul"), " ", i18n$t("Navigation & filtres")))
+    ),
     navset_tab(
-      nav_panel(i18n$t("Concordance par identité"),
+      id = ns("cross_out_tabs"),
+      nav_panel(i18n$t("Concordance par identité"), value = "cross_tab_concordance",
                 plotOutput(ns("cross_concordance"), height = "480px"),
                 div(class = "m-1",
                     downloadButton(ns("dl_cross_concordance_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_cross_concordance_pdf"), "PDF", class = "btn-sm btn-outline-secondary")),
                 DT::dataTableOutput(ns("cross_table"), height = "300px")),
-      nav_panel(i18n$t("Mappage voisinages → identités"),
+      nav_panel(i18n$t("Mappage voisinages → identités"), value = "cross_tab_map",
                 plotOutput(ns("cross_nhood_map"), height = "480px"),
                 div(class = "m-1",
                     downloadButton(ns("dl_cross_nhood_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_cross_nhood_pdf"), "PDF", class = "btn-sm btn-outline-secondary"))),
-      nav_panel(i18n$t("Composition échantillons"),
+      nav_panel(i18n$t("Composition échantillons"), value = "cross_tab_compo",
                 plotOutput(ns("cross_compo"), height = "480px"),
                 div(class = "m-1",
                     downloadButton(ns("dl_cross_compo_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_cross_compo_pdf"), "PDF", class = "btn-sm btn-outline-secondary"))),
-      nav_panel(i18n$t("Effets scCODA (rappel)"),
+      nav_panel(i18n$t("Effets scCODA (rappel)"), value = "cross_tab_effects",
                 plotOutput(ns("cross_sccoda_effects"), height = "480px")),
-      nav_panel(i18n$t("Limites"),
+      nav_panel(i18n$t("Limites"), value = "cross_tab_limites",
                 div(class = "alert alert-danger m-3", style = "font-size:0.9em;",
                     i18n$t("Deux GRANDEURS DIFFÉRENTES : la médiane des logFC de voisinages (Milo, niveau voisinage) et l'effet compositionnel (scCODA, niveau échantillon) ne mesurent pas la même chose — la concordance est descriptive et exploratoire.")),
                 div(class = "alert alert-warning m-3", style = "font-size:0.9em;",
                     i18n$t("Les cellules ne sont pas des réplicats biologiques : chaque vue porte le contexte de composition par échantillon. Un désaccord peut provenir des échelles, des effectifs ou d'une biologie captée différemment — rien ne tranche.")),
                 div(class = "alert alert-light m-3", style = "font-size:0.9em;",
                     uiOutput(ns("cross_meanings"))))
+    ),
+    # Tiroir offcanvas (DEUXIÈME enfant de la carte — motif comm_drawer /
+    # milo_drawer / sccoda_drawer) :
+    tags$div(
+      id = ns("cross_drawer"), class = "offcanvas offcanvas-end", tabindex = "-1",
+      `aria-labelledby` = ns("cross_drawer_title"),
+      tags$div(class = "offcanvas-header",
+               h5(id = ns("cross_drawer_title"), class = "offcanvas-title",
+                  icon("list-ul"), " ", i18n$t("Navigation Vues croisées")),
+               # .tr_plain (strip span) — JAMAIS de $t() brut en contexte
+               # attribut (BUG A11Y « Fermer », motif bc9c09a) :
+               tags$button(type = "button", class = "btn-close",
+                           `data-bs-dismiss` = "offcanvas",
+                           `aria-label` = .tr_plain("Fermer"))),
+      tags$div(class = "offcanvas-body",
+        h6(i18n$t("État du résultat")),
+        div(class = "small text-muted", `aria-live` = "polite",
+            uiOutput(ns("cross_drawer_summary"))),
+        hr(),
+        uiOutput(ns("cross_drawer_nav"))
+      )
     )
   )
 }
@@ -74,6 +122,76 @@ mod_sc_da_cross_server <- function(id, global_data, shared_rv = NULL) {
       !is.null(shared_rv) && !is.null(shared_rv$da_milo_result) &&
         !is.null(shared_rv$da_sccoda_result)
     }
+
+    # ── CCC_NAV_DRAWER vague B jalon J4 (2026-11-12) : tiroir « Navigation » ──
+    # Pattern 5f0a906 + bc9c09a, généralisé comme Milo (6c8eb84) et scCODA
+    # (12f181c). JUMELLE de la déclaration output_ui (égalité verrouillée
+    # test-mod-sc-da-cross-ui.R) — aucune constante top-level (gel
+    # test-da-cross-views-contract-freeze.R).
+    .cross_drawer_groups <- list(
+      "Vues croisées" = list(
+        list(value = "cross_tab_concordance", label = "Concordance par identité"),
+        list(value = "cross_tab_map", label = "Mappage voisinages → identités"),
+        list(value = "cross_tab_compo", label = "Composition échantillons"),
+        list(value = "cross_tab_effects", label = "Effets scCODA (rappel)")),
+      "Limites" = list(
+        list(value = "cross_tab_limites", label = "Limites")))
+
+    # Résumé d'état du tiroir : disponibilité des DEUX résultats canoniques
+    # (consommés tels quels via shared_rv — jamais recalculés) + verdict de
+    # COMPARABILITÉ du contrat (.cross_summary → fully_comparable). Même clé
+    # d'attente que la boîte de comparabilité du panneau (zéro divergence).
+    output$cross_drawer_summary <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      li <- function(n, lab) tags$li(tags$strong(n), " ", lab)
+      milo_ok <- !is.null(shared_rv) && !is.null(shared_rv$da_milo_result)
+      sccoda_ok <- !is.null(shared_rv) && !is.null(shared_rv$da_sccoda_result)
+      if (!milo_ok && !sccoda_ok) {
+        return(tags$ul(class = "list-unstyled mb-0",
+                       tags$li(.tr("Lancez Milo (8d) ET scCODA (8e) pour activer la lecture croisée."))))
+      }
+      cmp <- if (.has_both() && !is.null(.cross_summary())) {
+        .cross_summary()$comparability$fully_comparable
+      } else NA
+      cmp_lab <- if (isTRUE(cmp)) "\u2713" else
+        if (isFALSE(cmp)) .tr("réserves") else "\u2014"
+      tags$ul(class = "list-unstyled mb-0",
+              style = "column-count:2;column-gap:1.5rem;",
+              li(if (milo_ok) "\u2713" else "\u2014", .tr("Milo (8d)")),
+              li(if (sccoda_ok) "\u2713" else "\u2014", .tr("scCODA (8e)")),
+              li(cmp_lab, .tr("Comparabilité")))
+    })
+
+    # Navigation du tiroir rendue DYNAMIQUEMENT (motif P1+P2 comm_drawer) :
+    output$cross_drawer_nav <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      sel <- input$cross_out_tabs %||% ""
+      lapply(names(.cross_drawer_groups), function(grp) {
+        items <- .cross_drawer_groups[[grp]]
+        tags$div(class = "mb-3",
+          h6(.tr(grp),
+             tags$span(class = "badge text-bg-secondary ms-1", length(items))),
+          lapply(items, function(pn) {
+            active <- identical(sel, pn$value)
+            actionButton(ns(paste0("cross_jump_", pn$value)),
+                         label = if (active)
+                           tagList(tags$span(class = "text-primary", "\u25B8 "),
+                                   .tr(pn$label))
+                         else .tr(pn$label),
+                         class = paste("btn btn-link btn-sm text-start p-0 d-block",
+                                       if (active) "fw-bold"))
+          }))
+      })
+    })
+
+    # Sauts directs : un observateur par panneau (motif 2L CCC verbatim).
+    lapply(.cross_drawer_groups, function(grp) {
+      lapply(grp, function(pn) {
+        observeEvent(input[[paste0("cross_jump_", pn$value)]], {
+          nav_select("cross_out_tabs", selected = pn$value)
+        })
+      })
+    })
 
     # ── Comparabilite (pure lecture des deux resultats canoniques) ────────
     .cross_summary <- eventReactive(c(input$cross_refresh, .has_both()), {
