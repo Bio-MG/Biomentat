@@ -573,6 +573,14 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         )
         velocity_state$umap_vectors <- uv
         velocity_state$vector_validation <- list(field = "scvelo_optin", ok = TRUE)
+        # FIX 2026-11-11 (démo velocity, chemin loom+opt-in) : un loom n'a pas de
+        # réduction stockée (embedding_reduction = NA_character_) et le garde de
+        # finalize_velocity_result() refusait 'NA' != sel_red — alors que les
+        # vecteurs viennent d'être calculés dans CETTE session POUR sel_red
+        # (embedding passé au moteur = Embeddings(sc_obj, sel_red)). Taguer le
+        # canonique en conséquence est la sémantique correcte des vecteurs
+        # opt-in (jamais précalculés, toujours pour la réduction courante).
+        velocity_state$validated$embedding_reduction <- sel_red
         canonical2 <- finalize_velocity_result(
           validated = velocity_state$validated,
           input_mode = canon$input_summary$input_mode %||% "rds",
