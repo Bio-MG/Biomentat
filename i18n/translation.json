@@ -13068,6 +13068,58 @@
     {
       "fr": "Cloud Enrichr : sélectionnez au moins une librairie.",
       "en": "Cloud Enrichr: select at least one library."
+    },
+    {
+      "fr": "Recherche :",
+      "en": "Search:"
+    },
+    {
+      "fr": "Afficher _MENU_ lignes par page",
+      "en": "Show _MENU_ rows per page"
+    },
+    {
+      "fr": "Lignes _START_ à _END_ sur _TOTAL_",
+      "en": "Showing _START_ to _END_ of _TOTAL_ rows"
+    },
+    {
+      "fr": "Aucune ligne",
+      "en": "No rows"
+    },
+    {
+      "fr": "(filtrées à partir de _MAX_ lignes)",
+      "en": "(filtered from _MAX_ rows)"
+    },
+    {
+      "fr": "Aucune donnée disponible",
+      "en": "No data available in table"
+    },
+    {
+      "fr": "Aucun résultat trouvé",
+      "en": "No matching records found"
+    },
+    {
+      "fr": "Traitement...",
+      "en": "Processing..."
+    },
+    {
+      "fr": "Premier",
+      "en": "First"
+    },
+    {
+      "fr": "Dernier",
+      "en": "Last"
+    },
+    {
+      "fr": "Copier",
+      "en": "Copy"
+    },
+    {
+      "fr": "Imprimer",
+      "en": "Print"
+    },
+    {
+      "fr": "Tout afficher",
+      "en": "Show all"
     }
   ]
 }

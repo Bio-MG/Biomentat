@@ -365,3 +365,91 @@ test_that("PC : ts_dt_future_restore() revient au defaut stock FALSE", {
   expect_true(isTRUE(ts_dt_future_restore()))
   expect_identical(formals(DT::renderDT)$future, FALSE)
 })
+
+# --- CQF-3 (2026-11-11) : langue DT FR par defaut (additif contrat) -----------
+# Constat mesure (triage UIUX Spatial 2026-11-08, RC1 ; triage SC 2026-11-09,
+# RC6) : ts_datatable() ne pose JAMAIS `language` => 71 des 73 tables de l'app
+# heritent des libelles anglais DataTables (Copy/Print/CSV/Excel, `Search:`,
+# lengthMenu anglais) dans une app a defaut FR (I18N_DEFAULT_LANG = "fr").
+# Fix additif : defaut FR literal dans le moteur (option TS_DT_LANGUAGE = voie
+# i18n app-side, meme arbitrage O6 que TS_PACKS_REGISTRY), extra_options garde
+# la priorite maximale (les 2 sites existants qui passent language = ... ne
+# changent pas). dom / filter restent GELÉS (contrat §2H / §6).
+
+test_that("CQF-3 : appel nu = language FR par defaut (search/lengthMenu/info/boutons)", {
+  df <- .tsd_df()
+  withr::with_options(list(TS_DT_LANGUAGE = NULL), {
+    got <- ts_datatable(df, page_length = 15, filename_base = "x")
+    lang <- got$x$options$language
+    expect_identical(lang$search, "Recherche :")
+    expect_identical(lang$lengthMenu, "Afficher _MENU_ lignes par page")
+    expect_identical(lang$info, "Lignes _START_ à _END_ sur _TOTAL_")
+    expect_identical(lang$infoEmpty, "Aucune ligne")
+    expect_identical(lang$infoFiltered, "(filtrées à partir de _MAX_ lignes)")
+    expect_identical(lang$emptyTable, "Aucune donnée disponible")
+    expect_identical(lang$zeroRecords, "Aucun résultat trouvé")
+    expect_identical(lang$processing, "Traitement...")
+    expect_identical(lang$paginate$first, "Premier")
+    expect_identical(lang$paginate$last, "Dernier")
+    expect_identical(lang$paginate[["next"]], "Suivant")
+    expect_identical(lang$paginate$previous, "Précédent")
+    expect_identical(lang$buttons$copy, "Copier")
+    expect_identical(lang$buttons$print, "Imprimer")
+    expect_identical(lang$buttons$pageLength[[2]], "Tout afficher")
+    # csv/excel : libelles identiques FR/EN — pas de cle i18n
+    expect_identical(lang$buttons$csv, "CSV")
+    expect_identical(lang$buttons$excel, "Excel")
+  })
+})
+
+test_that("CQF-3 : l'option TS_DT_LANGUAGE remplace le defaut wholesale (voie i18n EN)", {
+  df <- .tsd_df()
+  withr::with_options(list(TS_DT_LANGUAGE = list(
+    search = "Search:", info = "Showing _START_ to _END_ of _TOTAL_ entries",
+    buttons = list(copy = "Copy", print = "Print", csv = "CSV", excel = "Excel")
+  )), {
+    got <- ts_datatable(df, page_length = 15)
+    expect_identical(got$x$options$language$search, "Search:")
+    expect_identical(got$x$options$language$buttons$copy, "Copy")
+    # l'option remplace le defaut TEL QUEL (pas de fusion partielle silencieuse)
+    expect_null(got$x$options$language$emptyTable)
+  })
+})
+
+test_that("CQF-3 : TS_DT_LANGUAGE invalide => avertissement + repli FR honnete", {
+  df <- .tsd_df()
+  withr::with_options(list(TS_DT_LANGUAGE = "pas une liste"), {
+    expect_warning(
+      got <- ts_datatable(df, page_length = 15),
+      "TS_DT_LANGUAGE"
+    )
+    expect_identical(got$x$options$language$search, "Recherche :")
+  })
+  withr::with_options(list(TS_DT_LANGUAGE = list(1, 2, 3)), {
+    expect_warning(
+      got2 <- ts_datatable(df, page_length = 15),
+      "TS_DT_LANGUAGE"
+    )
+    expect_identical(got2$x$options$language$search, "Recherche :")
+  })
+})
+
+test_that("CQF-3 : extra_options garde la priorite maximale sur le defaut language (fusion recursive)", {
+  df <- .tsd_df()
+  withr::with_options(list(TS_DT_LANGUAGE = NULL), {
+    got <- ts_datatable(df, page_length = 15,
+                        extra_options = list(language = list(search = "Filtrer :")))
+    expect_identical(got$x$options$language$search, "Filtrer :")
+    # les cles non surchargees restent FR par defaut (fusion recursive)
+    expect_identical(got$x$options$language$emptyTable, "Aucune donnée disponible")
+  })
+})
+
+test_that("CQF-3 : dom / filter du contrat restent GELÉS sous le defaut language", {
+  df <- .tsd_df()
+  withr::with_options(list(TS_DT_LANGUAGE = NULL), {
+    got <- ts_datatable(df, page_length = 15)
+    expect_identical(got$x$options$dom, "Bfrtip")
+    expect_identical(got$x$filter, "top")
+  })
+})

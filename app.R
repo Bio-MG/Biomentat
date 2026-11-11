@@ -1288,6 +1288,11 @@ server <- function(input, output, session) {
     if (is.null(lang) || !lang %in% c("fr", "en")) return()
     global_data$language <- lang
     global_data$i18n$set_translation_language(lang)
+    # CQF-3 (2026-11-11) : les NOUVELLES tables DT (et les re-renders) lisent
+    # l'option a la construction — les tables deja rendues ne se re-rendent
+    # pas tant que leurs reactifs ne changent pas (limite honnete, notee
+    # STATUS).
+    .ts_dt_set_language(global_data$i18n)
     if (I18N_AVAILABLE) shiny.i18n::update_lang(language = lang, session = session)
   }, ignoreInit = TRUE)
 

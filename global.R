@@ -262,6 +262,46 @@ if (I18N_AVAILABLE) {
   )
 }
 
+# --- CQF-3 (2026-11-11) : langue DT des tables (additif contrat PLOT_DATATABLE) ---
+#   ts_datatable() (moteur pur) pose un defaut FR literal ; la voie i18n
+#   vivante passe par l'option TS_DT_LANGUAGE (meme arbitrage O6 que
+#   TS_PACKS_REGISTRY) : posee ICI au boot depuis le traducteur global (fr),
+#   mise a jour par l'observateur de langue de app.R au switch fr<->en.
+#   Les cles i18n SONT les chaines FR (meme convention que le reste) ; une
+#   cle absente de translation.json est retournee telle quelle par $t()
+#   (comportement raw_translate mesure) — csv/excel restent donc sans cle.
+.ts_dt_language_keys <- function() {
+  list(
+    search       = "Recherche :",
+    lengthMenu   = "Afficher _MENU_ lignes par page",
+    info         = "Lignes _START_ à _END_ sur _TOTAL_",
+    infoEmpty    = "Aucune ligne",
+    infoFiltered = "(filtrées à partir de _MAX_ lignes)",
+    emptyTable   = "Aucune donnée disponible",
+    zeroRecords  = "Aucun résultat trouvé",
+    processing   = "Traitement...",
+    paginate     = list(first = "Premier", last = "Dernier",
+                        `next` = "Suivant", previous = "Précédent"),
+    buttons      = list(copy = "Copier", print = "Imprimer",
+                        csv = "CSV", excel = "Excel",
+                        pageLength = list("_", "Tout afficher"))
+  )
+}
+
+.ts_dt_set_language <- function(tr) {
+  if (is.null(tr)) return(invisible(NULL))
+  trd <- function(k) tryCatch(tr$t(k), error = function(e) k)
+  rec <- function(x) {
+    if (is.list(x)) return(lapply(x, rec))
+    if (is.character(x)) return(unname(vapply(x, trd, character(1))))
+    x
+  }
+  options(TS_DT_LANGUAGE = rec(.ts_dt_language_keys()))
+  invisible(NULL)
+}
+
+if (I18N_AVAILABLE) .ts_dt_set_language(i18n)
+
 #' Fresh session-scoped translator (called once per session in app.R server).
 .new_session_i18n <- function() {
   if (I18N_AVAILABLE) {

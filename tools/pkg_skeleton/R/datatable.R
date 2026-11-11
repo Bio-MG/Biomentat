@@ -84,6 +84,52 @@ ts_datatable_public_api <- function() {
     "ts_dt_future_restore")
 }
 
+# --- CQF-3 (2026-11-11) : langue DT FR par defaut (additif contrat) ----------
+# Constat mesure (triage UIUX Spatial 2026-11-08 RC1 / SC 2026-11-09 RC6) :
+# 71 des 73 tables de l'app heritent des libelles anglais DataTables
+# (Copy/Print/CSV/Excel, `Search:`, lengthMenu anglais) car le wrapper ne
+# pose JAMAIS `language`. Fix additif : defaut FR literal ICI (moteur pur),
+# surchargeable wholesale par l'option TS_DT_LANGUAGE (voie i18n app-side,
+# meme arbitrage O6 que TS_PACKS_REGISTRY — posee au boot global.R et mise
+# a jour par l'observateur de langue app.R). Priorite : extra_options (max)
+# > option TS_DT_LANGUAGE (wholesale) > defaut FR literal. dom / filter
+# restent GELÉS (contrat §2H / §6) — aucun changement d'ergonomie porteuse.
+
+.ts_dt_language_default <- function() {
+  # Accents en echappements \u (motif maison, cf. bulk_report_engine.R) :
+  # la chaine est deterministe quel que soit le locale de parse (lecon
+  # adf274 / LC_CTYPE=C), contrairement a un literal UTF-8 sous pkgload.
+  list(
+    search       = "Recherche :",
+    lengthMenu   = "Afficher _MENU_ lignes par page",
+    info         = "Lignes _START_ \u00e0 _END_ sur _TOTAL_",
+    infoEmpty    = "Aucune ligne",
+    infoFiltered = "(filtr\u00e9es \u00e0 partir de _MAX_ lignes)",
+    emptyTable   = "Aucune donn\u00e9e disponible",
+    zeroRecords  = "Aucun r\u00e9sultat trouv\u00e9",
+    processing   = "Traitement...",
+    paginate     = list(first = "Premier", last = "Dernier",
+                        `next` = "Suivant", previous = "Pr\u00e9c\u00e9dent"),
+    buttons      = list(copy = "Copier", print = "Imprimer",
+                        csv = "CSV", excel = "Excel",
+                        pageLength = list("_", "Tout afficher"))
+  )
+}
+
+#' Resolveur de la langue DT : option TS_DT_LANGUAGE (wholesale) sinon defaut
+#' FR. Option invalide = avertissement + repli FR honnete (jamais une erreur).
+.ts_dt_language <- function() {
+  lang <- getOption("TS_DT_LANGUAGE", NULL)
+  if (is.null(lang)) return(.ts_dt_language_default())
+  ok <- is.list(lang) && !is.null(names(lang)) && all(nzchar(names(lang)))
+  if (!ok) {
+    warning("TS_DT_LANGUAGE invalide (liste nommee attendue) — defaut FR applique",
+            call. = FALSE)
+    return(.ts_dt_language_default())
+  }
+  lang
+}
+
 # --- Erreurs classees --------------------------------------------------------
 
 .ts_dt_stop <- function(state, message) {
@@ -185,6 +231,10 @@ ts_datatable <- function(df, page_length, filename_base = NULL,
   }
   if (!is.null(dom)) opts$dom <- dom
   if (!is.null(filename_base)) opts$buttons <- ts_datatable_buttons(filename_base)
+  # CQF-3 (2026-11-11) : langue DT (defaut FR / option TS_DT_LANGUAGE).
+  # Posee AVANT la fusion extra_options : les sites qui passent leur propre
+  # language = ... (mod_sc_markers, mod_sc_metadata) gardent la priorite.
+  opts$language <- .ts_dt_language()
   # Priorite maximale : extra_options ecrase les cles posees ci-dessus.
   if (!is.null(extra_options)) opts <- utils::modifyList(opts, extra_options)
 
