@@ -15,6 +15,20 @@
 #   Rscript tools/launch_dev_drive.R                # Mode 1 "headless" (default)
 #   Rscript tools/launch_dev_drive.R --visible      # Mode 2 "visible"
 #   Rscript tools/launch_dev_drive.R --print        # sanity check, do not run
+#   Rscript tools/launch_dev_drive.R --visible --browser=edge --print
+#
+# OPTIONAL BROWSER CHOICE (GUI convenience, 2026-11-10)
+#   `--browser=chrome|edge|firefox|brave` or `--browser=<absolute .exe path>`.
+#   Omitting it leaves TODAY's behaviour byte-for-byte unchanged: RStudio's
+#   Viewer, or the OS default browser. It is ONLY honoured in `--visible`.
+#
+#   WHY THIS EXISTS. RStudio's "Run App" button never goes through this script:
+#     - TRANSCRIPTO_DEV_DRIVE=1 is not set, so the wildcard arm token is refused;
+#     - the viewer mode is not DECLARED, only derived from interactive();
+#     - it opens the OS DEFAULT browser (Chrome here) and offers no choice.
+#   Launching from here fixes the first two because the env + arm gate are set
+#   in THIS process; the flag fixes the third. See `WHAT IT DOES NOT DO` below:
+#   this is still the only supported boot, and `runApp()` is untouched.
 #
 # TWO MODES, ONE PROTOCOL (spec §4)
 #   Mode 1 `headless` (the default) — `launch.browser = FALSE`, no window. This
@@ -90,6 +104,31 @@ options(ts.drive.interactive = TRUE)
 
 args <- commandArgs(trailingOnly = TRUE)
 
+# ── OPTIONAL BROWSER — stripped BEFORE the mode vocabulary is checked ───────
+# The mode parser below is deliberately CLOSED (`--headless/--visible/--print`):
+# an unknown flag is a stop(), not a silent ignore. `--browser=` is not a MODE,
+# so it is removed here and never reaches that parser. No third protocol axis:
+# the two visibility modes still share the exact same handshake and wire.
+browser_hits <- grep("^--browser=", args, value = TRUE)
+if (length(browser_hits) > 1L) {
+  stop("[launch_dev_drive] --browser given more than once.", call. = FALSE)
+}
+browser_spec <- if (length(browser_hits) == 1L) {
+  sub("^--browser=", "", browser_hits[[1L]])
+} else {
+  NULL
+}
+args <- args[!grepl("^--browser=", args)]
+
+# Measured on this host 2026-11-10 — four executables present. A full path is
+# ALSO accepted, so this table is a convenience, never a closed vocabulary.
+TS_GUI_BROWSERS <- c(
+  chrome  = "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  edge    = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  firefox = "C:/Program Files/Mozilla Firefox/firefox.exe",
+  brave   = "C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe"
+)
+
 # ── Visibility mode (spec §4) — the ONLY axis the two modes differ on ────────
 # `headless` is the default, which is what this script has always effectively
 # done under Rscript (`runApp()`'s default is `interactive()`, FALSE there), so
@@ -106,6 +145,35 @@ if (length(mode_flags) > 1L) {
 }
 viewer <- if (length(mode_flags) == 1L) sub("^--", "", mode_flags) else "headless"
 launch_browser <- identical(viewer, "visible")
+
+if (!is.null(browser_spec)) {
+  if (!launch_browser) {
+    stop("[launch_dev_drive] --browser requires --visible: headless opens no window.",
+         call. = FALSE)
+  }
+  exe <- if (browser_spec %in% names(TS_GUI_BROWSERS)) {
+    unname(TS_GUI_BROWSERS[[browser_spec]])
+  } else {
+    browser_spec
+  }
+  if (!nzchar(exe) || !file.exists(exe)) {
+    stop(sprintf(paste0("[launch_dev_drive] browser not found: '%s'. ",
+                        "Use chrome|edge|firefox|brave or an absolute .exe path."), exe),
+         call. = FALSE)
+  }
+  # cmd.exe is the eventual consumer (see browseURL below): give it a native
+  # Windows path, not the forward-slash form used in the registry above.
+  exe <- normalizePath(exe, winslash = "\\", mustWork = TRUE)
+  # MEASURED on shiny 1.14.0: `.setupShinyApp()` calls
+  # `utils::browseURL(appUrl)` with NO `browser` argument when
+  # `launch.browser = TRUE`. `formals(browseURL)$browser` is
+  # `getOption("browser")`, and the Windows branch runs
+  # `system(paste0("\"", browser, "\" ", url))` — so "Program Files" paths are
+  # quoted correctly. Setting the option is the smallest possible hook:
+  # `runApp()`, `launch.browser` and the whole drive protocol stay UNCHANGED.
+  options(browser = exe)
+  message("[launch_dev_drive] browser: ", exe)
+}
 
 # DECLARED, not guessed: `ts_drive_viewer()` reads this and publishes it in
 # ready.json's `viewer` field, so the agent can tell whether a human is watching.
@@ -146,6 +214,29 @@ if (!file.exists(file.path(root, "app.R"))) {
   root <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 }
 message("[launch_dev_drive] app root: ", root)
+
+# ── NON-BLOCKING single-session warning ────────────────────────────────────
+# A fresh ready.json means a client is ALREADY connected (the poller rewrites
+# it every ~1 s). Opening another visible tab creates a NEW Shiny session and
+# REWRITES ready.json with a NEW session_token — the agent's arm.json then
+# names a stale token and is refused, indistinguishably from "nobody armed me".
+# WARN, never block: boot diagnostics legitimately start a second process.
+if (launch_browser) {
+  ready <- file.path(root, "tools", "_drive", "ready.json")
+  if (file.exists(ready)) {
+    age <- suppressWarnings(as.numeric(
+      difftime(Sys.time(), file.info(ready)$mtime, units = "secs")))
+    timeout <- suppressWarnings(as.numeric(
+      Sys.getenv("TRANSCRIPTO_DEV_DRIVE_HB_TIMEOUT", "15")))
+    if (!is.finite(timeout) || timeout <= 0) timeout <- 15
+    if (is.finite(age) && age >= 0 && age <= timeout) {
+      message("[launch_dev_drive] WARNING: a fresh ready.json exists (",
+              round(age, 1), "s old). A second tab ROTATES the session token; ",
+              "re-read ready.json AFTER this tab connects, and never reuse an ",
+              "older token to arm.")
+    }
+  }
+}
 
 # `launch.browser` is passed EXPLICITLY rather than left to `runApp()`'s default
 # (`interactive()`): the mode is a decision this launcher made, and a decision
