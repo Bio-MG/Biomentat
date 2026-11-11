@@ -195,7 +195,8 @@ mod_import_bulk_ui <- function(id) {
               
               fileInput(ns("counts_file"), "Fichier de Counts (CSV/TSV/TXT)",
                         accept = c(".csv", ".tsv", ".txt", ".xlsx",
-                                   ".rda", ".RData", ".rds", ".RDS")),
+                                   ".rda", ".RData", ".rds", ".RDS"),
+                        buttonLabel = i18n$t("Parcourir...")),
               
               helpText("Format attendu : Lignes = Gènes, Colonnes = Échantillons. ",
                        "Un filtrage fin (par réplicat) est disponible à l'étape 1 du module d'analyse — ",
@@ -235,7 +236,8 @@ mod_import_bulk_ui <- function(id) {
               
               fileInput(ns("metadata_file"), "Fichier de Métadonnées (CSV/TSV/TXT)",
                         accept = c(".csv", ".tsv", ".txt", ".xlsx",
-                                   ".rda", ".RData", ".rds", ".RDS")),
+                                   ".rda", ".RData", ".rds", ".RDS"),
+                        buttonLabel = i18n$t("Parcourir...")),
               
               helpText("Format : Lignes = Échantillons, Colonnes = Variables (condition, batch, etc.)."),
               
@@ -308,7 +310,8 @@ mod_import_bulk_ui <- function(id) {
                 ns("ps_files"),
                 "Fichiers bulk (un fichier = un sample)",
                 multiple = TRUE,
-                accept   = c(".csv", ".tsv", ".txt", ".gz")
+                accept   = c(".csv", ".tsv", ".txt", ".gz"),
+                buttonLabel = i18n$t("Parcourir...")
               ),
               
               numericInput(
@@ -342,7 +345,8 @@ mod_import_bulk_ui <- function(id) {
               fileInput(
                 ns("ps_metadata_file"),
                 "Métadonnées (CSV/TSV, optionnel — 1 ligne par fichier)",
-                accept = c(".csv", ".tsv", ".txt")
+                accept = c(".csv", ".tsv", ".txt"),
+                buttonLabel = i18n$t("Parcourir...")
               ),
               helpText("Alignées par ORDRE des fichiers ci-dessus (ligne 1 ↔ 1er fichier). Si une colonne « sample_id » est présente, elle remplace les identifiants déduits du nom de fichier ; les autres colonnes sont ajoutées telles quelles. La colonne utilisée comme condition doit être choisie ci-dessous."),
               uiOutput(ns("ps_meta_condition_ui")),

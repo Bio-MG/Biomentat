@@ -279,7 +279,7 @@ mod_import_spatial_ui <- function(id) {
         # le pre reste lisible quelle que soit la place que prend la carte
         # RCTD (fix purement CSS/inline, aucune logique).
         card_body(h5(i18n$t("Console de Log"), class = "text-muted"),
-                  div(style = "height:240px; overflow-y:auto;",
+                  div(style = "height:240px; overflow-y:auto; white-space:pre-wrap;",
                       verbatimTextOutput(ns("console_log"), placeholder = TRUE)))
       ),
 
@@ -297,7 +297,8 @@ mod_import_spatial_ui <- function(id) {
             bsicons::bs_icon("info-circle"),
             " ", i18n$t("Chargez et preparez UNE FOIS une reference scRNA-seq annotee ici pour la reutiliser directement dans l'onglet \"Spatial > 3. Deconvolution\" (RCTD ET Label Transfer), sans avoir a la re-uploader/re-preparer a chaque echantillon ou a chaque session (tant que l'artefact reste sur ce disque — voir sauvegarde de session dans le panneau lateral).")),
         fileInput(ns("shared_ref_file"), i18n$t("Fichier reference (.rds Seurat, .h5ad, .h5, .loom)"),
-                  accept = c(".rds", ".h5ad", ".h5", ".loom", ".rda", ".RData")),
+                  accept = c(".rds", ".h5ad", ".h5", ".loom", ".rda", ".RData"),
+                  buttonLabel = i18n$t("Parcourir...")),
         uiOutput(ns("shared_ref_status_badge_ui")),
         uiOutput(ns("shared_ref_celltype_col_ui")),
         uiOutput(ns("shared_ref_artifact_status_ui"))

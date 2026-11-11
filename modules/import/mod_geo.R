@@ -63,11 +63,13 @@ mod_geo_ui <- function(id) {
 
       fileInput(ns("file_counts"),
                 i18n$t("Fichier de counts (tsv/csv/txt/xlsx)"),
-                accept = c(".tsv", ".csv", ".txt", ".xlsx")),
+                accept = c(".tsv", ".csv", ".txt", ".xlsx"),
+                buttonLabel = i18n$t("Parcourir...")),
 
       fileInput(ns("file_meta"),
                 i18n$t("Fichier de métadonnées (optionnel) — series_matrix.txt ou csv/tsv"),
-                accept = c(".txt", ".csv", ".tsv", ".gz"))
+                accept = c(".txt", ".csv", ".tsv", ".gz"),
+                buttonLabel = i18n$t("Parcourir..."))
     ),
 
     uiOutput(ns("ui_preview")),

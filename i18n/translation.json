@@ -13121,5 +13121,14 @@
       "fr": "Tout afficher",
       "en": "Show all"
     }
+,
+    {
+      "fr": "Aperçu du jeu de données",
+      "en": "Dataset Overview"
+    },
+    {
+      "fr": "Gènes spatialement variables (Moran's I)",
+      "en": "Spatially Variable Genes (Moran's I)"
+    }
   ]
 }

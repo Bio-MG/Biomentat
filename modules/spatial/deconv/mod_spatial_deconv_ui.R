@@ -31,7 +31,8 @@ mod_spatial_deconv_ui <- function(id) {
         conditionalPanel(
           condition = sprintf("!(input['%s'] && input['%s'] == 'shared')", ns("ref_source"), ns("ref_source")),
           fileInput(ns("ref_file"), i18n$t("Reference scRNA-seq (.rds Seurat, .h5ad, .h5, .loom)"),
-                    accept = c(".rds", ".h5ad", ".h5", ".loom", ".rda", ".RData")),
+                    accept = c(".rds", ".h5ad", ".h5", ".loom", ".rda", ".RData"),
+                    buttonLabel = i18n$t("Parcourir...")),
           uiOutput(ns("ref_status_badge_ui")),
           uiOutput(ns("ref_celltype_col_ui")),
           uiOutput(ns("ref_celltype_summary_ui"))

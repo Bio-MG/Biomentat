@@ -363,7 +363,7 @@ mod_spatial_qc_ui <- function(id) {  ns <- NS(id)
       sliderInput(ns("max_pct_mt"), i18n$t("% Mitochondrial max"), 0, 100, 20, step = 1),
 
       actionButton(ns("btn_apply_qc"), i18n$t("Appliquer les seuils"),
-                   class = "btn-danger w-100 mt-2", icon = icon("filter")),
+                   class = "btn-primary w-100 mt-2", icon = icon("filter")),
       uiOutput(ns("qc_pass_summary")),
 
       hr(),
@@ -445,7 +445,7 @@ mod_spatial_qc_ui <- function(id) {  ns <- NS(id)
     # the drive's navigation plan cannot drift apart.
     navset_card_underline(
       id = ns("qc_results"), selected = "overview",
-      nav_panel(i18n$t("Apercu du jeu de donnees"), value = "overview",
+      nav_panel(i18n$t("Aperçu du jeu de données"), value = "overview",
                 uiOutput(ns("dataset_overview_ui")),
                 hr(),
                 h6(i18n$t("Metadata (sketch)"), style = "font-weight:bold;"),
@@ -460,7 +460,7 @@ mod_spatial_qc_ui <- function(id) {  ns <- NS(id)
                      card_header(i18n$t("nCount vs nFeature (couleur = %MT)")),
                      plotOutput(ns("qc_scatter_plot"), height = "480px"))),
 
-      nav_panel(i18n$t("Genes spatialement variables (Moran's I)"), value = "moran",
+      nav_panel(i18n$t("Gènes spatialement variables (Moran's I)"), value = "moran",
                 div(class = "alert alert-light", style = "font-size:0.78rem;",
                     i18n$t("Grille des genes les plus spatialement structures (rang Moran's I) — necessite l'autocorrelation ci-contre (calculee au moins une fois).")),
                 fluidRow(

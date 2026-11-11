@@ -263,7 +263,8 @@ mod_import_sc_ui <- function(id) {
                 bsicons::bs_icon("hdd"),
                 " ", i18n$t("Fichiers volumineux (> quelques Go) : vérifiez l'espace disque disponible sur le disque où pointe le dossier temporaire de R (TMPDIR), pas seulement celui de l'app.")),
             fileInput(ns("file_upload"), i18n$t("Ajouter Fichier(s)"),
-                      accept = c(".rds", ".h5", ".h5ad", ".loom", ".rda", ".RData"), multiple = TRUE),
+                      accept = c(".rds", ".h5", ".h5ad", ".loom", ".rda", ".RData"), multiple = TRUE,
+                      buttonLabel = i18n$t("Parcourir...")),
             uiOutput(ns("file_list_display")),
             # Roadmap 3.4 : sélection par fichier avant chargement.
             uiOutput(ns("file_select_ui")),
@@ -275,7 +276,8 @@ mod_import_sc_ui <- function(id) {
             i18n$t("Option C: Fichier Unique (Classique)"),
             value = "opt_c",
             fileInput(ns("single_file_upload"), i18n$t("Charger un seul fichier"),
-                      accept = c(".rds", ".h5", ".h5ad", ".loom", ".rda", ".RData")),
+                      accept = c(".rds", ".h5", ".h5ad", ".loom", ".rda", ".RData"),
+                      buttonLabel = i18n$t("Parcourir...")),
             helpText(i18n$t("Pour un seul échantillon.")),
             actionButton(ns("btn_load_single"), i18n$t("Charger"), class = "btn-warning w-100"),
             # .rda/.RData "Inspect & Select" — carte conditionnelle mutualisée

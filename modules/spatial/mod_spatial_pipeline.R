@@ -212,7 +212,7 @@ mod_spatial_pipeline_ui <- function(id) {
 
       hr(),
       h6(i18n$t("Statistiques spatiales avancees (optionnel, onglets 1/6)"), style = "font-weight:bold;"),
-      div(class = "text-muted", style = "font-size:0.7rem;",
+      div(class = "text-muted", style = "font-size:0.8rem;",
           i18n$t("Ajoutent chacune un peu de temps de calcul -- decochees par defaut. Consultez les onglets \"1. QC\" et \"6. Niches spatiales\" pour l'explication de chaque test.")),
       checkboxInput(ns("compute_enrichment"), i18n$t("Enrichissement de voisinage (co-occurrence, base = clusters)"), value = FALSE),
       conditionalPanel(
@@ -232,13 +232,13 @@ mod_spatial_pipeline_ui <- function(id) {
       conditionalPanel(
         condition = sprintf("input['%s']", ns("compute_ripley")),
         numericInput(ns("n_perm_ripley"), i18n$t("Permutations"), 199, min = 49, max = 499, step = 10),
-        div(class = "text-muted", style = "font-size:0.68rem;",
+        div(class = "text-muted", style = "font-size:0.8rem;",
             i18n$t("Cible choisie automatiquement = le cluster le plus peuple apres l'etape 2. Pour tester un autre cluster/niche/type cellulaire, utilisez l'onglet 6 directement."))
       ),
 
       hr(),
       actionButton(ns("btn_run_all"), i18n$t("\U0001F680 Lancer le pipeline complet"),
-                   class = "btn-danger w-100", icon = icon("bolt")),
+                   class = "btn-primary w-100", icon = icon("bolt")),
       div(class = "mt-2", uiOutput(ns("pipeline_status_ui"))),
       div(class = "bg-light border rounded p-2 mt-2",
           style = "max-height:220px; overflow-y:auto; white-space:pre-wrap; font-family:monospace; font-size:0.72rem;",

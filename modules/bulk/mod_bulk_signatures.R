@@ -267,7 +267,8 @@ mod_bulk_signatures_ui <- function(id) {
     conditionalPanel(
       condition = sprintf("input['%s'] == 'rds_local'", ns("sig_resource")), ns = ns,
       fileInput(ns("sig_rds"), i18n$t("Fichier .rds (liste nommée ou data.frame signature/gene)"),
-                accept = c(".rds", ".RDS")),
+                accept = c(".rds", ".RDS"),
+                buttonLabel = i18n$t("Parcourir...")),
       div(class = "small text-muted",
           i18n$t("Liste nomm\u00e9e de vecteurs de g\u00e8nes, ou data.frame avec colonnes 'signature' et 'gene'."))
     ),
