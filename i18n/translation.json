@@ -13032,6 +13032,42 @@
     {
       "fr": "Librairies convergentes",
       "en": "Convergent libraries"
+    },
+    {
+      "fr": "Cloud Enrichr (opt-in)",
+      "en": "Cloud Enrichr (opt-in)"
+    },
+    {
+      "fr": "⚠️ Mode CLOUD : vos listes de gènes QUITTENT la machine et sont envoyées à maayanlab.cloud (Enrichr). Rien n'est envoyé tant que la case ci-dessous n'est pas cochée.",
+      "en": "⚠️ CLOUD mode: your gene lists LEAVE this machine and are sent to maayanlab.cloud (Enrichr). Nothing is sent until the box below is checked."
+    },
+    {
+      "fr": "J'accepte d'envoyer ma liste de gènes à Enrichr (maayanlab.cloud)",
+      "en": "I agree to send my gene list to Enrichr (maayanlab.cloud)"
+    },
+    {
+      "fr": "Librairies Enrichr (cloud)",
+      "en": "Enrichr libraries (cloud)"
+    },
+    {
+      "fr": "Cloud Enrichr indisponible : {msg}",
+      "en": "Cloud Enrichr unavailable: {msg}"
+    },
+    {
+      "fr": "Librairies Enrichr indisponibles (réseau ?) — re-sélectionnez la base pour réessayer.",
+      "en": "Enrichr libraries unavailable (network?) — re-select the database to retry."
+    },
+    {
+      "fr": "Cloud Enrichr : orthologie souris en attente de l'arbitrage D4 (GEMS D5) — librairies symboles humains uniquement.",
+      "en": "Cloud Enrichr: mouse orthology awaits the D4 arbitration (GEMS D5) — human-symbol libraries only."
+    },
+    {
+      "fr": "Cloud Enrichr : cochez la case de consentement — vos listes de gènes quittent la machine (maayanlab.cloud). Rien n'a été envoyé.",
+      "en": "Cloud Enrichr: check the consent box — your gene lists leave this machine (maayanlab.cloud). Nothing was sent."
+    },
+    {
+      "fr": "Cloud Enrichr : sélectionnez au moins une librairie.",
+      "en": "Cloud Enrichr: select at least one library."
     }
   ]
 }

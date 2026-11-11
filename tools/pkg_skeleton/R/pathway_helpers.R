@@ -2159,3 +2159,374 @@ build_convergence_dt <- function(df, tr = NULL) {
                                               c("darkgreen", "green", "orange", "red")))
 }
 
+# =============================================================================
+# ENRICHR CLOUD (PK-5 — pilier 2bis, fiche PROPOSAL_PACKS_ECOSYSTEM_2026-11-09.md
+# §3 jalon PK-5, idéation §4.2 ; GO vie privée opérateur 2026-11-11, arbitrage
+# B-1 : opt-in explicite, OFF par défaut, bannière dédiée).
+# =============================================================================
+# CONTRAT VIE PRIVÉE (D3) : le mode cloud est OPT-IN EXPLICITE — l'argument
+# `consent` DOIT être littéralement TRUE pour qu'UN SEUL octet quitte la
+# machine ; le refus est levé AVANT toute construction de requête (testable
+# hors réseau). Défaut = local strict (PK-2). La bannière UI porte la
+# destination réelle (maayanlab.cloud). Réseau : httr2 (au lock). Échec
+# réseau = pathway_error VISIBLE, jamais un repli silencieux vers le local
+# (mélanger local + cloud serait une analyse différente sous le même nom —
+# doctrine M12). Les variants modEnrichr (Fly/Yeast/Worm/Fish) suivent le
+# même contrat (idéation §4.2). AUCUN cache disque des listes de gènes : les
+# listes vivent le temps de la requête Enrichr puis sont oubliées.
+# Limite HONNÊTE v1 : la BH locale est recalculée sur l'UNION des termes
+# RENVOYÉS par l'API (la p-ajustée native Enrichr est ignorée) — l'union de
+# tests réelle d'Enrichr est potentiellement plus large que l'échantillon
+# renvoyé (même leçon que PK-3 : BH globale, mais sur l'échantillon API).
+# =============================================================================
+
+#' Hôtes Enrichr officiels (default = Enrichr humain ; variants modEnrichr).
+TS_ENRICHR_BASE_URLS <- c(
+  "Enrichr"       = "https://maayanlab.cloud/Enrichr",
+  "FlyEnrichr"    = "https://maayanlab.cloud/FlyEnrichr",
+  "YeastEnrichr"  = "https://maayanlab.cloud/YeastEnrichr",
+  "WormEnrichr"   = "https://maayanlab.cloud/WormEnrichr",
+  "FishEnrichr"   = "https://maayanlab.cloud/FishEnrichr"
+)
+
+#' URL finale Enrichr — builder PURE (testable hors réseau) : slash final
+#' normalisé + query ordonné (ordre d'insertion conservé).
+enrichr_cloud_url <- function(base_url, path, query = NULL) {
+  if (!is.character(base_url) || length(base_url) != 1L ||
+      is.na(base_url) || !startsWith(base_url, "https://") ||
+      !nzchar(trimws(base_url))) {
+    stop(errorCondition(
+      "Enrichr cloud : base_url https:// attendue (chaîne unique).",
+      class = "pathway_error"))
+  }
+  if (!is.character(path) || length(path) != 1L || is.na(path) ||
+      !grepl("^[A-Za-z0-9_/]+$", path)) {
+    stop(errorCondition(
+      "Enrichr cloud : chemin d'API attendu (chaîne [A-Za-z0-9_/]).",
+      class = "pathway_error"))
+  }
+  url <- paste0(sub("/+$", "", base_url), "/", sub("^/+", "", path))
+  if (!is.null(query)) {
+    if (!is.list(query) || length(query) == 0L ||
+        !all(nzchar(names(query)))) {
+      stop(errorCondition(
+        "Enrichr cloud : query attendu = liste nommée non vide.",
+        class = "pathway_error"))
+    }
+    parts <- vapply(seq_along(query), function(i) {
+      paste0(names(query)[[i]], "=",
+             utils::URLencode(as.character(query[[i]]), reserved = TRUE))
+    }, character(1))
+    url <- paste0(url, "?", paste(parts, collapse = "&"))
+  }
+  url
+}
+
+#' POST /enrich — dépose la liste de gènes chez Enrichr, DANS UNE SESSION
+#' (cookie jar) que le /export qui suit doit réutiliser.
+#'
+#' CONTRAT VIE PRIVÉE : `consent` DOIT être TRUE — sinon pathway_error AVANT
+#' toute construction de requête (RIEN ne quitte la machine).
+#'
+#' CONTRAT API (mesuré 2026-11-11 contre le client officiel enrichR
+#' [github.com/wjawaid/enrichR, functions.R] + probes live) : la voie
+#' userListId (POST /addList puis GET /enrich?userListId=…) NE RENVOIE PLUS
+#' de données ({} mesuré ×3, 8-40 s d'attente) ; POST /enrich sans session
+#' renvoie la page HTML (no-op silencieux) et le /export suivant répond
+#' {"expired": true}. Le flux qui MARCHE (sondé live, résultats réels) :
+#' GET base → POST /enrich multipart (`list`) → GET /export?file=API&…,
+#' LE TOUT DANS LE MÊME cookie jar — l'équivalent du cache de handles httr
+#' par hôte que le client officiel obtient gratuitement. httr2 (au lock,
+#' 1.3.0) : req_cookie_preserve(). LIMITATION HONNÊTE v1 : /export porte la
+#' liste COURANTE de la session — mono-utilisateur assumé (arbitrage O6) ;
+#' ne pas lancer deux analyses cloud simultanées.
+#'
+#' @param genes vecteur caractère de symboles (non vide après trim).
+#' @param consent consentement EXPLICITE de l'opérateur (case UI opt-in).
+#' @param base_url hôte (TS_ENRICHR_BASE_URLS ou https:// équivalent).
+#' @param cookie_jar chemin du jar de cookies (créé si NULL — le chemin est
+#'   RENVOYÉ : le /export doit reprendre LE MÊME jar, cf. enrichr_cloud_run).
+#' @return le chemin du cookie jar (invisible).
+enrichr_cloud_submit <- function(genes, consent = FALSE,
+                                 base_url = TS_ENRICHR_BASE_URLS[["Enrichr"]],
+                                 cookie_jar = NULL) {
+  # -- 1. GARDE DE CONSENTEMENT — AVANT tout le reste (contrat D3) -----------
+  if (!isTRUE(consent)) {
+    stop(errorCondition(
+      paste("Enrichr cloud : opt-in EXPLICITE requis — case de consentement",
+            "non cochée. RIEN n'a été envoyé."),
+      class = "pathway_error"))
+  }
+  # -- 2. validations d'arguments (encore avant le vol) ----------------------
+  if (!is.character(genes) || length(genes) == 0L) {
+    stop(errorCondition(
+      "Enrichr cloud : liste de gènes attendue (vecteur caractère non vide).",
+      class = "pathway_error"))
+  }
+  genes <- unique(trimws(genes[!is.na(genes)]))
+  genes <- genes[nzchar(genes)]
+  if (length(genes) == 0L) {
+    stop(errorCondition(
+      "Enrichr cloud : liste de gènes vide après nettoyage (symboles attendus).",
+      class = "pathway_error"))
+  }
+  own_jar <- is.null(cookie_jar)
+  if (own_jar) cookie_jar <- tempfile(fileext = ".cookies")
+  # -- 3. le vol (seule fonction du fichier qui POSTe des gènes) -------------
+  # GET base d'abord (hygiène du client officiel : session posée), PUIS le
+  # POST — le jar porte les cookies entre les deux comme entre submit/export.
+  tryCatch({
+    httr2::request(base_url) |>
+      httr2::req_cookie_preserve(cookie_jar) |>
+      httr2::req_perform()
+    httr2::request(enrichr_cloud_url(base_url, "enrich")) |>
+      httr2::req_cookie_preserve(cookie_jar) |>
+      httr2::req_body_multipart(
+        list = paste(genes, collapse = "\n")) |>
+      httr2::req_perform()
+  }, error = function(e) {
+    if (own_jar) unlink(cookie_jar)
+    stop(errorCondition(
+      sprintf("Enrichr cloud indisponible : %s",
+              conditionMessage(e)),
+      class = "pathway_error"))
+  })
+  invisible(cookie_jar)
+}
+
+#' GET /export?file=API&backgroundType=<lib> — résultats TSV par librairie
+#' pour la liste COURANTE de la session (jar renvoyé par
+#' enrichr_cloud_submit()).
+#'
+#' @param libraries vecteur caractère non vide de noms de librairies.
+#' @param cookie_jar chemin du jar — OBLIGATOIRE (sans session, l'API
+#'   répond {"expired": true}, mesuré).
+#' @return data.frame : une ligne par terme (library, Term, Overlap, P.value,
+#'   Adjusted.P.value, Odds.Ratio, Combined.Score, Genes) — colonnes TSV
+#'   natives Enrichr (check.names → points) + colonne `library`.
+enrichr_cloud_enrich <- function(libraries,
+                                 base_url = TS_ENRICHR_BASE_URLS[["Enrichr"]],
+                                 cookie_jar = NULL) {
+  if (!is.character(libraries) || length(libraries) == 0L ||
+      all(!nzchar(trimws(libraries)))) {
+    stop(errorCondition(
+      "Enrichr cloud : au moins une librairie attendue.",
+      class = "pathway_error"))
+  }
+  if (is.null(cookie_jar) || !nzchar(cookie_jar)) {
+    stop(errorCondition(
+      paste("Enrichr cloud : session absente — passez le cookie jar renvoyé",
+            "par enrichr_cloud_submit() (sans session, l'API répond",
+            "« expired »)."),
+      class = "pathway_error"))
+  }
+  libraries <- unique(trimws(libraries))
+  libraries <- libraries[nzchar(libraries)]
+  rows <- list()
+  for (lib in libraries) {
+    txt <- tryCatch(
+      httr2::request(enrichr_cloud_url(base_url, "export",
+                                       list(file = "API",
+                                            backgroundType = lib))) |>
+        httr2::req_cookie_preserve(cookie_jar) |>
+        httr2::req_perform() |>
+        httr2::resp_body_string(),
+      error = function(e) {
+        stop(errorCondition(
+          sprintf("Enrichr cloud indisponible (librairie %s) : %s",
+                  lib, conditionMessage(e)),
+          class = "pathway_error"))
+      })
+    if (grepl('"expired"', txt)) {
+      stop(errorCondition(
+        sprintf(paste("Enrichr cloud : session expirée avant le /export de %s",
+                      "(liste non enregistrée ?) — relancez l'analyse."),
+                lib),
+        class = "pathway_error"))
+    }
+    if (is.null(txt) || !nzchar(trimws(txt))) next
+    rows[[length(rows) + 1L]] <- enrichr_cloud_parse_export(txt, lib)
+  }
+  rows <- Filter(function(x) is.data.frame(x) && nrow(x) > 0L, rows)
+  if (length(rows) == 0L) {
+    return(enrichr_cloud_parse_export(character(0), ""))
+  }
+  do.call(rbind, rows)
+}
+
+#' Parsing PUR du TSV /export (testable hors réseau) — colonnes natives
+#' Enrichr : Term, Overlap, P.value, Adjusted.P.value, Old.P.value,
+#' Old.Adjusted.P.value, Odds.Ratio, Combined.Score, Genes.
+enrichr_cloud_parse_export <- function(tsv_text, library) {
+  empty <- data.frame(library = character(0), Term = character(0),
+                      Overlap = character(0), P.value = numeric(0),
+                      Adjusted.P.value = numeric(0), Odds.Ratio = numeric(0),
+                      Combined.Score = numeric(0), Genes = character(0),
+                      stringsAsFactors = FALSE)
+  if (!is.character(tsv_text) || length(tsv_text) != 1L || !nzchar(tsv_text)) {
+    return(empty)
+  }
+  df <- tryCatch(
+    utils::read.table(text = tsv_text, sep = "\t", header = TRUE,
+                      quote = "", comment.char = "",
+                      stringsAsFactors = FALSE),
+    error = function(e) NULL)
+  if (is.null(df) || nrow(df) == 0L || !"Term" %in% colnames(df)) {
+    return(empty)
+  }
+  df$library <- as.character(library)
+  df$P.value <- suppressWarnings(as.numeric(df$P.value))
+  if ("Adjusted.P.value" %in% colnames(df))
+    df$Adjusted.P.value <- suppressWarnings(as.numeric(df$Adjusted.P.value))
+  df
+}
+
+#' GET /datasetStatistics → noms de librairies disponibles (sélecteur cloud).
+enrichr_cloud_libraries <- function(base_url = TS_ENRICHR_BASE_URLS[["Enrichr"]]) {
+  resp <- tryCatch(
+    httr2::request(enrichr_cloud_url(base_url, "datasetStatistics")) |>
+      httr2::req_perform(),
+    error = function(e) {
+      stop(errorCondition(
+        sprintf("Enrichr cloud indisponible (datasetStatistics) : %s",
+                conditionMessage(e)),
+        class = "pathway_error"))
+    })
+  body <- tryCatch(httr2::resp_body_json(resp, check_type = FALSE),
+                   error = function(e) NULL)
+  enrichr_cloud_parse_libraries(body)
+}
+
+#' Parsing PUR de /datasetStatistics (testable hors réseau) : noms triés et
+#' dédupliqués. Forme mesurée live 2026-11-11 : top-level {statistics: […],
+#' categories: […]} — les objets librairie vivent sous `statistics`.
+enrichr_cloud_parse_libraries <- function(raw) {
+  if (!is.list(raw) || length(raw) == 0L) return(character(0))
+  if (!is.null(raw$statistics) && is.list(raw$statistics)) {
+    raw <- raw$statistics
+  }
+  names_vec <- vapply(raw, function(x) {
+    nm <- x$libraryName %||% x$name %||% ""
+    as.character(nm)
+  }, character(1))
+  sort(unique(names_vec[nzchar(names_vec)]))
+}
+
+#' Table finale au CONTRAT PK-2 (ID/Description/GeneRatio/Count/p.adjust) —
+#' build_pathway_dt et les vues aval la consomment comme une sortie ORA.
+#' BH recalculée localement sur l'UNION des termes renvoyés (motif PK-3 :
+#' BH globale, ici sur l'échantillon API — limite documentée au header ;
+#' la Adjusted.P.value par-librairie d'Enrichr est ignorée exprès).
+#' `raw_rows` = sortie enrichr_cloud_enrich() (TSV parsé, colonne `library`).
+enrichr_cloud_results_table <- function(raw_rows, pval_cutoff = 0.05,
+                                        p_adjust_method = "BH") {
+  empty <- data.frame(ID = character(0), Description = character(0),
+                      GeneRatio = character(0), Count = integer(0),
+                      pvalue = numeric(0), p.adjust = numeric(0),
+                      library = character(0), Genes = character(0),
+                      stringsAsFactors = FALSE)
+  if (!is.data.frame(raw_rows) || nrow(raw_rows) == 0L) return(empty)
+  need <- c("library", "Term", "Overlap", "P.value")
+  if (!all(need %in% colnames(raw_rows))) return(empty)
+  # Count = k du « k/N » natif Enrichr ; GeneRatio = « k/N » tel quel
+  kn <- strsplit(trimws(raw_rows$Overlap), "/", fixed = TRUE)
+  k <- vapply(kn, function(p) {
+    if (!length(p)) return(0L)
+    x <- suppressWarnings(as.integer(p[[1]]))
+    if (is.na(x)) 0L else x
+  }, integer(1))
+  raw_rows$Count <- k
+  raw_rows$GeneRatio <- trimws(raw_rows$Overlap)
+  raw_rows$ID <- trimws(raw_rows$Term)
+  raw_rows$Description <- trimws(raw_rows$Term)
+  raw_rows$pvalue <- raw_rows$P.value
+  raw_rows$Genes <- if ("Genes" %in% colnames(raw_rows))
+    trimws(as.character(raw_rows$Genes)) else ""
+  # BH GLOBALE sur l'union des termes renvoyés (toutes librairies confondues)
+  raw_rows$p.adjust <- stats::p.adjust(raw_rows$pvalue,
+                                       method = p_adjust_method)
+  keep <- !is.na(raw_rows$p.adjust) & raw_rows$p.adjust <= pval_cutoff
+  out <- raw_rows[keep, c("ID", "Description", "GeneRatio", "Count",
+                          "pvalue", "p.adjust", "library", "Genes"),
+                  drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
+#' ORCHESTRATEUR cloud — même rôle que run_packs_enrichment() côté local :
+#' submit (session posée) → enrich (même jar) → table contrat. Le
+#' consentement est re-vérifié ici (double garde moteur : la voie UI coche la
+#' case, toute autre voie — drive/MCP — doit passer un consent explicite).
+#' Le délai 1 s entre le POST et le /export est l'hygiène du client officiel
+#' (sleepTime=1) ; le jar est supprimé en sortie de run (aucun état session
+#' ne survit à l'analyse — vie privée).
+enrichr_cloud_run <- function(genes, libraries, consent,
+                              base_url = TS_ENRICHR_BASE_URLS[["Enrichr"]],
+                              pval_cutoff = 0.05, p_adjust_method = "BH") {
+  jar <- tempfile(fileext = ".cookies")
+  on.exit(unlink(jar), add = TRUE)
+  enrichr_cloud_submit(genes = genes, consent = consent, base_url = base_url,
+                       cookie_jar = jar)
+  Sys.sleep(1)
+  raw <- enrichr_cloud_enrich(libraries, base_url = base_url, cookie_jar = jar)
+  enrichr_cloud_results_table(raw, pval_cutoff = pval_cutoff,
+                              p_adjust_method = p_adjust_method)
+}
+
+# -- UI opt-in (vive dans le MOTEUR : le contrat vie privée bulk/sc est UN,
+#    jamais divergent — le garde check_duplication a mesuré 27+15 lignes
+#    identiques quand les 2 modules portaient chacun leur copie, c'était le
+#    signal qu'une extraction moteur s'imposait) ------------------------------
+
+#' Panneau opt-in du mode cloud — bannière vie privée VISIBLE (destination
+#' réelle nommée) + case de consentement OFF par défaut + slot du sélecteur
+#' de librairies. `tr` = traducteur UI (.tr_plain côté module).
+enrichr_cloud_optin_ui <- function(ns, tr) {
+  shiny::conditionalPanel(
+    condition = "input.pathway_db == 'EnrichrCloud'", ns = ns,
+    shiny::div(class = "alert alert-warning",
+               style = "font-size:0.82rem; margin-bottom:6px;",
+               tr("⚠️ Mode CLOUD : vos listes de gènes QUITTENT la machine et sont envoyées à maayanlab.cloud (Enrichr). Rien n'est envoyé tant que la case ci-dessous n'est pas cochée.")),
+    shiny::checkboxInput(ns("pathway_enrichr_consent"),
+                         tr("J'accepte d'envoyer ma liste de gènes à Enrichr (maayanlab.cloud)"),
+                         value = FALSE, width = NULL),
+    shiny::uiOutput(ns("enrichr_libs_ui"))
+  )
+}
+
+#' Corps du renderUI des librairies cloud — dépendances INJECTÉES (pure,
+#' testable hors shiny) : fetch live /datasetStatistics une seule fois par
+#' session (cache via `store`), échec réseau = notification honnête + slot
+#' discret, JAMAIS un repli silencieux vers le local.
+#'
+#' @param active  logical — le mode cloud est-il sélectionné ?
+#' @param cached  valeur du cache session (NULL = pas encore fetché).
+#' @param store   mutateur du cache (reactiveVal) — posé APRÈS le fetch.
+#' @param fetch   fonction réseau sans argument (injection pour tests).
+#' @param tr      traducteur serveur (.tr), `t_fmt` formatteur {msg}.
+#' @param notify  showNotification injecté, `ns` namespace du module.
+enrichr_cloud_libs_output <- function(active, cached, store, fetch,
+                                      tr, t_fmt, notify, ns) {
+  if (!isTRUE(active)) return(NULL)
+  libs <- cached
+  if (is.null(libs)) {
+    libs <- tryCatch(
+      fetch(),
+      error = function(e) {
+        notify(t_fmt(tr("Cloud Enrichr indisponible : {msg}"),
+                     msg = conditionMessage(e)),
+               type = "warning", duration = 10)
+        NA_character_
+      })
+    store(libs)
+  }
+  if (!is.character(libs) || length(libs) == 0L || all(is.na(libs))) {
+    return(shiny::tags$div(class = "small text-muted",
+                           tr("Librairies Enrichr indisponibles (réseau ?) — re-sélectionnez la base pour réessayer.")))
+  }
+  shiny::selectizeInput(ns("pathway_enrichr_libs"),
+                        tr("Librairies Enrichr (cloud)"),
+                        choices = libs, multiple = TRUE,
+                        options = list(placeholder = tr("Sélectionnez une ou plusieurs librairies")))
+}
+

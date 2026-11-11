@@ -152,9 +152,9 @@ mod_sc_pathways_ui <- function(id) {
                      options=list(placeholder="Selectionnez genes"))),
     fluidRow(
       column(6, selectInput(ns("pathway_db"), i18n$t("Base de donnees"),
-               choices=setNames(c("GOBP","KEGG","Reactome","Packs"),
+               choices=setNames(c("GOBP","KEGG","Reactome","Packs","EnrichrCloud"),
                  c(.tr_plain("GO Biological Process"), .tr_plain("KEGG Pathways"), .tr_plain("Reactome"),
-                   .tr_plain("Packs (GMT libraries)"))))),
+                   .tr_plain("Packs (GMT libraries)"), .tr_plain("Cloud Enrichr (opt-in)"))))),
       column(6, selectInput(ns("pathway_org"), i18n$t("Organisme"),
                choices=setNames(c("human","mouse"), c(.tr_plain("Humain"), .tr_plain("Souris")))))
     ),
@@ -162,6 +162,12 @@ mod_sc_pathways_ui <- function(id) {
     # librairies GMT installées — le sélecteur n'apparaît que sur « Packs » ;
     # librairies = registre session (scan PK-1 au démarrage).
     uiOutput(ns("packs_libs_ui")),
+    # PK-5 (pilier 2bis cloud, fiche §4.2 ; GO vie privée B-1 2026-11-11) :
+    # le panneau opt-in (bannière + consentement + slot libs) vit dans le
+    # MOTEUR (enrichr_cloud_optin_ui) — contrat vie privée partagé bulk/sc,
+    # jamais divergent (le check_duplication a mesuré 27+15 lignes identiques
+    # quand chaque module portait sa copie : extraction moteur s'imposait).
+    enrichr_cloud_optin_ui(ns, .tr_plain),
     numericInput(ns("pathway_pval"), i18n$t("P-value cutoff"), value=0.05, min=0.001, max=0.1, step=0.01),
     actionButton(ns("run_pathway"), i18n$t("Lancer Enrichissement"), class="btn-warning w-100", icon=icon("dna")),
     hr(),
@@ -273,6 +279,20 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
                      options = list(placeholder = .tr("Sélectionnez une ou plusieurs librairies")))
     })
 
+    # PK-5 (pilier 2bis cloud) : sélecteur des librairies Enrichr — le corps
+    # (fetch LIVE /datasetStatistics une fois par session, cache, échec
+    # réseau = notification honnête) vit dans le MOTEUR avec dépendances
+    # injectées (enrichr_cloud_libs_output, testable hors shiny).
+    enrichr_libs_cache <- shiny::reactiveVal(NULL)
+    output$enrichr_libs_ui <- renderUI({
+      global_data$language
+      enrichr_cloud_libs_output(
+        active = identical(input$pathway_db, "EnrichrCloud"),
+        cached = enrichr_libs_cache(), store = enrichr_libs_cache,
+        fetch  = enrichr_cloud_libraries,
+        tr = .tr, t_fmt = .t_fmt, notify = showNotification, ns = ns)
+    })
+
     observeEvent(input$run_pathway, {
       req(global_data$sc_obj)
       genes_to_test <- NULL
@@ -326,6 +346,29 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
                            type="warning", duration=6); return()
         }
       }
+      # PK-5 (pilier 2bis cloud) : refus honnêtes AVANT le vol — même motif
+      # que le bloc Packs. Le consentement est vérifié ICI (UX : raison
+      # visible) ET dans le moteur (double garde : toute autre voie que la
+      # case UI — drive/MCP — doit passer un consent explicite, et le moteur
+      # refuse AVANT toute construction de requête, donc RIEN ne part).
+      enrichr_libs <- NULL
+      if (identical(input$pathway_db, "EnrichrCloud")) {
+        if (!identical(input$pathway_org, "human")) {
+          # Même contrat D4 que les packs : les librairies Enrichr sont des
+          # symboles humains, jamais un mapping silencieux.
+          showNotification(.tr("Cloud Enrichr : orthologie souris en attente de l'arbitrage D4 (GEMS D5) — librairies symboles humains uniquement."),
+                           type="warning", duration=8); return()
+        }
+        if (!isTRUE(input$pathway_enrichr_consent)) {
+          showNotification(.tr("Cloud Enrichr : cochez la case de consentement — vos listes de gènes quittent la machine (maayanlab.cloud). Rien n'a été envoyé."),
+                           type="warning", duration=8); return()
+        }
+        enrichr_libs <- input$pathway_enrichr_libs
+        if (is.null(enrichr_libs) || length(enrichr_libs) == 0L) {
+          showNotification(.tr("Cloud Enrichr : sélectionnez au moins une librairie."),
+                           type="warning", duration=6); return()
+        }
+      }
 
       # add = TRUE : le module DÉCLARE un job drive — un on.exit() nu
       # effacerait la déclaration (garde test-drive-watcher.R §additive).
@@ -344,6 +387,15 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
                                term2name=t2g$term2name,
                                universe = rownames(global_data$sc_obj),
                                pval_cutoff=input$pathway_pval)
+        } else if (identical(input$pathway_db, "EnrichrCloud")) {
+          # PK-5 : le moteur re-vérifie le consentement (refus AVANT tout
+          # vol) ; pas d'univers local — Enrichr applique le fond de sa
+          # librairie (honnêteté : c'est LA différence de méthode cloud vs
+          # local, le tableau porte la colonne `library` pour le dire).
+          enrichr_cloud_run(genes=genes_to_test,
+                            libraries=enrichr_libs,
+                            consent=isTRUE(input$pathway_enrichr_consent),
+                            pval_cutoff=input$pathway_pval)
         } else {
           run_pathway_enrichment(genes=genes_to_test, organism=input$pathway_org,
                                  database=input$pathway_db, pval_cutoff=input$pathway_pval,
