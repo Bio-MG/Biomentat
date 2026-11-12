@@ -137,6 +137,7 @@ mod_sc_da_milo_output_ui <- function(id) {
 
 mod_sc_da_milo_server <- function(id, global_data, shared_rv = NULL) {
   moduleServer(id, function(input, output, session) {
+    ns <- session$ns
     # ── i18n proxy ──────────────────────────────────────────────────────────
     .tr <- function(key) {
       tr <- isolate(global_data$i18n)
