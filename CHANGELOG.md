@@ -30,6 +30,25 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — P1.1 Leads I+J : vérification checkpoint en flux + jeton de session crypto-aléatoire] — 2026-11-13
+
+Audit externe #4 §4 (2026-11-12), RED→GREEN (session-checkpoint-engine 132/0 ;
+session-checkpoint-restore 135/0 ; drive-watcher 1008/0).
+
+### Corrigé
+- **Lead I** (`tools/pkg_skeleton/R/session_checkpoint.R`) : `ts_session_verify_bytes()`
+  ne relit PLUS le fichier entier en raw (le readback intégral doublait le pic RAM d'un
+  checkpoint lourd, au tmp ET à la destination) — comparaison par empreinte STREAMING
+  (`digest::digest(file=)` lit par blocs, sha256) des deux côtés + parité de taille ;
+  repli readBin intégral si digest indisponible (sémantique inchangée). Piège digest
+  mesuré : `digest(bytes)` serialize l'objet par défaut → `serialize = FALSE` requis
+  sur les raw vectors.
+- **Lead J** (`tools/pkg_skeleton/R/drive_watcher.R`) : `ts_drive_new_token()` est
+  crypto-aléatoire quand openssl est disponible (`openssl::rand_bytes` → format
+  [a-z0-9]^8 inchangé pour compat wire, modulo bias 256 %% 36 documenté) au lieu d'une
+  graine horloge+compteur ; modèle de menace documenté en tête (étiquette de session,
+  PAS un jeton d'autorisation cryptographique) ; repli horloge+compteur documenté.
+
 ## [V1.x — P1.1 Leads G+H : scaling HVG borné explicite + repli synchrone traçable/refusable] — 2026-11-13
 
 Audit externe #4 §4 (2026-11-12), RED→GREEN (sc-bpcells 32/0 ; core-jobs 22/0).

@@ -549,3 +549,26 @@ test_that("checkpoint dir resolution honours TRANSCRIPTO_* and the project data 
   expect_true(startsWith(fallback, ts_project_root()))
   expect_true(grepl("data_sc/session_checkpoints$", fallback))
 })
+
+# ── P1.1 Lead I — audit externe #4 §4 (2026-11-12) : la vérification de bytes
+# compare par empreinte EN FLUX (digest(file=) lit par blocs) au lieu de relire
+# le fichier entier en raw (le readback intégral doublait le pic RAM d'un
+# checkpoint lourd). Sémantique inchangée : match / corruption / absent. ──────
+
+test_that("Lead I : ts_session_verify_bytes — sémantique inchangée (match / corruption / absent)", {
+  p <- file.path(tempdir(), paste0("sc_verify_lead_i_", Sys.getpid(), ".bin"))
+  on.exit(unlink(p), add = TRUE)
+  bytes <- serialize(list(a = 1:10, b = letters[1:5]), connection = NULL)
+  con <- file(p, open = "wb"); writeBin(bytes, con); close(con)
+  expect_true(ts_session_verify_bytes(p, bytes))
+  back <- readBin(p, "raw", n = length(bytes))
+  back[7] <- as.raw(as.integer(back[7]) + 1L)
+  con <- file(p, open = "wb"); writeBin(back, con); close(con)
+  expect_false(ts_session_verify_bytes(p, bytes))
+  expect_false(ts_session_verify_bytes(file.path(tempdir(), "n_existe_pas.bin"), bytes))
+})
+
+test_that("Lead I : la vérification compare par empreinte en flux (plus de readBin intégral)", {
+  lines <- readLines(.engine_file, warn = FALSE)
+  expect_true(any(grepl("digest(file = path", lines, fixed = TRUE)))
+})

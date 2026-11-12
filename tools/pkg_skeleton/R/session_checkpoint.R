@@ -248,6 +248,25 @@ ts_session_checkpoint_layer3 <- function(assets = list()) {
 ts_session_verify_bytes <- function(path, bytes) {
   if (!is.raw(bytes)) bytes <- serialize(bytes, connection = NULL)
   if (!file.exists(path)) return(FALSE)
+  # Lead I (audit #4 §4, 2026-11-12) : la vérification ne lit PLUS le fichier
+  # entier en raw (le readback intégral doublait le pic RAM d'un checkpoint
+  # lourd, à la destination ET au tmp). Comparaison par empreinte STREAMING
+  # (digest::digest(file=) lit par blocs) des deux côtés + parité de taille.
+  # Repli readBin intégral UNIQUEMENT si digest est indisponible (sémantique
+  # identique ; coût mémoire d'origine, documenté).
+  if (requireNamespace("digest", quietly = TRUE)) {
+    dg <- tryCatch(
+      list(
+        disk = digest::digest(file = path, algo = "sha256"),
+        mem = digest::digest(bytes, algo = "sha256", serialize = FALSE)
+      ),
+      error = function(e) NULL
+    )
+    if (!is.null(dg)) {
+      sz <- tryCatch(as.numeric(file.info(path)$size), error = function(e) NA_real_)
+      return(isTRUE(sz == length(bytes)) && isTRUE(dg$disk == dg$mem))
+    }
+  }
   back <- tryCatch(
     readBin(path, "raw", n = max(file.info(path)$size, 0L)),
     error = function(e) NULL

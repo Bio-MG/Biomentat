@@ -486,7 +486,24 @@ ts_drive_now_iso <- function() {
 }
 
 #' Per-session token: 8 lowercase alphanumerics (spec §2.1 example).
-ts_drive_new_token <- function() .ts_drive_rand_id(8L)
+#'
+#' Lead J (audit externe #4 §4, 2026-11-12) — modèle de menace assumé :
+#' le jeton est une ÉTIQUETTE de session, PAS un jeton d'autorisation crypto-
+#' graphique (aucune garantie sans transport sécurisé ; il ne protège pas
+#' contre un attaquant local qui observerait le drive). Génération crypto-
+#' aléatoire quand openssl est disponible (rand_bytes → même format [a-z0-9]^8
+#' pour compat wire ; léger modulo bias 256 %% 36 documenté, acceptable pour
+#' une étiquette). Repli : graine dérivée horloge+compteur (.ts_drive_rand_id)
+#' — unicité conservée, imprévisibilité NON garantie (documenté). Tests
+#' ciblés : test-drive-watcher.R « Lead J ».
+ts_drive_new_token <- function() {
+  if (requireNamespace("openssl", quietly = TRUE)) {
+    idx <- as.integer(openssl::rand_bytes(8L)) %% 36L + 1L
+    paste(c(letters, 0:9)[idx], collapse = "")
+  } else {
+    .ts_drive_rand_id(8L)
+  }
+}
 
 
 # =============================================================================

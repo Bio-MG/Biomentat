@@ -4281,3 +4281,20 @@ test_that("les tirages du drive ne perturbent pas le RNG de l'appelant", {
   expect_false(identical(tok, ts_drive_new_token()))
   expect_match(tok, "^[a-z0-9]{8}$")
 })
+
+# ── P1.1 Lead J — audit externe #4 §4 (2026-11-12) : le jeton de session est
+# crypto-aléatoire (openssl::rand_bytes) au lieu d'une graine horloge+compteur.
+# Modèle de menace documenté en tête de générateur : ÉTIQUETTE de session,
+# PAS un jeton d'autorisation cryptographique. ─────────────────────────────────
+
+test_that("Lead J : 200 jetons consécutifs — format [a-z0-9]{8} inchangé, unicité totale", {
+  toks <- replicate(200L, ts_drive_new_token())
+  expect_length(unique(toks), 200L)
+  expect_true(all(grepl("^[a-z0-9]{8}$", toks)))
+})
+
+test_that("Lead J : le jeton ne dérive plus d'une graine d'horloge (source openssl)", {
+  src <- readLines(file.path(ts_project_root(), "tools", "pkg_skeleton", "R",
+                             "drive_watcher.R"), warn = FALSE)
+  expect_true(any(grepl("openssl::rand_bytes", src, fixed = TRUE)))
+})
