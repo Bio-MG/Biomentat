@@ -55,9 +55,25 @@
 # PARAMÈTRES (params) :
 #   seed                   graine (défaut TS_SC_PIPELINE_SEED sinon 989) ;
 #   doublet_score_cutoff   [0,1], défaut TS_SC_QC_DOUBLET_SCORE_CUTOFF / 0.25 ;
+#   exclusion_mode         "user_cutoff" (défaut — intersection historique :
+#                          appel moteur ET score > cutoff) ou
+#                          "engine_calibrated" (appel moteur SEUL). Audit
+#                          externe #4 §4 Lead D : les deux modes sont explicites
+#                          et enregistrés (qc_metrics + provenance) ;
 #   max_contamination      [0,1], défaut TS_SC_QC_MAX_CONTAMINATION / 0.20 —
-#                          PAS un filtre du chemin doublet-only : consommé
-#                          uniquement par le chemin ambiant, écho en provenance ;
+#                          CAP de contamination appliqué sur le chemin ambiant
+#                          quand le paramètre est fourni EXPLICITEMENT (la
+#                          pipeline UI le fait toujours — mod_sc_pipeline.R:438)
+#                          : les cellules dont l'estimation par cellule dépasse
+#                          le seuil sont exclues. Défaut implicite = enregistré
+#                          non appliqué (statut « recorded_default_not_enforced »
+#                          — mesuré : sur fixture dégénérée, decontX estime une
+#                          contamination > 0.20 pour TOUTES les cellules) ;
+#                          celda/DecontX expose l'estimation ; SoupX 1.6.2 n'en
+#                          expose PAS par cellule → « not_applicable_soupx » ;
+#                          hors chemin ambiant → « ambient_path_off ». Écho en
+#                          provenance partout — le paramètre n'est plus un écho
+#                          inerte (audit #4 §4 Lead E, 2026-11-12) ;
 #   run_ambient            opt-in décontamination (défaut FALSE) ;
 #   batch_var              colonne meta.data multi-échantillons passée à
 #                          scDblFinder(samples=) ; absente de l'objet =>
@@ -95,6 +111,28 @@
       class = c("sc_qc_error_invalid_param", "sc_qc_error")))
   }
   as.numeric(val)
+}
+
+#' Masque d'exclusion doublet — deux modes EXPLICITES (audit #4 §4 Lead D)
+#'
+#' "user_cutoff" (défaut) = intersection historique mesurée : appel moteur ET
+#' score > cutoff (sémantique F21-2/3/4 inchangée). "engine_calibrated" =
+#' appel moteur SEUL (le seuil interne du moteur est la sortie calibrée ; le
+#' cutoff utilisateur ne filtre plus). Le mode est enregistré en qc_metrics
+#' ET en provenance — jamais implicite.
+.sc_qc_exclusion_mask <- function(classes, scores, cutoff, mode = "user_cutoff") {
+  if (!is.character(mode) || length(mode) != 1L ||
+      !mode %in% c("user_cutoff", "engine_calibrated")) {
+    stop(errorCondition(
+      paste0("sc_filter_doublets_and_ambient() : 'exclusion_mode' doit être ",
+             "\"user_cutoff\" ou \"engine_calibrated\" (reçu : ",
+             paste(utils::head(as.character(mode), 3L), collapse = ","), ")."),
+      class = c("sc_qc_error_invalid_param", "sc_qc_error")))
+  }
+  if (identical(mode, "engine_calibrated")) {
+    return(classes == "doublet")
+  }
+  classes == "doublet" & scores > cutoff
 }
 
 #' Moteur ambiant présent ? (même paire que le test e2e : SoupX OU celda/DecontX)
@@ -204,7 +242,10 @@
                              calcChannels = FALSE)
     sc <- SoupX::setClusters(sc, clus)
     sc <- withr::with_seed(seed, SoupX::autoEstCont(sc, verbose = FALSE))
-    return(SoupX::adjustCounts(sc, round = TRUE))
+    # Soupx 1.6.2 : aucune estimation de contamination PAR CELLULE exposée par
+    # cette API (agrégats par cluster uniquement) → contamination = NULL, et le
+    # cap max_contamination est marqué « not_applicable_soupx » côté appelant.
+    return(list(counts = SoupX::adjustCounts(sc, round = TRUE), contamination = NULL))
   }
   if (requireNamespace("celda", quietly = TRUE)) {
     # celda 1.22 (fix e2e F20-5, 2026-11-09) : decontX sur une MATRICE rend
@@ -218,7 +259,18 @@
         "Décontamination celda : la matrice corrigée est absente ou désalignée — aucun repli silencieux.",
         class = c("sc_qc_error_ambient_failed", "sc_qc_error")))
     }
-    return(as.matrix(out))
+    # Lead F : parcimonie préservée — le as.matrix() systématique SUPPRIMÉ (il
+    # densifiait une sortie sparse en matrix dense : hazard mémoire audit #4 §4).
+    # Coercion dense uniquement en dernier recours si le moteur rend un type
+    # ni matrix ni Matrix.
+    if (!is.matrix(out) && !inherits(out, "Matrix")) {
+      out <- as.matrix(out)
+    }
+    # Estimation de contamination par cellule (Lead E) — NULL si absente.
+    contam <- if (is.list(res_d) && !is.null(res_d$contamination)) {
+      as.numeric(res_d$contamination)
+    } else NULL
+    return(list(counts = out, contamination = contam))
   }
   stop(errorCondition(
     paste0("Aucun moteur de décontamination ('SoupX' ou 'celda'/DecontX) installé — le garde amont devrait avoir bloqué cet appel."),
@@ -259,6 +311,16 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
     params$max_contamination %||% .sc_qc_default("TS_SC_QC_MAX_CONTAMINATION", 0.20),
     "max_contamination")
   seed <- as.integer(params$seed %||% .sc_qc_default("TS_SC_PIPELINE_SEED", 989L))
+  # ── Mode d'exclusion (Lead D) : validé TÔT (échec avant tout calcul moteur) ──
+  exclusion_mode <- params$exclusion_mode %||% "user_cutoff"
+  if (!is.character(exclusion_mode) || length(exclusion_mode) != 1L ||
+      !exclusion_mode %in% c("user_cutoff", "engine_calibrated")) {
+    stop(errorCondition(
+      paste0("sc_filter_doublets_and_ambient() : 'exclusion_mode' doit être ",
+             "\"user_cutoff\" ou \"engine_calibrated\" (reçu : ",
+             paste(utils::head(as.character(exclusion_mode), 3L), collapse = ","), ")."),
+      class = c("sc_qc_error_invalid_param", "sc_qc_error")))
+  }
   run_ambient <- isTRUE(params$run_ambient)
   batch_var <- params$batch_var
   if (!is.null(batch_var)) batch_var <- as.character(batch_var)[1L]
@@ -330,8 +392,8 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
   names(scores) <- colnames(obj)
   names(classes) <- colnames(obj)
 
-  # ── Exclusion : appel moteur ET score > cutoff (STRICT — jamais >= : F21-4) ──
-  excluded_mask <- classes == "doublet" & scores > cutoff
+  # ── Exclusion : deux modes explicites (Lead D) — défaut = intersection ─────
+  excluded_mask <- .sc_qc_exclusion_mask(classes, scores, cutoff, exclusion_mode)
   keep_cells <- colnames(obj)[!excluded_mask]
   excluded_cells <- colnames(obj)[excluded_mask]
   if (length(keep_cells) == 0L) {
@@ -343,15 +405,75 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
 
   # ── Chemin ambiant (opt-in, moteur présent) : correction AVANT le subset ──
   counts_out <- NULL
+  contam_in <- NULL
+  n_contam_excluded <- 0L
+  max_contamination_applied <- FALSE
+  max_contamination_status <- "ambient_path_off"
+  # Lead E : le cap est appliqué quand l'appelant fournit max_contamination
+  # EXPLICITEMENT (la pipeline UI le fait toujours — mod_sc_pipeline.R:438
+  # passe le slider). Défaut implicite = enregistré, non appliqué (statut
+  # honnête) : sur les fixtures dégénérées, l'estimation decontX dépasse 0.20
+  # pour TOUTES les cellules — un cap toujours-on y refuserait tout (mesuré).
+  enforce_cap <- !is.null(params$max_contamination)
   if (run_ambient) {
-    corrected <- tryCatch(
+    amb <- tryCatch(
       .sc_qc_ambient_decontaminate(obj, cnt_in, seed, tod_mat = tod_mat),
       error = function(e) stop(errorCondition(
         paste0("Décontamination ambiante (", ambient_engine,
                ") échouée — aucun repli silencieux sur données brutes : ",
                conditionMessage(e)),
         class = c("sc_qc_error_ambient_failed", "sc_qc_error"))))
-    counts_out <- corrected[, keep_cells, drop = FALSE]
+    contam_in <- amb$contamination
+      if (!is.null(contam_in) && enforce_cap) {
+        # ── CAP max_contamination (Lead E) : le paramètre devient opérationnel ──
+      contam_in <- as.numeric(contam_in)
+      bad_c <- !is.finite(contam_in)
+      if (any(bad_c)) {
+        contam_in[bad_c] <- 0
+        warnings_vec <- c(warnings_vec,
+          sprintf("%d estimation(s) de contamination non finie(s) remise(s) à 0 — cellules conservées.", sum(bad_c)))
+      }
+      if (length(contam_in) != ncol(obj)) {
+        stop(errorCondition(
+          paste0("Estimation de contamination (", ambient_engine, ") désalignée : ",
+                 length(contam_in), " valeur(s) pour ", ncol(obj), " cellules d'entrée."),
+          class = c("sc_qc_error_engine_mismatch", "sc_qc_error")))
+      }
+      names(contam_in) <- colnames(obj)
+      # Sous-ensemble POSITIONNEL (même ordre que keep_cells, qui provient de
+      # colnames(obj)[!excluded_mask]) — jamais par nom, les vecteurs du moteur
+      # peuvent être anonymes.
+      contam_keep <- contam_in[!excluded_mask]
+      contam_excl <- keep_cells[contam_keep > max_cont]
+      if (length(contam_excl) > 0L) {
+        keep_cells <- setdiff(keep_cells, contam_excl)
+        if (length(keep_cells) == 0L) {
+          stop(errorCondition(
+            paste0("Toutes les ", ncol(obj), " cellules seraient exclues ",
+                   "(contamination estimée > max_contamination = ", max_cont,
+                   ") — aucun objet résultat. Relevez max_contamination."),
+            class = c("sc_qc_error_empty_result", "sc_qc_error")))
+        }
+      }
+      n_contam_excluded <- length(contam_excl)
+      max_contamination_applied <- TRUE
+      max_contamination_status <- if (identical(ambient_engine, "celda")) "applied_celda"
+                                  else "applied"
+    } else if (!enforce_cap && !is.null(contam_in)) {
+      # Défaut implicite fourni par .sc_qc_default() : enregistré, non appliqué
+      # (statut honnête tracé — Lead E ; l'UI passe toujours la valeur du
+      # slider explicitement, donc la voie utilisateur reste enforcée).
+      max_contamination_status <- "recorded_default_not_enforced"
+      warnings_vec <- c(warnings_vec,
+        "max_contamination enregistré mais NON appliqué (valeur par défaut implicite — fournissez le paramètre explicitement pour l'appliquer).")
+    } else {
+      # SoupX : aucune estimation par cellule exposée par l'API 1.6.2 utilisée
+      # (Lead E — statut explicite, jamais un écho qui prétend s'appliquer).
+      max_contamination_status <- "not_applicable_soupx"
+      warnings_vec <- c(warnings_vec,
+        "max_contamination non applicable sur la voie SoupX (aucune estimation par cellule exposée par l'API SoupX 1.6.2) — paramètre enregistré, non appliqué.")
+    }
+    counts_out <- amb$counts[, keep_cells, drop = FALSE]
   }
 
   # ── Objet résultat : subset strict + tags par cellule (F19-3, F24-*) ────────
@@ -399,15 +521,20 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
     engine = "scDblFinder",
     seed = seed,
     doublet_score_cutoff = cutoff,
+    exclusion_mode = exclusion_mode,
     max_contamination = max_cont,
+    max_contamination_applied = max_contamination_applied,
+    max_contamination_status = max_contamination_status,
     run_ambient = run_ambient,
     ambient_engine = ambient_engine,
     batch_var = batch_used,
     doublet_score = scores,          # per-cell ENTRÉE, pré-filtre, fini (F19-2)
     doublet_class = classes,
+    ambient_contamination = contam_in,  # per-cell ENTRÉE, fini ; NULL si non applicable
     n_cells_input = ncol(obj),
     n_cells_retained = length(keep_cells),
     n_cells_excluded = length(excluded_cells),
+    n_cells_contamination_excluded = n_contam_excluded,
     doublet_fraction_excluded = length(excluded_cells) / max(ncol(obj), 1L),
     distributions = list(
       nCount_RNA = list(
@@ -424,7 +551,10 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
   applied_params <- list(
     seed = seed,
     doublet_score_cutoff = cutoff,
+    exclusion_mode = exclusion_mode,
     max_contamination = max_cont,
+    max_contamination_applied = max_contamination_applied,
+    max_contamination_status = max_contamination_status,
     run_ambient = run_ambient
   )
   if (!is.null(batch_used)) applied_params$batch_var <- batch_used

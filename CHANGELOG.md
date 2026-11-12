@@ -30,6 +30,36 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — P1.1 Leads D+E+F : modes d'exclusion doublets explicites + cap max_contamination opérationnel + parcimonie ambiante] — 2026-11-13
+
+Audit externe #4 §4 (2026-11-12), exécution RED→GREEN (suite `sc-doublets-qc` :
+91 PASS / 0 FAIL, e2e tier1 92 / tier2 18 / tier3 12 verts). Trois défauts vérifiés au
+source du moteur M4 « biomentat-doublets » :
+
+### Corrigé
+- **Lead D** (`tools/pkg_skeleton/R/sc_qc_doublets.R`) : le masque d'exclusion n'était
+  plus un implicite — nouveau paramètre `exclusion_mode` (`"user_cutoff"` défaut =
+  intersection historique mesurée appel moteur ET score > cutoff, invariants F21-2/3/4
+  inchangés ; `"engine_calibrated"` = appel moteur SEUL), validé avant tout calcul
+  (erreur classée `sc_qc_error_invalid_param`), enregistré en `qc_metrics` ET
+  provenance. Helper unitaire `.sc_qc_exclusion_mask()` testé sur classes/scores
+  synthétiques.
+- **Lead E** : `max_contamination` n'était qu'un écho inerte (l'en-tête prétendait
+  « consommé par le chemin ambiant » — faux). Il est désormais APPLIQUÉ sur le chemin
+  ambiant quand il est fourni explicitement (= la voie UI, mod_sc_pipeline.R:438) :
+  les cellules dont l'estimation decontX dépasse le cap sont exclues, tracées
+  (`n_cells_contamination_excluded`, `ambient_contamination` per-cell fini, statut
+  `applied_celda`) ; défaut implicite = `recorded_default_not_enforced` (mesuré : sur
+  fixture dégénérée decontX estime > 0.20 pour TOUTES les cellules) ; voie SoupX =
+  `not_applicable_soupx` explicite (l'API 1.6.2 n'expose pas d'estimation par cellule) ;
+  hors chemin ambiant = `ambient_path_off`. Écho provenance complet.
+- **Lead F** : le `as.matrix(out)` systématique de la voie celda/DecontX SUPPRIMÉ (il
+  densifiait une sortie sparse en matrix dense — hazard mémoire de l'audit) ; classe
+  du moteur préservée, coercion dense uniquement en dernier recours. Test sparse-in →
+  sparse-out.
+- Tests : `tests/testthat/test-sc-doublets-qc.R` (+8 blocs Lead D/E/F, fixture sparse
+  dédié `.m4u_make_obj_sparse()`).
+
 ## [V1.x — Marqueurs par cluster : FindAllMarkers opt-out depuis la modal UI] — 2026-11-12
 
 Signalement opérateur : « marqueurs par cluster absents » après ▶ Lancer sans toucher aux

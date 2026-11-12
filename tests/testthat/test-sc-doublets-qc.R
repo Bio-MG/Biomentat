@@ -291,3 +291,113 @@ test_that("post-ambiant : nCount_RNA et nFeature_RNA sont recalculés depuis cou
   expect_equal(as.numeric(res$obj@meta.data$nCount_RNA), as.numeric(Matrix::colSums(cnt_after)))
   expect_equal(as.numeric(res$obj@meta.data$nFeature_RNA), as.numeric(Matrix::colSums(cnt_after > 0)))
 })
+
+# ═════════════════════════════════════════════════════════════════════════════
+# P1.1 Leads D+E+F — audit externe #4 §4 (2026-11-12), exécution RED→GREEN
+#   D : deux modes d'exclusion explicites (appel moteur / cutoff utilisateur)
+#   E : max_contamination appliqué sur le chemin ambiant (statut honnête ailleurs)
+#   F : parcimonie préservée sur le chemin ambiant (plus de as.matrix systématique)
+# ═════════════════════════════════════════════════════════════════════════════
+
+.m4u_make_obj_sparse <- function(n_genes = 120L, n_cells = 80L, seed = 42) {
+  set.seed(seed)
+  mat <- matrix(rpois(n_genes * n_cells, lambda = 3), nrow = n_genes, ncol = n_cells)
+  mat[1:40, 1:(n_cells %/% 2)] <- mat[1:40, 1:(n_cells %/% 2)] * 8
+  mat[41:80, ((n_cells %/% 2) + 1):n_cells] <- mat[41:80, ((n_cells %/% 2) + 1):n_cells] * 8
+  rownames(mat) <- paste0("gene-", seq_len(n_genes))
+  colnames(mat) <- paste0("Cell-", seq_len(n_cells))
+  Seurat::CreateSeuratObject(counts = Matrix::Matrix(mat, sparse = TRUE))
+}
+
+test_that("Lead D : le masque d'exclusion expose deux modes explicites (unitaire)", {
+  classes <- c("doublet", "singlet", "doublet", "singlet")
+  scores  <- c(0.10, 0.90, 0.90, 0.10)
+  # engine_calibrated : appel moteur SEUL — le doublet à score bas est exclu
+  m1 <- .sc_qc_exclusion_mask(classes, scores, cutoff = 0.25, mode = "engine_calibrated")
+  expect_identical(as.logical(m1), c(TRUE, FALSE, TRUE, FALSE))
+  # user_cutoff : intersection historique (appel moteur ET score > cutoff)
+  m2 <- .sc_qc_exclusion_mask(classes, scores, cutoff = 0.25, mode = "user_cutoff")
+  expect_identical(as.logical(m2), c(FALSE, FALSE, TRUE, FALSE))
+})
+
+test_that("Lead D : mode par défaut = user_cutoff, enregistré en qc_metrics ET provenance", {
+  res <- sc_filter_doublets_and_ambient(.m4u_make_obj(), params = list(seed = 42))
+  expect_identical(res$qc_metrics$exclusion_mode, "user_cutoff")
+  expect_identical(as.character(res$provenance$parameters$exclusion_mode), "user_cutoff")
+})
+
+test_that("Lead D : mode inconnu → erreur classée sc_qc_error_invalid_param", {
+  err <- tryCatch(
+    sc_filter_doublets_and_ambient(.m4u_make_obj(),
+                                   params = list(seed = 42, exclusion_mode = "aggressive")),
+    error = function(e) e
+  )
+  expect_s3_class(err, "sc_qc_error_invalid_param")
+  expect_s3_class(err, "sc_qc_error")
+})
+
+test_that("Lead E : chemin ambiant celda applique max_contamination et le trace", {
+  skip_if_not_installed("celda")
+  n_in <- ncol(.m4u_make_obj())
+  # Fourni EXPLICITEMENT (= la voie UI, mod_sc_pipeline.R:438) → appliqué.
+  # Cap = 1 : rien ne dépasse (fixture dégénérée : decontX estime > 0.20 pour
+  # TOUTES les cellules — mesuré), mais le statut applied_celda est tracé ;
+  # le contre-factuel ci-dessous prouve que le cap exclut réellement.
+  res <- sc_filter_doublets_and_ambient(.m4u_make_obj(),
+                                        params = list(run_ambient = TRUE, seed = 42,
+                                                      max_contamination = 1))
+  expect_true(isTRUE(res$qc_metrics$max_contamination_applied))
+  expect_identical(as.character(res$qc_metrics$max_contamination_status), "applied_celda")
+  contam <- res$qc_metrics$ambient_contamination
+  expect_length(contam, n_in)                      # per-cell ENTRÉE, pré-filtre
+  expect_true(all(is.finite(contam)))
+  expect_true(all(contam >= 0 & contam <= 1))
+  expect_identical(as.numeric(res$qc_metrics$n_cells_contamination_excluded), 0)
+})
+
+test_that("Lead E : contre-factuel — max_contamination bas n'exclut jamais plus que haut", {
+  skip_if_not_installed("celda")
+  r_lo <- tryCatch(
+    sc_filter_doublets_and_ambient(.m4u_make_obj(),
+                                   params = list(run_ambient = TRUE, seed = 42,
+                                                 max_contamination = 0)),
+    error = function(e) e)
+  r_hi <- sc_filter_doublets_and_ambient(.m4u_make_obj(),
+                                         params = list(run_ambient = TRUE, seed = 42,
+                                                       max_contamination = 1))
+  if (inherits(r_lo, "sc_qc_error_empty_result")) {
+    # Cas extrême assumé : contamination > 0 partout → refus classé (contrat total)
+    expect_s3_class(r_lo, "sc_qc_error_empty_result")
+    expect_identical(as.numeric(r_hi$qc_metrics$n_cells_contamination_excluded), 0)
+  } else {
+    expect_true(r_lo$qc_metrics$n_cells_contamination_excluded >=
+                  r_hi$qc_metrics$n_cells_contamination_excluded)
+    expect_lte(r_lo$qc_metrics$n_cells_retained, r_hi$qc_metrics$n_cells_retained)
+  }
+})
+
+test_that("Lead E : hors chemin ambiant → statut explicite ambient_path_off (pas de mensonge)", {
+  res <- sc_filter_doublets_and_ambient(.m4u_make_obj(), params = list(seed = 42))
+  expect_false(isTRUE(res$qc_metrics$max_contamination_applied))
+  expect_identical(as.character(res$qc_metrics$max_contamination_status), "ambient_path_off")
+})
+
+test_that("Lead F : counts ambiant celda restent parcimonieux quand l'entrée est sparse", {
+  skip_if_not_installed("celda")
+  obj <- .m4u_make_obj_sparse()
+  expect_s4_class(SeuratObject::GetAssayData(obj, assay = "RNA", layer = "counts"),
+                  "sparseMatrix")
+  res <- sc_filter_doublets_and_ambient(obj, params = list(run_ambient = TRUE, seed = 42))
+  cnt_after <- SeuratObject::GetAssayData(res$obj, assay = "RNA", layer = "counts")
+  expect_true(inherits(cnt_after, "sparseMatrix"))
+})
+
+test_that("Lead E : défaut implicite (paramètre absent) → enregistré NON appliqué, statut honnête", {
+  skip_if_not_installed("celda")
+  res <- sc_filter_doublets_and_ambient(.m4u_make_obj(),
+                                        params = list(run_ambient = TRUE, seed = 42))
+  expect_false(isTRUE(res$qc_metrics$max_contamination_applied))
+  expect_identical(as.character(res$qc_metrics$max_contamination_status),
+                   "recorded_default_not_enforced")
+  expect_identical(as.numeric(res$qc_metrics$n_cells_contamination_excluded), 0)
+})
