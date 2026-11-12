@@ -729,8 +729,10 @@ test_that("the hotspot table is floored ONLY below the breakpoint, by a measured
   tail_after <- substring(flat, q)
   expect_match(tail_after, "min-height:\\s*300px",
                info = "the table floor must be INSIDE the narrow-only media query, or the wide widths change")
-  # and it must not also appear outside: count the declarations, expect exactly one
-  expect_identical(length(gregexpr("min-height", flat, fixed = TRUE)[[1]]), 1L)
+  # count the declarations: exactly TWO — the table floor above, and the grid's
+  # min-content floor OUTSIDE the query (its own block below). Any third min-height in
+  # this panel stylesheet is a rule nobody measured.
+  expect_identical(length(gregexpr("min-height", flat, fixed = TRUE)[[1]]), 2L)
 
   # the floor clears the measured defect and stays under the natural height, so DT still
   # paginates and scrolls instead of being handed a box taller than its content
@@ -744,6 +746,43 @@ test_that("the hotspot table is floored ONLY below the breakpoint, by a measured
                                              as.integer(.MEASURED_TABLE_H_PX[["1920"]])))
   expect_true(.HOTSPOT_TABLE_FLOOR_PX <= max(as.integer(.MEASURED_TABLE_H_PX[["1400"]]),
                                              as.integer(.MEASURED_TABLE_H_PX[["1920"]])))
+})
+
+test_that("the hotspot grid carries a min-content floor OUTSIDE the narrow-only query", {
+  # The clipping measured live at 1920x1080 (2026-11-12): the grid ELEMENT is itself an
+  # html-fill-item (flex: 1 1 auto; min-height: 0) inside the hotspots pane's flex
+  # column, while `row_heights` pins only the TRACK (593.3 px = header 40.7 + body 552.6
+  # incl. the declared 520 px plot). When the pane budget is smaller than the track,
+  # flex shrinks the BOX (measured 593.3 -> 322.2 px) while the track stays 593.3 — CSS
+  # grid tracks never follow the flex-resolved box — so the two plot cards overflow the
+  # grid box with overflow: visible and paint over the DT table and the export button
+  # below (card bottom y=997.7 vs table top y=742.5 = 255 px covered). min-height:
+  # min-content on the grid element itself forbids the box from shrinking below its own
+  # track, and the qc card body (overflow: auto) becomes the single scroll window again.
+  # NO fixed pixel constant: min-content follows the cards' actual content, so a wrapped
+  # or translated header cannot invalidate it — the reason fixed rows/heights were
+  # already rejected in the vertical slice above.
+  css <- .tsl_hotspot_css(file.path("modules", "spatial", "mod_spatial_qc.R"))
+  flat <- gsub("(?s)/\\*.*?\\*/", "", paste(css, collapse = "\n"), perl = TRUE)
+  flat <- gsub("[[:space:]]+", " ", flat)
+
+  # the rule exists and addresses the grid through its OWN scoping class — same
+  # discipline as the stacking rule: a narrow compound selector, no global override
+  g <- regexpr("\\.bslib-grid\\.ts-qc-hotspot-grid\\s*\\{\\s*min-height:\\s*min-content;", flat)
+  expect_true(g > 0L,
+              info = "the grid element needs a min-height: min-content floor scoped to ts-qc-hotspot-grid, or the flex squeeze clips the plots")
+
+  # structurally OUTSIDE the media query: BEFORE its opening brace. The defect exists
+  # at wide viewports too (the pane budget is viewport-derived), so a narrow-only rule
+  # would leave 1920x1080 broken.
+  q <- regexpr("@media[^{]*max-width:\\s*1399\\.98px[^{]*\\{", flat)
+  expect_true(q > 0L, info = "the narrow-only media query is missing")
+  expect_true(g > 0L && g < q,
+              info = "the grid floor must sit BEFORE the narrow-only media query: the clipping is measured at 1920x1080 too")
+
+  # and the panel stylesheet still carries no !important anywhere
+  expect_false(grepl("!important", flat, fixed = TRUE),
+               info = "the grid floor must win on specificity, not on !important")
 })
 
 test_that("the table floor addresses the id the module ACTUALLY produces, not a guessed one", {
