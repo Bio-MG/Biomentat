@@ -2958,6 +2958,34 @@ sc_velocity_optin_banner_label <- function() {
     "Vecteurs calculés dans l'app (scVelo, opt-in) — jamais dans l'autopipeline."
 }
 
+.velocity_ensure_reticulate_python <- function() {
+    if (!requireNamespace("reticulate", quietly = TRUE)) return(FALSE)
+    if (isTRUE(tryCatch(reticulate::py_available(initialize = FALSE), error = function(e) FALSE))) {
+        return(TRUE)
+    }
+    if (!nzchar(Sys.getenv("RETICULATE_PYTHON", unset = ""))) {
+        cur <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+        for (i in seq_len(8L)) {
+            cand <- file.path(cur, "python_env_sccoda",
+                              if (.Platform$OS.type == "windows") file.path("Scripts", "python.exe") else file.path("bin", "python"))
+            if (file.exists(cand)) {
+                cand_clean <- normalizePath(cand, winslash = "/", mustWork = FALSE)
+                Sys.setenv(RETICULATE_PYTHON = cand_clean)
+                tryCatch(reticulate::use_virtualenv(file.path(cur, "python_env_sccoda"), required = FALSE),
+                         error = function(e) reticulate::use_python(cand_clean, required = FALSE))
+                break
+            }
+            parent <- dirname(cur)
+            if (identical(parent, cur)) break
+            cur <- parent
+        }
+    } else {
+        py_env <- Sys.getenv("RETICULATE_PYTHON")
+        tryCatch(reticulate::use_python(py_env, required = FALSE), error = function(e) NULL)
+    }
+    TRUE
+}
+
 #' Disponibilité du moteur scVelo (Python) pour la voie opt-in O13
 #'
 #' @return TRUE seulement si reticulate est installé ET le module python
@@ -2965,6 +2993,7 @@ sc_velocity_optin_banner_label <- function() {
 #' @keywords internal
 sc_velocity_scvelo_available <- function() {
     if (!requireNamespace("reticulate", quietly = TRUE)) return(FALSE)
+    .velocity_ensure_reticulate_python()
     tryCatch(isTRUE(reticulate::py_module_available("scvelo")),
              error = function(e) FALSE)
 }

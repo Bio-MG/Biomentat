@@ -80,6 +80,14 @@ Sys.setenv(
   TRANSCRIPTO_DEV_DRIVE_HB_INTERVAL = Sys.getenv("TRANSCRIPTO_DEV_DRIVE_HB_INTERVAL", "3")
 )
 
+if (!nzchar(Sys.getenv("RETICULATE_PYTHON", unset = ""))) {
+  .py_cand <- file.path(getwd(), "python_env_sccoda",
+                        if (.Platform$OS.type == "windows") file.path("Scripts", "python.exe") else file.path("bin", "python"))
+  if (file.exists(.py_cand)) {
+    Sys.setenv(RETICULATE_PYTHON = normalizePath(.py_cand, winslash = "/", mustWork = FALSE))
+  }
+}
+
 # ── THE ARM GATE MUST BE OPEN, or this launcher produces an INERT app ───────
 # `ts_drive_interactive()` is `isTRUE(interactive())` unless overridden, and
 # `Rscript` is NEVER interactive. Without the line below the poller's observer

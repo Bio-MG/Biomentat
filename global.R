@@ -45,6 +45,17 @@ options(future.globals.maxSize = 10000 * 1024^2)
 
 options(shiny.maxRequestSize = 5000 * 1024^2)
 
+# --- 1ter. PYTHON / RETICULATE ENVIRONNEMENT PAR DEFAUT ----------------------
+# Resolution automatique vers le venv projet python_env_sccoda (scCODA + scVelo)
+# si RETICULATE_PYTHON n'est pas deja explicitement defini dans l'environnement.
+if (!nzchar(Sys.getenv("RETICULATE_PYTHON", unset = ""))) {
+  .py_cand <- file.path(getwd(), "python_env_sccoda",
+                        if (.Platform$OS.type == "windows") file.path("Scripts", "python.exe") else file.path("bin", "python"))
+  if (file.exists(.py_cand)) {
+    Sys.setenv(RETICULATE_PYTHON = normalizePath(.py_cand, winslash = "/", mustWork = FALSE))
+  }
+}
+
 # --- 1bis. RENDU DES PLOTS : backend PNG EPINGLE + dimension MINIMALE -------
 # PLOT-S6. Deux defauts distincts, MESURES le 2026-09-15 ; le detail des mesures
 # et la raison d'etre des planchers sont dans tools/pkg_skeleton/R/plot_dims.R
