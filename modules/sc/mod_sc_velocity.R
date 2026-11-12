@@ -269,6 +269,7 @@ mod_sc_velocity_output_ui <- function(id) {
 
 mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
   moduleServer(id, function(input, output, session) {
+    ns <- session$ns
     # ── i18n proxy ──────────────────────────────────────────────────────────
     .tr <- function(key) {
       tr <- isolate(global_data$i18n)
@@ -372,7 +373,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       updateCheckboxInput(session, "velocity_strip_gene_version", label = .tr("Retirer les suffixes de version Ensembl (ex. .1, .2)"))
       updateCheckboxInput(session, "velocity_allow_low_overlap", label = .tr("Forcer l'alignement malgre un recouvrement < 80%"))
       updateActionButton(session, "velocity_validate", label = .tr("Valider les matrices velocity"))
-      updateSelectInput(session, "velocity_gene", label = .tr("Gene pour phase portrait"))
+      updateSelectizeInput(session, "velocity_gene", label = .tr("Gene pour phase portrait"), server = TRUE)
       updateSelectInput(session, "velocity_reduction", label = .tr("Reduction pour vecteurs"))
     }, ignoreInit = TRUE)
     velocity_status_rv <- reactiveVal(.tr("En attente d'import velocity..."))
@@ -493,11 +494,12 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         .tr("Objet Seurat modifie : reimportez et validez les donnees velocity.")
       )
 
-      updateSelectInput(
+      updateSelectizeInput(
         session,
         "velocity_gene",
         choices = character(0),
-        selected = character(0)
+        selected = character(0),
+        server = TRUE
       )
 
       updateCheckboxInput(
@@ -853,8 +855,8 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
                                   error = function(e) character(0)),
           unspliced    = validated$unspliced
         )
-        updateSelectInput(session, "velocity_gene", choices = gene_choices,
-                          selected = default_gene %||% gene_choices[1])
+        updateSelectizeInput(session, "velocity_gene", choices = gene_choices,
+                          selected = default_gene %||% gene_choices[1], server = TRUE)
 
         # 11. French status summary : statut canonique explicite (+ BUG 3
         # message when only coordinates exist). Validite technique uniquement —
