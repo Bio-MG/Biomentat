@@ -13232,6 +13232,10 @@
     {
       "fr": "Vue courante",
       "en": "Current view"
+    },
+    {
+      "fr": "Pool mirai indisponible — relancez l'application.",
+      "en": "mirai pool unavailable — restart the application."
     }
   ]
 }

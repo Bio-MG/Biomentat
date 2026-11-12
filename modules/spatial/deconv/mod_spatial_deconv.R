@@ -164,6 +164,23 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
         }
       }
 
+      # ── Garde pool (diagnostic live 2026-11-12 : 4 journaux deconv à 0 octet)
+      # Les daemons peuvent mourir en cours de session (RAM) : un mirai() émis
+      # sur un pool mort n'écrit JAMAIS la 1re ligne du journal puis attend le
+      # .timeout. Même doctrine que le couple SC/bulk (mod_sc.R:1870,
+      # mod_bulk_de_run.R:568) : on ARME — le watchdog d'init_spatial_daemons()
+      # respawn un pool épuisé — et on VÉRIFIE avant tout dispatch ; sans pool,
+      # notification honnête, pas d'invoke et PAS de reset_log (un journal
+      # tronqué puis jamais écrit = le fichier à 0 octet mesuré).
+      pool_ok <- requireNamespace("mirai", quietly = TRUE) &&
+        isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE)) &&
+        isTRUE(tryCatch(mirai::daemons_set(), error = function(e) FALSE))
+      if (!pool_ok) {
+        showNotification(.tr("Pool mirai indisponible — relancez l'application."),
+                         type = "error", duration = 10)
+        return()
+      }
+
       last_deconv_mode(input$mode)
       reset_log(log_file)
       shared_rv$deconv_params <- list(
@@ -200,6 +217,13 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
         if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("deconv_complete", layer2_extras = list(deconv_props = shared_rv$deconv_props))  # ASR-WIRING : point de pose (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §3.1)
         showNotification(.tr("Deconvolution terminee."), type = "message", duration = 5)
       } else if (deconv_task$status() == "error") {
+        # Journal honnête (cf. mod_spatial_deconv_refviz.R — diagnostic
+        # 2026-11-12 : « voir le log » pointait sur un fichier vide) : un
+        # daemon mort n'a rien écrit — c'est le côté app qui journalise
+        # l'erreur RÉELLE de la tâche, horodatée, pour le tracker.
+        err_txt <- tryCatch(conditionMessage(deconv_task$result()),
+                            error = function(e) conditionMessage(e))
+        write_mirai_log(log_file, paste0("ECHEC : ", err_txt))
         ceiling_txt <- switch(last_deconv_mode() %||% "?",
                               "labeltransfer" = "45 min",
                               "rctd"          = "40 min",

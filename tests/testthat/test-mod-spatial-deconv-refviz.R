@@ -175,6 +175,178 @@ test_that("la garde est conditionnelle : colonne présente ⇒ pas notre classe"
   if (!is.null(res)) expect_false("spatial_deconv_refviz_error" %in% res$class)
 })
 
+# =============================================================================
+# P-lane deconv (2026-11-12) — garde pool mirai + journal honnête
+# =============================================================================
+# Diagnostic LIVE (instance opérateur 6561, soirée 2026-11-12) : les 4
+# dernières sessions refviz ont un journal à 0 octet — `reset_log()` tronque
+# au clic, puis le worker mirai (mort, RAM) n'écrit JAMAIS la 1re ligne : le
+# module dispatchait SANS AUCUN appel de `ensure_app_daemons()` (seul le
+# couple SC/bulk arme le pool avant invoke — mod_sc.R:1870,
+# mod_bulk_de_run.R:568/757). Résultat mesuré : timeout muet de 20 min puis
+# « voir le journal » pointant sur un fichier vide.
+#
+# Contrats (ROUGE d'abord, règle 5) :
+#   (1) pool indisponible => invoke NON appelé + notification type "error"
+#       honnête, et le journal N'EST PAS tronqué par un clic qui ne part pas ;
+#   (2) statut "error" => le journal reçoit le VRAI texte d'erreur de la
+#       tâche, horodaté par le `write_mirai_log` RÉEL (le daemon mort n'a rien
+#       écrit — c'est le côté app qui journalise).
+#
+# Idiome : le VRAI bloc `observeEvent` est extrait par AST (helper-ast.R) et
+# levé dans un environnement enfant — jamais re-copié (cf. la série D4(a) de
+# test-mod-bulk-de-run.R). `mirai::daemons_set()` est un appel de NAMESPACE
+# (non doublable) : le chemin « pool OK » arme un VRAI daemon.
+# =============================================================================
+
+.RVZ_GUARD_FILE <- "modules/spatial/deconv/mod_spatial_deconv_refviz.R"
+
+# write_mirai_log RÉEL : le test de journal ne prouverait rien avec une copie.
+source_project_file("tools/pkg_skeleton/R/spatial_async.R")
+
+.rvz_lift <- function(envir, needle) {
+  f <- function() NULL
+  body(f) <- ts_ast_observe_block(.RVZ_GUARD_FILE, needle)
+  environment(f) <- envir
+  f
+}
+
+.rvz_run <- function(e, needle) {
+  f <- .rvz_lift(e, needle)
+  shiny::withReactiveDomain(shiny::MockShinySession$new(), f())
+  invisible(e)
+}
+
+.rvz_notif_recorder <- function(e) {
+  function(message, type = "message", duration = NULL, id = NULL, ...) {
+    e$notifs[[length(e$notifs) + 1L]] <- list(message = message, type = type)
+    paste0("id", length(e$notifs))
+  }
+}
+
+# req() avec la sémantique RÉELLE de Shiny (avortement silencieux) —
+# cf. test-mod-bulk-de-run.R:92-97.
+.rvz_req <- function(...) {
+  vals <- list(...)
+  dead <- vapply(vals, function(v) is.null(v) || length(v) == 0L || isFALSE(v),
+                 logical(1))
+  if (any(dead)) {
+    stop(structure(class = c("shiny.silent.error", "error", "condition"),
+                   list(message = "", call = NULL)))
+  }
+  if (length(vals)) vals[[1]] else invisible(NULL)
+}
+
+.rvz_guard_env <- function(pool_ok, log_file) {
+  e <- new.env(parent = globalenv())
+  e$`%||%` <- function(a, b) if (is.null(a)) b else a
+  e$notifs <- list()
+  e$invoked <- list()
+  e$showNotification <- .rvz_notif_recorder(e)
+  e$.tr <- function(key) key
+  e$req <- .rvz_req
+  e$reset_log <- function(file) {
+    e$reset_called <- TRUE
+    cat("", file = file)
+    invisible(file)
+  }
+  # Le point d'injection du garde : pool_ok = FALSE simule « mirai absent ou
+  # init/verification en echec » — le tryCatch du bloc rend le chemin entier.
+  e$ensure_app_daemons <- function() isTRUE(pool_ok)
+  e$ref_viz_log_file <- log_file
+  e$ref_viz_task <- list(
+    invoke = function(...) {
+      e$invoked[[length(e$invoked) + 1L]] <- list(...)
+      invisible(NULL)
+    },
+    status = function() NULL,
+    result = function() NULL)
+  e$input <- list(btn_ref_viz = 1L, ref_viz_reduction = "umap", ref_source = NULL)
+  e$global_data <- list(i18n = NULL, spatial_reference = NULL)
+  e$ref_state <- list(obj = NULL)
+  e$input_ref_celltype_col <- function() NULL
+  e
+}
+
+.rvz_status_env <- function(log_file) {
+  e <- new.env(parent = globalenv())
+  e$notifs <- list()
+  e$showNotification <- .rvz_notif_recorder(e)
+  e$.tr <- function(key) key
+  e$ref_viz_log_file <- log_file
+  e$ref_viz_result <- function(x) {
+    if (!missing(x)) e$last_result <<- x
+    invisible(NULL)
+  }
+  e$ref_viz_task <- list(status = function() NULL, result = function() NULL)
+  e
+}
+
+# ---------------------------------------------------------------------------
+# (1) POOL MORT => invoke NON appelé + notification honnête, journal intact
+# ---------------------------------------------------------------------------
+test_that("P-lane refviz : pool mirai mort => invoke NON appelé + notification error", {
+  log_file <- tempfile(fileext = ".log")
+  on.exit(unlink(log_file), add = TRUE)
+  e <- .rvz_guard_env(pool_ok = FALSE, log_file = log_file)
+  .rvz_run(e, "btn_ref_viz")
+
+  expect_length(e$invoked, 0L)
+  expect_length(e$notifs, 1L)
+  expect_identical(e$notifs[[1]]$type, "error",
+                   info = "une pool mort est une ERREUR, pas un avertissement de branche")
+  expect_true(grepl("Pool mirai indisponible", e$notifs[[1]]$message, fixed = TRUE),
+              info = "le message honnête nomme la panne, pas un faux « chargez une référence »")
+  # Le journal ne doit PAS être tronqué par un clic qui ne part pas :
+  # c'est la moitié du bug mesuré (0 octet parce que reset_log a couru sans
+  # qu'aucun worker n'écrive jamais la ligne suivante).
+  expect_false(isTRUE(e$reset_called),
+               info = "reset_log() AVANT la garde recrée le journal vide")
+})
+
+# ---------------------------------------------------------------------------
+# (1bis) POOL OK => la garde n'entrave pas le dispatch (chemin partagé)
+# ---------------------------------------------------------------------------
+test_that("P-lane refviz : pool OK => invoke appelé (mode shared, log_file câblé)", {
+  skip_if_not_installed("mirai")
+  on.exit(tryCatch(mirai::daemons(0), error = function(e) NULL), add = TRUE)
+  if (!mirai::daemons_set()) suppressMessages(mirai::daemons(1))
+  log_file <- tempfile(fileext = ".log")
+  on.exit(unlink(log_file), add = TRUE)
+  e <- .rvz_guard_env(pool_ok = TRUE, log_file = log_file)
+  e$global_data$spatial_reference <- list(path = "ref_manifest.rds", celltype_col = "ct")
+  .rvz_run(e, "btn_ref_viz")
+
+  expect_length(e$invoked, 1L)
+  expect_identical(e$invoked[[1]]$mode, "shared")
+  expect_identical(e$invoked[[1]]$log_file, log_file)
+})
+
+# ---------------------------------------------------------------------------
+# (2) STATUT "error" => le journal reçoit le VRAI texte d'erreur de la tâche
+# ---------------------------------------------------------------------------
+test_that("P-lane refviz : statut error => journal horodaté avec l'erreur RÉELLE", {
+  log_file <- tempfile(fileext = ".log")
+  cat("", file = log_file)  # reset_log a déjà couru : le fichier existe, vide
+  on.exit(unlink(log_file), add = TRUE)
+  e <- .rvz_status_env(log_file)
+  e$ref_viz_task <- list(
+    status = function() "error",
+    result = function() stop("le pool mirai est mort : aucune connection worker"))
+  .rvz_run(e, "ref_viz_task$status")
+
+  lines <- readLines(log_file, warn = FALSE)
+  expect_true(any(grepl("ECHEC :", lines, fixed = TRUE)),
+              info = paste("journal lu :", paste(lines, collapse = " || ")))
+  expect_true(any(grepl("le pool mirai est mort : aucune connection worker",
+                        lines, fixed = TRUE)),
+              info = "le TEXTE RÉEL de la tâche, pas un message générique")
+  expect_true(any(grepl("^[0-9]{2}:[0-9]{2}:[0-9]{2} \\| ECHEC :", lines)),
+              info = "ligne horodatée par write_mirai_log (même format que le daemon)")
+  expect_true(length(e$notifs) >= 1L && e$notifs[[1]]$type == "error",
+              info = "la notification « voir le journal » reste en place")
+})
+
 # ---------------------------------------------------------------------------
 # Verrou source : mod_spatial_deconv_refviz.R ne doit plus contribuer aucun C10
 # ---------------------------------------------------------------------------
