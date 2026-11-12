@@ -108,7 +108,30 @@ convert_seurat_to_bpcells <- function(obj, dir = NULL) {
 smart_scale_data <- function(obj, extra_features = character(0),
                              vars.to.regress = NULL) {
   var_feat <- tryCatch(VariableFeatures(obj), error = function(e) character(0))
-  if (length(var_feat) == 0) var_feat <- rownames(obj)   # safety net if VST wasn't run
+  if (length(var_feat) == 0) {
+    # FIX P1.1 Lead G (audit externe #4 §4, 2026-11-12) : le repli silencieux
+    # historique `var_feat <- rownames(obj)` scalait TOUS les gènes — précisé-
+    # ment quand la sélection HVG amont est absente ou a échoué — sous une
+    # étiquette « RAM-safe ». Politique bornée explicite : sélection HVG vst
+    # (plafond Seurat 2000) exécutée ICI et TRACÉE par un warning ; si elle ne
+    # produit rien, erreur actionable — jamais de scaling du génome entier
+    # silencieux.
+    warning("smart_scale_data() : VariableFeatures vide (FindVariableFeatures non exécuté en amont ?) — sélection HVG bornée explicite (vst, nfeatures=2000) au lieu du scaling du génome entier.",
+            call. = FALSE)
+    obj <- tryCatch(
+      Seurat::FindVariableFeatures(obj, selection.method = "vst",
+                                   nfeatures = 2000L, verbose = FALSE),
+      error = function(e) obj)
+    var_feat <- tryCatch(VariableFeatures(obj), error = function(e) character(0))
+    if (length(var_feat) == 0) {
+      stop(errorCondition(
+        paste0("smart_scale_data() : aucune feature variable sélectionnable ",
+               "(HVG vst vide) — refus de scaler tout le génome. Exécutez ",
+               "FindVariableFeatures() en amont ou vérifiez l'objet (gènes ",
+               "constants / objet dégénéré)."),
+        class = "sc_bpcells_error"))
+    }
+  }
   feats <- unique(c(var_feat, intersect(extra_features, rownames(obj))))
   if (is.null(vars.to.regress)) {
     ScaleData(obj, features = feats, verbose = FALSE)

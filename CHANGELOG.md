@@ -30,6 +30,22 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — P1.1 Leads G+H : scaling HVG borné explicite + repli synchrone traçable/refusable] — 2026-11-13
+
+Audit externe #4 §4 (2026-11-12), RED→GREEN (sc-bpcells 32/0 ; core-jobs 22/0).
+
+### Corrigé
+- **Lead G** (`tools/pkg_skeleton/R/sc_bpcells.R`) : `smart_scale_data()` ne retombe plus
+  silencieusement sur TOUS les gènes (`var_feat <- rownames(obj)` retiré) précisément
+  quand la sélection HVG amont est absente — repli = sélection HVG vst bornée explicite
+  (nfeatures 2000) TRACÉE par warning ; si rien de sélectionnable → erreur actionable
+  `sc_bpcells_error`, jamais de scaling du génome entier sous l'étiquette « RAM-safe ».
+- **Lead H** (`tools/pkg_skeleton/R/jobs.R`) : le repli synchrone de `run_job()` est
+  désormais TRAÇABLE (nouveau `job_label` — le message de repli nomme le job) et
+  REFUSABLE (`allow_sync_fallback = FALSE` → erreur classée `run_job_error_no_pool`
+  au lieu de déplacer silencieusement une tâche chère sur le process Shiny principal) ;
+  défaut inchangé (TRUE, comportement historique).
+
 ## [V1.x — P1.1 Leads D+E+F : modes d'exclusion doublets explicites + cap max_contamination opérationnel + parcimonie ambiante] — 2026-11-13
 
 Audit externe #4 §4 (2026-11-12), exécution RED→GREEN (suite `sc-doublets-qc` :

@@ -108,3 +108,29 @@ test_that("run_job async reproduces the caller's RNG stream (RNGkind trap)", {
     sync_val
   ))
 })
+
+# ── P1.1 Lead H — audit externe #4 §4 (2026-11-12) : repli synchrone TRAÇABLE
+# (nom du job dans le message) et REFUSABLE (allow_sync_fallback = FALSE) —
+# une tâche chère ne doit jamais se déplacer silencieusement sur le process
+# Shiny principal. ─────────────────────────────────────────────────────────────
+
+test_that("Lead H : le message de repli nomme le job (job_label)", {
+  skip_if_not_installed("mirai")
+  on.exit(tryCatch(mirai::daemons(0), error = function(e) NULL), add = TRUE)
+  if (mirai::daemons_set()) mirai::daemons(0)
+  expect_warning(
+    res <- run_job(function(x) x + 1, 1, async = TRUE, job_label = "lead-h-probe"),
+    regexp = "lead-h-probe")
+  expect_equal(res, 2)
+})
+
+test_that("Lead H : allow_sync_fallback = FALSE refuse au lieu de bloquer le process principal", {
+  skip_if_not_installed("mirai")
+  on.exit(tryCatch(mirai::daemons(0), error = function(e) NULL), add = TRUE)
+  if (mirai::daemons_set()) mirai::daemons(0)
+  err <- tryCatch(
+    run_job(function(x) x + 1, 1, async = TRUE,
+            allow_sync_fallback = FALSE, job_label = "refus"),
+    error = function(e) e)
+  expect_s3_class(err, "run_job_error_no_pool")
+})

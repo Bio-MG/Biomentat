@@ -195,3 +195,33 @@ test_that("convert_seurat_to_bpcells preserve TOUTES les colonnes de meta.data",
   expect_identical(conv2$n_cells, ncol(new_obj))
   expect_identical(conv2$n_genes, nrow(new_obj))
 })
+
+# ── P1.1 Lead G — audit externe #4 §4 (2026-11-12) : « safe scaling » ne retombe
+# plus silencieusement sur TOUS les gènes — sélection HVG bornée explicite,
+# tracée par warning ; erreur actionable si rien de sélectionnable. ────────────
+
+.g_lead_make_obj <- function(seed = 1) {
+  set.seed(seed)
+  mat <- matrix(rpois(120 * 80, lambda = 3), nrow = 120, ncol = 80)
+  mat[1:20, 1:40] <- mat[1:20, 1:40] * 8
+  rownames(mat) <- paste0("gene-", seq_len(120))
+  colnames(mat) <- paste0("Cell-", seq_len(80))
+  obj <- Seurat::CreateSeuratObject(counts = mat)
+  Seurat::NormalizeData(obj, verbose = FALSE)
+}
+
+test_that("Lead G : VariableFeatures vide → HVG bornée explicite + warning (jamais le génome entier)", {
+  obj <- .g_lead_make_obj()
+  expect_warning(res <- smart_scale_data(obj), regexp = "HVG")
+  expect_gt(length(Seurat::VariableFeatures(res)), 0)
+  scaled <- rownames(SeuratObject::GetAssayData(res, layer = "scale.data"))
+  expect_setequal(scaled, Seurat::VariableFeatures(res))
+})
+
+test_that("Lead G : le repli silencieux tous-gènes est retiré du source", {
+  src <- readLines(file.path(ts_project_root(), "tools", "pkg_skeleton", "R",
+                             "sc_bpcells.R"), warn = FALSE)
+  # Pattern exact de la ligne de CODE historique (pas le commentaire qui la cite).
+  expect_false(any(grepl("if (length(var_feat) == 0) var_feat <- rownames(obj)",
+                         src, fixed = TRUE)))
+})

@@ -62,10 +62,19 @@
 #'   (defaut : le RNGkind de l'appelant, evalue paresseusement dans le
 #'   processus appelant). Sans cela un calcul stochastique ne rend PAS le meme
 #'   resultat qu'en synchrone (voir l'en-tete). NULL = ne rien restaurer.
+#' @param job_label Etiquette courte du job (optionnelle) — reprise dans les
+#'   messages de repli pour la traçabilité (audit #4 §4 Lead H, 2026-11-12 :
+#'   un repli synchrone doit etre identifiable dans les logs de session).
+#' @param allow_sync_fallback Defaut TRUE (comportement historique : repli
+#'   synchrone + warning si pas de pool). FALSE = REFUS classee
+#'   `run_job_error_no_pool` au lieu du repli — a utiliser pour les tâches
+#'   cheres qui ne doivent JAMAIS se deplacer silencieusement sur le process
+#'   Shiny principal (audit #4 §4 Lead H).
 #' @return Le resultat de fn(...), ou NULL (invisible) si on_error a absorbe
 #'   une erreur.
 run_job <- function(fn, ..., async = FALSE, on_progress = NULL, on_error = NULL,
-                    timeout_ms = NULL, rng_kind = RNGkind()) {
+                    timeout_ms = NULL, rng_kind = RNGkind(),
+                    job_label = NULL, allow_sync_fallback = TRUE) {
   if (!is.function(fn)) {
     stop("run_job() : 'fn' doit etre une fonction.", call. = FALSE)
   }
@@ -96,15 +105,28 @@ run_job <- function(fn, ..., async = FALSE, on_progress = NULL, on_error = NULL,
 
   if (!isTRUE(async)) return(.run_sync())
 
+  # ── Repli synchrone : TRAÇABLE (Lead H) et REFUSABLE (allow_sync_fallback) ─
+  .label <- if (is.null(job_label)) "" else paste0("[", job_label, "] ")
+  .fallback_or_refuse <- function(reason) {
+    msg <- paste0("run_job", .label, " : ", reason,
+                  " — repli SYNCHRONE (bloquant : tache executee sur le ",
+                  "process principal).")
+    if (!isTRUE(allow_sync_fallback)) {
+      stop(errorCondition(
+        paste0(msg, " Refus explicite (allow_sync_fallback = FALSE) : ",
+               "activez le pool ou passez en ExtendedTask cote module."),
+        class = "run_job_error_no_pool"))
+    }
+    warning(msg, call. = FALSE)
+  }
+
   # ── Chemin async — delegation au pattern mirai existant ───────────────────
   if (!requireNamespace("mirai", quietly = TRUE)) {
-    warning("Package 'mirai' absent : execution synchrone de secours pour ce job.",
-            call. = FALSE)
+    .fallback_or_refuse("Package 'mirai' absent")
     return(.run_sync())
   }
   if (!mirai::daemons_set()) {
-    warning("Aucun pool mirai actif (init_spatial_daemons() non appele) : ",
-            "execution synchrone de secours pour ce job.", call. = FALSE)
+    .fallback_or_refuse("Aucun pool mirai actif (init_spatial_daemons() non appele)")
     return(.run_sync())
   }
 
