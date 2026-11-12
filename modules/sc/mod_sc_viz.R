@@ -281,14 +281,43 @@ mod_sc_viz_output_ui <- function(id) {
                         choices = ts_export_format_choices_ui()),
             uiOutput(ns("export_fidelity_note")),
             downloadButton(ns("export_plot"), i18n$t("Exporter"))
-          )
+          ),
+          # Pastille tiroir état (CCC_NAV_DRAWER clôture C6, 2026-11-12) :
+          tags$button(type = "button",
+                      class = "btn btn-sm btn-outline-secondary flex-shrink-0",
+                      `data-bs-toggle` = "offcanvas",
+                      `data-bs-target` = paste0("#", ns("viz_drawer")),
+                      `aria-controls` = ns("viz_drawer"),
+                      icon("list-ul"), " ", i18n$t("Navigation & filtres"))
         )
       )
     ),
     uiOutput(ns("preview_badge")),
     uiOutput(ns("viz_category_badge")),
     div(style="height:650px;overflow:auto;",
-        uiOutput(ns("plot_container")))
+        uiOutput(ns("plot_container"))),
+    # Tiroir état (CCC_NAV_DRAWER clôture C6, 2026-11-12) — le panneau Viz est
+    # un CONTENEUR UNIQUE (aucune cible de saut) : le tiroir porte la seule
+    # moitié applicable du pattern — le RÉSUMÉ d'état vivant (catégorie,
+    # palette, réglages d'export sinon cachés dans le popover). PAS de nav,
+    # PAS de navset (déviation gelée par test-mod-sc-viz-drawer-ui.R).
+    tags$div(
+      id = ns("viz_drawer"), class = "offcanvas offcanvas-end", tabindex = "-1",
+      `aria-labelledby` = ns("viz_drawer_title"),
+      tags$div(class = "offcanvas-header",
+               h5(id = ns("viz_drawer_title"), class = "offcanvas-title",
+                  icon("list-ul"), " ", i18n$t("Navigation Viz")),
+               # .tr_plain (strip span) — JAMAIS de $t() brut en contexte
+               # attribut (BUG A11Y « Fermer », motif bc9c09a) :
+               tags$button(type = "button", class = "btn-close",
+                           `data-bs-dismiss` = "offcanvas",
+                           `aria-label` = .tr_plain("Fermer"))),
+      tags$div(class = "offcanvas-body",
+        h6(i18n$t("État de la vue")),
+        div(class = "small text-muted", `aria-live` = "polite",
+            uiOutput(ns("viz_drawer_summary")))
+      )
+    )
   )
 }
 
@@ -396,10 +425,10 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
 
     # Step 5 (UI reorg): maps the flat viz_type value back to its conceptual
     # group for display -- purely informational, no new reactive contract.
-    output$viz_category_badge <- renderUI({
-      req(input$viz_type)
-      # Make badge reactive to language switch
-      global_data$language
+    # CCC_NAV_DRAWER C6 (2026-11-12) : la carte est FACTORISÉE en helper LOCAL
+    # unique — consommé par le badge ET le résumé du tiroir (zéro divergence
+    # possible sur le libellé ; gel test-mod-sc-viz-drawer-ui.R : 1 définition).
+    .viz_category_label <- function(type) {
       .viz_category_map <- c(
         dim = .tr("Réductions"), reduction_3d = .tr("Visualisation 3D"),
         feature = .tr("Expression"), dot = .tr("Expression"),
@@ -409,10 +438,31 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
         heatmap = .tr("Heatmap"), heatmap_hier = .tr("Heatmap"),
         density_2d = .tr("Densité 2D")
       )
-      cat_label <- .viz_category_map[[input$viz_type]] %||% "Exploration"
+      .viz_category_map[[type]] %||% "Exploration"
+    }
+
+    output$viz_category_badge <- renderUI({
+      req(input$viz_type)
+      global_data$language
+      cat_label <- .viz_category_label(input$viz_type)
       div(class = "text-muted", style = "font-size:0.75em;margin-bottom:4px;",
           bsicons::bs_icon("diagram-3"),
           sprintf(" Bloc 1 — Exploration Core / %s", cat_label))
+    })
+
+    # ── CCC_NAV_DRAWER clôture C6 (2026-11-12) : résumé d'état du tiroir ──────
+    # La vue courante, la palette et les réglages d'export SINOIS CACHÉS dans
+    # le popover — consommés de l'état (jamais recalculés, jamais inventés).
+    output$viz_drawer_summary <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      li <- function(n, lab) tags$li(tags$strong(n), " ", lab)
+      tags$ul(class = "list-unstyled mb-0",
+              li(.viz_category_label(input$viz_type %||% ""), .tr("Vue courante")),
+              li(input$sc_palette %||% "\u2014", .tr("Palette")),
+              li(input$plot_theme %||% "\u2014", .tr("Thème")),
+              li(paste0(input$plot_width %||% "\u2014", " \u00d7 ",
+                        input$plot_height %||% "\u2014"), .tr("Dimensions")),
+              li(input$export_format %||% "\u2014", .tr("Format")))
     })
 
     # ── Helper: config snapshot (used ONLY for report basket — NOT for renders

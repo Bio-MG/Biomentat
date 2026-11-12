@@ -13216,6 +13216,22 @@
     {
       "fr": "État du rapport",
       "en": "Report state"
+    },
+    {
+      "fr": "Navigation Viz",
+      "en": "Viz navigation"
+    },
+    {
+      "fr": "État de la vue",
+      "en": "View state"
+    },
+    {
+      "fr": "Palette",
+      "en": "Palette"
+    },
+    {
+      "fr": "Vue courante",
+      "en": "Current view"
     }
   ]
 }
