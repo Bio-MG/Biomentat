@@ -712,9 +712,16 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     }
     comm_filtered <- reactive({
       req(comm_state$result)
+      ct <- comm_state$result$canonical_table
+      has_rank <- !is.null(ct) && "rank" %in% colnames(ct)
+      has_score <- !is.null(ct) && "score" %in% colnames(ct) && any(!is.na(ct$score))
+      r_max <- .num_filter(input$comm_f_rank_max)
+      s_min <- .num_filter(input$comm_f_score_min)
+      if (!is.na(r_max) && !has_rank) r_max <- NA_real_
+      if (!is.na(s_min) && !has_score) s_min <- NA_real_
       communication_apply_filters(comm_state$result, list(
-        score_min    = .num_filter(input$comm_f_score_min),
-        rank_max     = .num_filter(input$comm_f_rank_max),
+        score_min    = s_min,
+        rank_max     = r_max,
         p_value_max  = .num_filter(input$comm_f_pmax),
         pathways     = input$comm_f_pathways %||% character(0),
         senders      = input$comm_f_senders %||% character(0),
@@ -1540,6 +1547,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       cmp <- comm_state$ccc_comparison
       if (is.null(cmp) || is.null(cmp$flow_table)) {
         return(ts_datatable(data.frame(info = .tr("Table rankNet indisponible.")),
+                            page_length = 10L,
                             filename_base = "sc_comm_ccc_ranknet", filter = "none"))
       }
       # Table comparative = flux d'information par voie calculé depuis
@@ -1554,6 +1562,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       cmp <- comm_state$ccc_comparison
       if (is.null(cmp) || is.null(cmp$similarity)) {
         return(ts_datatable(data.frame(info = .tr("Matrice de similarité indisponible (calcul refusé ou non exécuté).")),
+                            page_length = 10L,
                             filename_base = "sc_comm_ccc_similarity", filter = "none"))
       }
       df <- as.data.frame(round(cmp$similarity, 3))

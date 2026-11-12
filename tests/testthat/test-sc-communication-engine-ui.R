@@ -153,7 +153,9 @@ test_that("the rank filter, collection selector, provenance and exports are wire
     'numericInput\\(ns\\("comm_f_rank_max"\\)(?s:.*?)min = 0',
     perl = TRUE
   )
-  expect_true(grepl("rank_max     = .num_filter(input$comm_f_rank_max)", .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("r_max <- .num_filter(input$comm_f_rank_max)", .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("if (!is.na(r_max) && !has_rank) r_max <- NA_real_", .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("rank_max     = r_max", .cc_ui_src, fixed = TRUE))
   expect_true(grepl("fs$dropped_rank", .cc_ui_src, fixed = TRUE))
   expect_true(grepl('updateNumericInput(session, "comm_f_rank_max", value = NA)', .cc_ui_src, fixed = TRUE))
   expect_true(grepl('selectInput(ns("comm_active_sample")', .cc_ui_src, fixed = TRUE))
