@@ -297,21 +297,40 @@ test_that("T1 SPMV-2 badges : chaque option porte son verdict (warn/danger = bad
                                "-- manque :", paste(setdiff(.spmv2_cols, got_values), collapse = ", "),
                                "| en trop :", paste(setdiff(got_values, .spmv2_cols), collapse = ", ")))
 
-      # warn/danger : badge + reason_key traduit DANS l'option (D3).
+      # P2.1 : AUCUN HTML dans <option> (les navigateurs ne rendent pas les
+      # badges dans <option>) ; les badges HTML vivent HORS <select>.
+      for (col in .spmv2_cols) {
+        opt <- .spmv2_option_of(html, col)
+        expect_true(length(opt) == 1L && nzchar(opt),
+                    info = paste("option absente pour", col))
+        if (length(opt) == 1L && nzchar(opt)) {
+          opt_inner <- sub("^<option[^>]*>(.*)</option>$", "\\1", opt)
+          expect_false(grepl("<[a-zA-Z!/]", opt_inner),
+                       info = paste("HTML interdit dans <option> pour", col, ":", opt_inner))
+        }
+      }
+
+      outside_select <- gsub("(?s)<select\\b[^>]*>.*?</select>", "", html, perl = TRUE)
+      verdict_items <- as.character(regmatches(
+        outside_select,
+        gregexpr("(?s)<li[^>]*class=\"[^\"]*spmv2-verdict-item[^\"]*\"[^>]*>.*?</li>",
+                 outside_select, perl = TRUE)
+      )[[1]])
+
+      # warn/danger : badge + reason_key traduit HORS <select> (liste de verdicts).
       keys <- list()
       for (col in .spmv2_cols) {
         keys[[col]] <- spatial_meta_col_validation(st$meta, col)$reason_key
       }
       for (col in c(.spmv2_warn, .spmv2_danger)) {
-        opt <- .spmv2_option_of(html, col)
-        expect_true(length(opt) == 1L && nzchar(opt),
-                    info = paste("option absente pour", col))
-        if (length(opt) == 1L && nzchar(opt)) {
-          expect_true(grepl(.spmv2_badge_pat, opt),
-                      info = paste("AUCUN marqueur de badge visible sur l'option", col,
-                                   "-- chaque option warn/danger doit porter son verdict (§6 :140)"))
-          expect_true(nzchar(keys[[col]]) && grepl(keys[[col]], opt, fixed = TRUE),
-                      info = paste("la reason_key du composant doit etre rendue (traduite) sur l'option",
+        item <- verdict_items[grepl(paste0('data-col="', col, '"'), verdict_items, fixed = TRUE)]
+        expect_true(length(item) == 1L && nzchar(item),
+                    info = paste("verdict HTML hors-<select> absent pour", col))
+        if (length(item) == 1L && nzchar(item)) {
+          expect_true(grepl(.spmv2_badge_pat, item),
+                      info = paste("AUCUN marqueur de badge visible hors-<select> pour", col))
+          expect_true(nzchar(keys[[col]]) && grepl(keys[[col]], item, fixed = TRUE),
+                      info = paste("la reason_key doit etre rendue hors-<select> pour",
                                    col, ":", keys[[col]]))
         }
       }
@@ -319,8 +338,6 @@ test_that("T1 SPMV-2 badges : chaque option porte son verdict (warn/danger = bad
       # ok : ni marqueur warn/danger, ni raison non-ok (D3 -- « rien ou vert »).
       for (col in .spmv2_ok) {
         opt <- .spmv2_option_of(html, col)
-        expect_true(length(opt) == 1L && nzchar(opt),
-                    info = paste("option absente pour", col))
         if (length(opt) == 1L && nzchar(opt)) {
           expect_false(grepl(.spmv2_badwarn_pat, opt),
                        info = paste("l'option ok", col, "porte un marqueur warn/danger -- interdit"))
@@ -328,6 +345,19 @@ test_that("T1 SPMV-2 badges : chaque option porte son verdict (warn/danger = bad
             if (nzchar(keys[[other]])) {
               expect_false(grepl(keys[[other]], opt, fixed = TRUE),
                            info = paste("l'option ok", col, "fuit la raison de", other))
+            }
+          }
+        }
+        item <- verdict_items[grepl(paste0('data-col="', col, '"'), verdict_items, fixed = TRUE)]
+        expect_true(length(item) == 1L && nzchar(item),
+                    info = paste("verdict HTML hors-<select> absent pour ok", col))
+        if (length(item) == 1L && nzchar(item)) {
+          expect_false(grepl(.spmv2_badwarn_pat, item),
+                       info = paste("le verdict ok", col, "porte un marqueur warn/danger -- interdit"))
+          for (other in c(.spmv2_warn, .spmv2_danger)) {
+            if (nzchar(keys[[other]])) {
+              expect_false(grepl(keys[[other]], item, fixed = TRUE),
+                           info = paste("le verdict ok", col, "fuit la raison de", other))
             }
           }
         }

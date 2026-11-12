@@ -257,20 +257,38 @@
     verdict_levels <- vapply(verdicts, function(v) v$level, character(1))
     choices <- cols[order(match(verdict_levels, c("ok", "warn", "danger")), method = "radix")]
 
-    # Badge par option (§4b) — pictogramme + raison traduite (données et clés
-    # i18n échappées via htmltools::htmlEscape — shiny ne l'exporte pas, mesuré :
-    # les reason_keys SPMV-1, ASCII sans & < >, passent telles quelles).
+    # Libellé texte brut pour <option> (les navigateurs ne peignent pas de HTML
+    # dans <option>) ; les badges HTML sont rendus en liste sous le <select>.
     .opt_label <- function(cn) {
       v <- verdicts[[cn]]
       if (identical(v$level, "ok")) {
-        paste0('<span class="badge bg-success">',
-               .t_fmt(.tr("{n} classes"), n = v$detail$n_levels %||% ""),
-               '</span> ', htmltools::htmlEscape(cn))
+        sprintf("%s (%s)", cn, .t_fmt(.tr("{n} classes"), n = v$detail$n_levels %||% ""))
+      } else {
+        sym <- if (identical(v$level, "danger")) "\u26d4" else "\u26a0"
+        sprintf("%s %s — %s", sym, cn, .tr(v$reason_key))
+      }
+    }
+
+    .verdict_item <- function(cn) {
+      v <- verdicts[[cn]]
+      if (identical(v$level, "ok")) {
+        tags$li(
+          class = "spmv2-verdict-item d-flex align-items-baseline gap-1 mb-1",
+          `data-col` = cn,
+          tags$span(class = "badge bg-success",
+                    .t_fmt(.tr("{n} classes"), n = v$detail$n_levels %||% "")),
+          tags$code(cn)
+        )
       } else {
         sym <- if (identical(v$level, "danger")) "\u26d4" else "\u26a0"
         cls <- if (identical(v$level, "danger")) "bg-danger text-white" else "bg-warning text-dark"
-        paste0('<span class="badge ', cls, '">', sym, '</span> ', htmltools::htmlEscape(cn),
-               " — ", htmltools::htmlEscape(.tr(v$reason_key)))
+        tags$li(
+          class = "spmv2-verdict-item d-flex align-items-baseline gap-1 mb-1",
+          `data-col` = cn,
+          tags$span(class = paste("badge", cls), sym),
+          tags$code(cn),
+          tags$span(" — ", .tr(v$reason_key))
+        )
       }
     }
 
@@ -307,8 +325,10 @@
                            lapply(choices, function(cn) {
                              tags$option(value = cn,
                                          selected = if (identical(cn, sel)) NA,
-                                         HTML(.opt_label(cn)))
-                           }))),
+                                         .opt_label(cn))
+                           })),
+               tags$ul(class = "list-unstyled small mt-1 mb-2",
+                       lapply(choices, .verdict_item))),
       # Colonne retenue warn/danger : avertissement visible + case « Je
       # confirme » (ok ne l'exige pas).
       if (sel_is_warn || sel_is_danger) {
