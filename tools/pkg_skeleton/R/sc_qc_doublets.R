@@ -127,10 +127,10 @@
 }
 
 #' Métriques par cellule (nCount_RNA / nFeature_RNA) — meta.data si fiable,
-#' recalcul depuis les counts sinon.
-.sc_qc_cell_metrics <- function(obj, counts_mat) {
-  nc <- as.numeric(obj@meta.data$nCount_RNA)
-  nf <- as.numeric(obj@meta.data$nFeature_RNA)
+#' recalcul depuis les counts sinon (ou si recompute = TRUE, ex. post-ambiant).
+.sc_qc_cell_metrics <- function(obj, counts_mat, recompute = FALSE) {
+  nc <- if (isTRUE(recompute)) numeric(0) else as.numeric(obj@meta.data$nCount_RNA)
+  nf <- if (isTRUE(recompute)) numeric(0) else as.numeric(obj@meta.data$nFeature_RNA)
   if (length(nc) != ncol(obj) || !all(is.finite(nc))) {
     nc <- as.numeric(Matrix::colSums(counts_mat))
   }
@@ -263,17 +263,19 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
   batch_var <- params$batch_var
   if (!is.null(batch_var)) batch_var <- as.character(batch_var)[1L]
 
+  tod_mat <- params$tod_mat
+
   # ── Garde ambiant AVANT tout calcul (feature 20 : jamais de repli silencieux)
   ambient_engine <- NULL
   if (run_ambient) {
-    if (requireNamespace("SoupX", quietly = TRUE)) {
+    if (!is.null(tod_mat) && requireNamespace("SoupX", quietly = TRUE)) {
       ambient_engine <- "SoupX"
     } else if (requireNamespace("celda", quietly = TRUE)) {
       ambient_engine <- "celda"
     } else {
       stop(errorCondition(
-        paste0("Décontamination RNA ambiante demandée (run_ambient = TRUE) mais aucun moteur n'est installé : ",
-               "le package 'SoupX' ou 'celda' (fournissant DecontX) est requis. ",
+        paste0("Décontamination RNA ambiante demandée (run_ambient = TRUE) mais aucun moteur utilisable n'est disponible : ",
+               "le package 'celda' (DecontX) est requis sans matrice de droplets bruts (tod_mat), ou 'SoupX' avec tod_mat. ",
                "Aucun repli silencieux sur données brutes n'est autorisé (feature 20)."),
         class = c("sc_ambient_package_missing", "sc_qc_error")))
     }
@@ -343,7 +345,7 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
   counts_out <- NULL
   if (run_ambient) {
     corrected <- tryCatch(
-      .sc_qc_ambient_decontaminate(obj, cnt_in, seed),
+      .sc_qc_ambient_decontaminate(obj, cnt_in, seed, tod_mat = tod_mat),
       error = function(e) stop(errorCondition(
         paste0("Décontamination ambiante (", ambient_engine,
                ") échouée — aucun repli silencieux sur données brutes : ",
@@ -362,7 +364,7 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
   if (run_ambient && !is.null(counts_out)) {
     ass <- Seurat::DefaultAssay(res_obj)
     res_obj[[ass]]$counts <- counts_out
-    m_corr <- .sc_qc_cell_metrics(res_obj, counts_out)
+    m_corr <- .sc_qc_cell_metrics(res_obj, counts_out, recompute = TRUE)
     res_obj@meta.data$nCount_RNA <- m_corr$nCount_RNA
     res_obj@meta.data$nFeature_RNA <- m_corr$nFeature_RNA
   }
@@ -399,6 +401,7 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
     doublet_score_cutoff = cutoff,
     max_contamination = max_cont,
     run_ambient = run_ambient,
+    ambient_engine = ambient_engine,
     batch_var = batch_used,
     doublet_score = scores,          # per-cell ENTRÉE, pré-filtre, fini (F19-2)
     doublet_class = classes,
@@ -425,6 +428,9 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
     run_ambient = run_ambient
   )
   if (!is.null(batch_used)) applied_params$batch_var <- batch_used
+  if (run_ambient && !is.null(ambient_engine)) {
+    applied_params$ambient_engine <- ambient_engine
+  }
   entry <- if (exists("new_provenance_entry", mode = "function")) {
     new_provenance_entry(
       analysis_id = "biomentat-doublets",

@@ -267,3 +267,27 @@ test_that("doublets injectés : les exclusions sont des appels moteurs au-dessus
   norm <- Seurat::NormalizeData(res$obj, verbose = FALSE)
   expect_identical(colnames(norm), colnames(res$obj))
 })
+
+test_that("provenance ambient_engine : reflète le moteur réellement exécuté (celda sans tod_mat)", {
+  skip_if_not_installed("celda")
+  obj <- .m4u_make_obj()
+  res <- sc_filter_doublets_and_ambient(obj, params = list(run_ambient = TRUE, seed = 42))
+  expect_identical(as.character(res$provenance$parameters$ambient_engine), "celda")
+  expect_identical(as.character(res$qc_metrics$ambient_engine), "celda")
+})
+
+test_that("post-ambiant : nCount_RNA et nFeature_RNA sont recalculés depuis counts_out", {
+  skip_if_not_installed("celda")
+  obj <- .m4u_make_obj()
+  # Simuler des métriques pré-ambiantes finies qui diffèrent des counts post-ambiants
+  obj@meta.data$nCount_RNA <- obj@meta.data$nCount_RNA + 500
+  obj@meta.data$nFeature_RNA <- obj@meta.data$nFeature_RNA + 10
+  cnt_raw <- SeuratObject::GetAssayData(obj, assay = Seurat::DefaultAssay(obj), layer = "counts")
+  m_recomp <- .sc_qc_cell_metrics(obj, cnt_raw, recompute = TRUE)
+  expect_equal(m_recomp$nCount_RNA, as.numeric(Matrix::colSums(cnt_raw)))
+  expect_equal(m_recomp$nFeature_RNA, as.numeric(Matrix::colSums(cnt_raw > 0)))
+  res <- sc_filter_doublets_and_ambient(obj, params = list(run_ambient = TRUE, seed = 42))
+  cnt_after <- SeuratObject::GetAssayData(res$obj, assay = Seurat::DefaultAssay(res$obj), layer = "counts")
+  expect_equal(as.numeric(res$obj@meta.data$nCount_RNA), as.numeric(Matrix::colSums(cnt_after)))
+  expect_equal(as.numeric(res$obj@meta.data$nFeature_RNA), as.numeric(Matrix::colSums(cnt_after > 0)))
+})
