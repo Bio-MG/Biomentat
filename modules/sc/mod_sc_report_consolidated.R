@@ -33,11 +33,47 @@ mod_sc_report_consolidated_ui <- function(id) {
 
 mod_sc_report_consolidated_output_ui <- function(id) {
   ns <- NS(id)
+  # CCC_NAV_DRAWER clôture C5 (2026-11-12) : le panneau 9b est PLAT (aucun
+  # navset, aucune cible de saut) — le tiroir porte la SEULE moitié applicable
+  # du pattern (5f0a906 + bc9c09a) : le RÉSUMÉ d'état vivant. PAS de nav,
+  # PAS de marqueur actif (déviation assumée et gelée par
+  # test-mod-sc-report-consolidated-ui.R : 0 navset_tab / 0 nav_select).
   card(
-    card_header(i18n$t("Rapport consolidé — aperçu des verdicts")),
+    # Pastille ouvrant le tiroir (motif 2L CCC : dans l'en-tête de carte) :
+    card_header(
+      div(class = "d-flex justify-content-between align-items-center gap-2",
+          tags$span(i18n$t("Rapport consolidé — aperçu des verdicts")),
+          tags$button(type = "button",
+                      class = "btn btn-sm btn-outline-secondary flex-shrink-0",
+                      `data-bs-toggle` = "offcanvas",
+                      `data-bs-target` = paste0("#", ns("rep_drawer")),
+                      `aria-controls` = ns("rep_drawer"),
+                      icon("list-ul"), " ", i18n$t("Navigation & filtres")))
+    ),
     uiOutput(ns("rep_verdicts_ui")),
     hr(),
-    uiOutput(ns("rep_provenance_count_ui"))
+    uiOutput(ns("rep_provenance_count_ui")),
+    # Tiroir état (résumé vivant — verdicts compacts, sections refusées,
+    # provenance) :
+    tags$div(
+      id = ns("rep_drawer"), class = "offcanvas offcanvas-end", tabindex = "-1",
+      `aria-labelledby` = ns("rep_drawer_title"),
+      tags$div(class = "offcanvas-header",
+               h5(id = ns("rep_drawer_title"), class = "offcanvas-title",
+                  icon("list-ul"), " ", i18n$t("Navigation Rapport consolidé")),
+               # .tr_plain (strip span) — JAMAIS de $t() brut en contexte
+               # attribut (BUG A11Y « Fermer », motif bc9c09a) :
+               tags$button(type = "button", class = "btn-close",
+                           `data-bs-dismiss` = "offcanvas",
+                           `aria-label` = .tr_plain("Fermer"))),
+      tags$div(class = "offcanvas-body",
+        h6(i18n$t("État du rapport")),
+        # aria-live : les SR annoncent les changements d'état résumés ici
+        # (motif P4 CCC) :
+        div(class = "small text-muted", `aria-live` = "polite",
+            uiOutput(ns("rep_drawer_summary")))
+      )
+    )
   )
 }
 
@@ -119,6 +155,40 @@ mod_sc_report_consolidated_server <- function(id, global_data, shared_rv = NULL)
         paste(.tr("Prêt —"), sum(vapply(cv$val$verdicts, function(v) v$state != "absent", logical(1))),
               .tr("section(s) avec résultat."))
       }
+    })
+
+    # ── CCC_NAV_DRAWER clôture C5 (2026-11-12) : résumé d'état du tiroir ──────
+    # Consomme la validation EXISTANTE (.collect_and_validate — zéro recalcul,
+    # zéro métrique inventée) : verdicts compacts par section (badges de la
+    # MÊME palette state_label_color que la table), sections refusées,
+    # provenance. MÊMES clés que le statut existant (zéro divergence).
+    output$rep_drawer_summary <- renderUI({
+      global_data$language  # re-rendu au changement de langue (motif du module)
+      cv <- .collect_and_validate()
+      if (is.null(cv)) {
+        return(tags$ul(class = "list-unstyled mb-0",
+                       tags$li(.tr("Objet SC requis : importez et traitez un objet d'abord."))))
+      }
+      li <- function(n, lab) tags$li(tags$strong(n), " ", lab)
+      ok <- sum(vapply(cv$val$verdicts, function(v) v$state != "absent", logical(1)))
+      blocked <- cv$val$blocked_sections
+      head <- if (length(blocked)) {
+        li(paste(blocked, collapse = ", "),
+           .tr("⚠ sections refusées (provenance absente) :"))
+      } else {
+        li(ok, .tr("section(s) avec résultat."))
+      }
+      sec_li <- lapply(cv$val$verdicts, function(v) {
+        tags$li(tags$span(class = paste0("badge bg-", state_label_color(v$state)),
+                          v$state),
+                " ", tags$strong(v$section))
+      })
+      tags$div(
+        tags$ul(class = "list-unstyled mb-0", head),
+        tags$ul(class = "list-unstyled mb-0",
+                style = "column-count:2;column-gap:1.5rem;", sec_li),
+        li(nrow(cv$ri$provenance_df), .tr("entrée(s) produite(s) par les analyses"))
+      )
     })
 
     # ── Téléchargement : rapport HTML autonome ────────────────────────────────

@@ -13208,6 +13208,14 @@
     {
       "fr": "Vues velocity",
       "en": "Velocity views"
+    },
+    {
+      "fr": "Navigation Rapport consolidé",
+      "en": "Consolidated report navigation"
+    },
+    {
+      "fr": "État du rapport",
+      "en": "Report state"
     }
   ]
 }
