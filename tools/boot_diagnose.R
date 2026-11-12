@@ -69,6 +69,16 @@
 #   - stall_proxy_s = écart t_listening → t_first_http_200 (sonde 1 s) ;
 #   - stats profils : renv_s du process main + des workers éventuels.
 #
+# RÉPARATION (F2 passe 3, 2026-11-12 — faux stall de la sonde, MESURÉ) : le
+# re-rendu UI de shiny 1.14.0 bloque la boucle 2,7–4,2 s par GET / (curl tenu
+# jusqu'au bout : 200 en 4,195 s, 1 740 928 octets) — l'ancien timeout sonde
+# de 2 s enregistrait http=0 permanent et reconnectait en cycle. Le défaut
+# sonde passe à 10 s (opt-out TS_BOOT_PROBE_TIMEOUT_S, cf. .bd_http_get).
+# La signature « 500 sans jamais 200 » du 2026-11-05 (:276-279) était la
+# cécité du timeout, pas l'app : 200 EST atteint. CAVEAT honnête : le coût
+# par GET / pour un client réel (re-rendu page_navbar non caché) reste
+# ouvert — hors périmètre de cette passe (fix minimal instrument).
+#
 # USAGE
 #   LC_ALL=French_France.65001 Rscript tools/boot_diagnose.R --observe \
 #       [--max-secs 240] [--app-args "--headless"]
@@ -164,7 +174,19 @@
   suppressWarnings(as.numeric(trimws(out[1]))) / 1024
 }
 
-.bd_http_get <- function(port, timeout_s = 2) {
+# Timeout sonde (F2 passe 3, MESURÉ 2026-11-12) : le handler UI de shiny
+# 1.14.0 re-sérialise la page page_navbar (1,74 Mo) SUR la boucle later/httpuv
+# à CHAQUE GET / — 2,7–4,2 s par requête — et l'ancien défaut 2 s quittait
+# ~1 s AVANT la réponse : http=0 permanent (21/22 summaries), reconnexion
+# ~0,4 s plus tard ⇒ « burn » ~100 % d'un cœur en cycle (faux stall).
+# Défaut 10 s ; opt-out : TS_BOOT_PROBE_TIMEOUT_S (secondes entières > 0,
+# ex. =2 restaure l'ancien défaut ; valeur absente/non numérique => 10).
+.bd_probe_timeout_s <- function() {
+  v <- suppressWarnings(as.integer(Sys.getenv("TS_BOOT_PROBE_TIMEOUT_S", unset = "")))
+  if (is.na(v) || v <= 0L) 10L else v
+}
+
+.bd_http_get <- function(port, timeout_s = .bd_probe_timeout_s()) {
   if (is.na(port)) return(NA_integer_)
   tryCatch({
     if (requireNamespace("curl", quietly = TRUE)) {
