@@ -325,3 +325,48 @@ test_that("2C verrou source : 2 dropdownButton, 9 downloadButton, 9 handlers int
                  info = paste("handler", id, "absent — le lot 2C a supprimé un export"))
   }
 })
+
+# ---------------------------------------------------------------------------
+# P1.5 : velocity_strip_gene_version (FALSE vs TRUE, y compris apres i18n)
+# ---------------------------------------------------------------------------
+test_that("P1.5 testServer : velocity_strip_gene_version FALSE vs TRUE atteint validate_velocity_matrices()", {
+  skip_if_not_installed("shiny")
+  skip_if_not_installed("Seurat")
+  source_project_file("tools/pkg_skeleton/R/io_helpers.R")
+  source_project_file("tools/pkg_skeleton/R/validation.R")
+  source_project_file("tools/pkg_skeleton/R/sc_velocity.R")
+
+  genes <- c("AC011043", "AC011043.1", "GAPDH")
+  cells <- paste0("Cell", 1:6)
+  set.seed(1)
+  sp <- matrix(rpois(18, 5), nrow = 3, ncol = 6, dimnames = list(genes, cells))
+  un <- matrix(rpois(18, 2), nrow = 3, ncol = 6, dimnames = list(genes, cells))
+  seu <- suppressWarnings(Seurat::CreateSeuratObject(counts = sp))
+
+  rds_path <- tempfile(fileext = ".rds")
+  on.exit(unlink(rds_path), add = TRUE)
+  saveRDS(list(spliced = sp, unspliced = un), rds_path)
+
+  gd <- shiny::reactiveValues(sc_obj = seu, language = "fr", i18n = NULL)
+  shiny::testServer(mod_sc_velocity_server, args = list(global_data = gd), {
+    # Simuler changement de langue (updateCheckboxInput sans arg value)
+    gd$language <- "en"
+    session$flushReact()
+
+    session$setInputs(
+      velocity_import_mode = "rds",
+      velocity_rds_file = data.frame(name = "vel.rds", datapath = rds_path, stringsAsFactors = FALSE),
+      velocity_orientation = "auto_strict",
+      velocity_strip_cell_suffix = FALSE,
+      velocity_strip_gene_version = FALSE,
+      velocity_allow_low_overlap = FALSE
+    )
+    session$setInputs(velocity_validate = 1L)
+    expect_false(grepl("Erreur validation velocity", velocity_status_rv() %||% "", fixed = TRUE))
+    expect_false(isTRUE(velocity_state$validated$strip_gene_version))
+
+    session$setInputs(velocity_strip_gene_version = TRUE)
+    session$setInputs(velocity_validate = 2L)
+    expect_match(velocity_status_rv() %||% "", "collisions : AC011043", fixed = TRUE)
+  })
+})
