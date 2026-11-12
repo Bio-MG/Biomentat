@@ -467,6 +467,45 @@ test_that("T5 entrees invalides : erreurs typees du vocabulaire gele §6", {
 })
 
 # =============================================================================
+# T5b -- resolution directe de covariates = "continuous" -> bulk_voom +
+# integrite de toutes les branches answers -> children de l'arbre
+# =============================================================================
+test_that("T5b covariates = continuous se resout vers bulk_voom et chaque reponse a un enfant", {
+  expect_true(.biostat_tree_present, info = .biostat_red_info)
+  if (!.biostat_tree_present) return(invisible(NULL))
+
+  tree <- biostat_build_tree()
+  rec <- biostat_resolve(tree, list(
+    data_family = "counts",
+    replicates_ok = "ok",
+    groups_n = "two",
+    covariates = "continuous"
+  ))
+  expect_identical(rec$method_id, "bulk_voom")
+  expect_identical(tail(rec$node_path, 1L), "bulk_voom")
+
+  # Chaque cible declaree dans `answers` d'un noeud doit correspondre a un enfant
+  check_links <- function(nd) {
+    ans <- .biostat_node_field(nd, "answers")
+    kids <- .biostat_kids(nd)
+    if (!is.null(ans) && length(ans) > 0L) {
+      kid_keys <- unlist(lapply(kids, function(k) {
+        c(.biostat_node_field(k, "name"), .biostat_node_field(k, "id"))
+      }))
+      for (target in unname(ans)) {
+        expect_true(
+          target %in% kid_keys,
+          info = sprintf("cible '%s' introuvable dans children de '%s'",
+                         target, .biostat_node_field(nd, "name") %||% "?")
+        )
+      }
+    }
+    for (k in kids) check_links(k)
+  }
+  check_links(tree)
+})
+
+# =============================================================================
 # T6 -- pin C8 : ce test CITE le contrat (garde tools/check_conventions.R:502)
 # =============================================================================
 test_that("T6 pin C8 : le fichier de test cite BIOSTAT_DECISION_CONTRACT", {

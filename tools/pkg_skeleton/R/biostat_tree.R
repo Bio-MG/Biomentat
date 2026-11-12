@@ -168,7 +168,7 @@ biostat_build_tree <- function() {
                 id = "covariates",
                 type = "question",
                 i18n_key = "biostat.q.bulk_covariates",
-                answers = c(none = "cov_none", continuous = "cov_continuous"),
+                answers = c(none = "cov_none", continuous = "bulk_voom"),
                 answers_i18n = c(none = "biostat.a.cov_none",
                                  continuous = "biostat.a.cov_continuous"),
                 method_id = NULL,
