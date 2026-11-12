@@ -401,7 +401,7 @@ source("modules/session/mod_tour.R")
 
 # --- UI ---
 
-ui <- page_navbar(
+ui_static <- page_navbar(
 
   # LOT 4A (V1.x UX): explicit id so import modules can jump natively
   # (nav_select) to the analysis tabs that host the ID-mapping panels.
@@ -763,7 +763,44 @@ ui <- page_navbar(
   
 )
 
-
+# ── F2 (2026-11-12) : cache du rendu HTML de la page GET / ──────────────────
+# shiny 1.14.0 ré-sérialise le tag tree (~1,74 Mo, doRenderTags/flattenTags —
+# Rprof F2) via renderPage() À CHAQUE GET / (baseline mesurée 2026-11-12 :
+# get2/get3 ≈ 3,8-4,2 s sur la boucle later). Le HTML servi n'embarque AUCUN
+# token par requête (shinycsrfnorm n'existe pas dans shiny 1.14.0 — 0
+# occurrence dans le paquet ; workerId/sessionId passent par le WebSocket,
+# www/shared/shiny.js addMessageHandler("config")) : deux GET / consécutifs
+# sont byte-identiques (propriété mesurée sur boots frais 2026-11-12 ; la
+# taille absolue varie selon les variantes d'assets résolues au boot).
+# Rendu mémoïsé UNE FOIS par process, clé sur testmode (flag PAR PROCESS :
+# .setupShinyApp:63 shinyOptions(testmode=) ; l'enfant shinytest2 démarre avec
+# shiny.testmode=TRUE — tests/testthat/helper-app-driver.R:132 — et renderPage
+# ajoute alors shiny-testmode.js). Hors périmètre de la clé, constants par
+# process et jamais posés par les boots supportés du dépôt (grep = 0 hits) :
+# showcase (.globals$showcaseDefault — tools/launch_dev_drive.R ne passe pas
+# display.mode), shiny.devmode/shiny.client_devmode/shiny.minified.
+# Chemin : shinyApp construit httpHandler <- uiHttpHandler(ui, "^/$") et
+# uiHttpHandler.R:47-52 court-circuite renderPage quand ui(req) rend une
+# httpResponse — shiny::httpResponse et shiny::getShinyOption sont EXPORTÉES ;
+# seul shiny:::renderPage est interne (deparse vérifié, shiny 1.14.0 épinglé
+# renv.lock ; repli = arbre brut, shiny re-rend par requête, comportement
+# pré-cache inchangé, bytes identiques — validé 2026-11-12 via uiHttpHandler réel).
+.ui_html_cache <- new.env(parent = emptyenv())
+ui <- function(req) {
+  tm <- shiny::getShinyOption("testmode", default = FALSE)
+  html <- .ui_html_cache[[as.character(tm)]]
+  if (is.null(html)) {
+    html <- tryCatch(
+      shiny:::renderPage(ui_static, testMode = tm),
+      error = function(e) NULL
+    )
+    if (is.null(html)) {
+      return(ui_static)  # repli transparent : shiny re-rend par requête, comportement pré-cache
+    }
+    .ui_html_cache[[as.character(tm)]] <- html
+  }
+  shiny::httpResponse(200, content = html)
+}
 
 # --- SERVER ---
 
