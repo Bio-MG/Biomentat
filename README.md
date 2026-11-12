@@ -61,7 +61,7 @@ Biomentat fournit des environnements modulaires dédiés à trois domaines trans
 > Le mapping d'identifiants dépend de l'espèce, de la version d'annotation et de la qualité des identifiants d'entrée. Les identifiants non résolus, ambigus ou dupliqués doivent être vérifiés avant toute interprétation biologique ; conservez toujours les identifiants originaux dans vos exports.
 - **Pipeline standard** : contrôle qualité, normalisation, sélection de gènes hautement variables, PCA, construction du graphe de voisins, clustering, UMAP et t-SNE optionnel. Disponible en **pipeline automatique 1 clic** (panneau 0 : mapping d'IDs optionnel, QC, normalisation/PCA/clustering/UMAP, t-SNE, puis étapes optionnelles annotation SingleR, marqueurs, corrélation génique, ORA sur top marqueurs, trajectoire) ou en mode guidé panneau par panneau — le pipeline auto s'exécute de façon asynchrone (ExtendedTask/mirai).
 > L'interface Single-Cell regroupe ses panneaux en cinq sections parent (Préparation / Analyse / Dynamique / Abondance cellulaire / Livrables). Vitesse ARN, communication cellule-cellule et abondance différentielle exigent des prérequis spécifiques et restent hors du pipeline automatique.
-- **Doublets & ARN ambiant (QC)** : détection des doublets et contrôle de contamination ARN ambiant via `scDblFinder` — l'appel tourne une fois, le seuil de score ne pilote que le filtrage (exclusion stricte des cellules appelées doublets).
+- **Doublets & ARN ambiant (QC)** : détection des doublets via `scDblFinder` (l'appel tourne une fois, le seuil de score ne pilote que le filtrage par exclusion stricte des cellules appelées doublets) et décontamination ARN ambiante opt-in via `SoupX` (avec matrice de droplets `tod_mat`) ou `celda` (`decontX`, erreur classée `sc_ambient_package_missing` si aucun moteur utilisable n'est installé).
 - **Correction de batch** : intégration avec Harmony lorsque plusieurs échantillons ou batchs sont présents.
 
 #### Multi-échantillons single-cell
@@ -87,7 +87,7 @@ Le workflow Single-Cell est nativement multi-échantillons (ex: Contrôle vs Tra
 - **Trajectoire** : pseudotemps exploratoire sur graphe kNN **plus inférence de lignées Slingshot en option** (quand le paquet est installé). Plafond strict sur le nombre de cellules.
 - **Pseudobulk** et **rapport Single-Cell consolidé** (compilateur d'état canonique + provenance uniquement — ne ré-exécute jamais les analyses ; HTML autonome, bundle d'export avec manifeste, tables fidèles, script R reproductible, sessionInfo).
 - La provenance est enregistrée pour chaque étape d'analyse alimentant un rapport ; les sections sans provenance sont rejetées par le validateur.
-- *Note scientifique* : la trajectoire par défaut reste le pseudotemps léger sur graphe ; Slingshot est proposé comme moteur optionnel quand il est installé. La détection de doublets et le QC ARN ambiant (`scDblFinder`) sont désormais intégrés au QC single-cell ; la régression du cycle cellulaire n'est pas encore intégrée.
+- *Note scientifique* : la trajectoire par défaut reste le pseudotemps léger sur graphe ; Slingshot est proposé comme moteur optionnel quand il est installé. La détection de doublets (`scDblFinder`), la décontamination ARN ambiante opt-in (`SoupX` / `celda` `decontX`) et le scoring/régression du cycle cellulaire opt-in (`CellCycleScoring` + `ScaleData` sur `CC.Difference` ou `S.Score`/`G2M.Score`, hors SCTransform) sont intégrés au workflow single-cell.
 
 ### Bulk RNA-seq
 
@@ -215,7 +215,8 @@ BiocManager::install(c("Seurat", "SeuratObject", "SingleR", "celldex",
 | Visium HD (parquet) | arrow | Import HD incomplet (alternative légère : nanoparquet) |
 | Inférence de lignées | slingshot | Trajectoire limitée au pseudotemps graphe |
 | scCODA | Environnement Python + dépendances scCODA | scCODA indisponible (erreur guidée) |
-| Doublets & ARN ambiant (SC) | scDblFinder | QC doublets indisponible |
+| Doublets (SC) | scDblFinder | QC doublets indisponible |
+| ARN ambiant opt-in (SC) | celda (`decontX`) ou SoupX | Décontamination ambiante indisponible (erreur classée) |
 | Vues spatiales WebGL | leafgl | Rendu de grands nuages de points dégradé |
 
 *Note : les workflows spatiaux peuvent exiger des packages supplémentaires tels que `BPCells`, `mirai`, `RANN` et `spacexr`. scCODA requiert un environnement **Python 3.13** dédié (`python_env_sccoda/` ou variable `TS_SCCODA_PYTHON`) — sans lui, une erreur classée avec guidance est levée, sans repli silencieux. CellChat (épinglé), LIANA, `drc`, `GSVA` et `WGCNA` sont inclus dans `renv.lock` — aucune installation séparée ; en leur absence (installation manuelle), les moteurs de communication natifs restent indisponibles avec une erreur guidée, l'import de résultats externes restant disponible. Le PDF par domaine requiert TinyTeX ; le rapport consolidé 4F génère un HTML autonome sans pandoc.*
@@ -388,7 +389,7 @@ La reproductibilité et la validité scientifique dépendent également :
 - [x] Rôles de signalisation (émetteur / récepteur / médiateur) par centralité CellChat native, avec vue dédiée et export CSV.
 - [x] Rareté par population (analyse descriptive mono-condition).
 - [x] Serveur MCP local (12 outils) + protocole drive de pilotage contrôlé d'une session vivante par un agent ; contrat d'ingestion `biomentat-exchange/v1` (CLI de validation headless).
-- [x] Détection des doublets & QC ARN ambiant (scDblFinder) dans le pipeline single-cell.
+- [x] Détection des doublets (`scDblFinder`) & décontamination ARN ambiante opt-in (`SoupX` / `celda` `decontX`) dans le pipeline single-cell.
 - [x] Exécution asynchrone (ExtendedTask/mirai) pour la DE bulk et le pipeline auto single-cell.
 - [x] Moteur limma moderne pour les plans bulk appariés/bloqués (`duplicateCorrelation` + `voomWithQualityWeights`, seuil `treat.lfc` optionnel).
 - [x] ORA directionnelle goana/kegga (table DE complète, Up/Down par voie) + barcodeplot par voie.
@@ -468,7 +469,7 @@ Biomentat provides dedicated, modular environments for three primary transcripto
 > Gene ID mapping depends on species, annotation version, and input ID quality. Unresolved, ambiguous, or duplicated IDs must be checked before biological interpretation; always keep original IDs in your exports.
 - **Standard pipeline**: QC, normalization, highly variable feature selection, PCA, neighbor graph construction, clustering, UMAP, and optional t-SNE. Available as a **1-click automatic pipeline** (panel 0: optional ID mapping, QC, normalization/PCA/clustering/UMAP, t-SNE, then optional steps SingleR annotation, markers, gene correlation, ORA on top markers, trajectory) or panel-by-panel in guided mode. The auto pipeline runs asynchronously (ExtendedTask/mirai).
 > The Single-Cell interface groups its panels into five parent sections (Preparation / Analysis / Dynamics / Cell abundance / Deliverables). RNA velocity, cell–cell communication, and differential abundance require specific prerequisites and remain outside the automatic pipeline.
-- **Doublets & ambient RNA (QC)**: doublet detection and ambient-RNA contamination control via `scDblFinder` — calling runs once, the score cutoff only drives filtering (strict exclusion of called doublet cells).
+- **Doublets & ambient RNA (QC)**: doublet detection via `scDblFinder` (calling runs once, the score cutoff only drives filtering with strict exclusion of called doublet cells) and opt-in ambient-RNA decontamination via `SoupX` (with droplet matrix `tod_mat`) or `celda` (`decontX`, classed error `sc_ambient_package_missing` if no usable engine is installed).
 - **Batch correction**: Harmony-based integration when multiple samples or batches are present.
 
 #### Multi-sample single-cell
@@ -494,7 +495,7 @@ The Single-Cell workflow is natively multi-sample (e.g. Control vs Treatment, Da
 - **Trajectory**: exploratory kNN-graph pseudotime **plus optional Slingshot lineage inference** (when the package is available). Hard cell-count ceiling.
 - **Pseudobulk** utilities and a **consolidated Single-Cell report** (compiler of canonical state + provenance only — never re-executes analyses; HTML autonomous, export bundle with manifest, faithful tables, reproducible R script, sessionInfo).
 - Provenance is recorded for every analysis step that feeds a report; sections lacking provenance are rejected by the validator.
-- *Scientific note*: the default trajectory remains the lightweight graph pseudotime; Slingshot is offered as an optional engine when installed. Doublet detection and ambient-RNA QC (`scDblFinder`) are now built into the single-cell QC; cell-cycle regression is not yet integrated.
+- *Scientific note*: the default trajectory remains the lightweight graph pseudotime; Slingshot is offered as an optional engine when installed. Doublet detection (`scDblFinder`), opt-in ambient-RNA decontamination (`SoupX` / `celda` `decontX`), and opt-in cell-cycle scoring/regression (`CellCycleScoring` + `ScaleData` on `CC.Difference` or `S.Score`/`G2M.Score`, excluding SCTransform) are integrated into the single-cell workflow.
 
 ### Bulk RNA-seq
 > For DESeq2, edgeR, and limma-voom, provide raw gene-level counts, ideally integer or integer-like, from a quantification tool compatible with count-based analysis. Do not use TPM, FPKM, CPM, log-counts, or batch-corrected matrices as input for differential expression. The import now detects TPM/FPKM (or non-integer) matrices and raises a warning banner before any analysis.
@@ -618,7 +619,8 @@ BiocManager::install(c("Seurat", "SeuratObject", "SingleR", "celldex",
 | Visium HD (parquet) | arrow | Incomplete HD import (lightweight alternative: nanoparquet) |
 | Lineage inference | slingshot | Trajectory limited to graph pseudotime |
 | scCODA | Python env + scCODA deps | scCODA unavailable (guided error) |
-| Doublets & ambient RNA (SC) | scDblFinder | Doublet QC unavailable |
+| Doublets (SC) | scDblFinder | Doublet QC unavailable |
+| Opt-in ambient RNA (SC) | celda (`decontX`) or SoupX | Ambient decontamination unavailable (classed error) |
 | Spatial WebGL views | leafgl | Degraded large point-cloud rendering |
 *Note: Spatial workflows may require additional packages such as `BPCells`, `mirai`, `RANN`, and `spacexr`. scCODA requires a dedicated **Python 3.13** environment (`python_env_sccoda/` or the `TS_SCCODA_PYTHON` variable) — without it, a classed error with guidance is raised, with no silent fallback. CellChat (pinned), LIANA, `drc`, `GSVA`, and `WGCNA` are included in `renv.lock` — no separate install; if absent (manual install), the native communication engines remain unavailable with a guided error while external result import stays available. Per-domain PDF requires TinyTeX; the consolidated 4F report produces standalone HTML without pandoc.*
 
@@ -746,7 +748,7 @@ However, true reproducibility and scientific validity also depend on:
 - [x] Signaling roles (sender / receiver / mediator) via native CellChat centrality, with a dedicated view and CSV export.
 - [x] Population rarity (descriptive single-condition analysis).
 - [x] Local MCP server (12 tools) + drive protocol for controlled agent-driven live-session control; `biomentat-exchange/v1` ingestion contract (headless validation CLI).
-- [x] Doublet detection & ambient-RNA QC (scDblFinder) in the single-cell pipeline.
+- [x] Doublet detection (`scDblFinder`) & opt-in ambient-RNA decontamination (`SoupX` / `celda` `decontX`) in the single-cell pipeline.
 - [x] Asynchronous execution (ExtendedTask/mirai) for bulk DE and the single-cell auto pipeline.
 - [x] Modern limma engine for paired/blocked bulk designs (`duplicateCorrelation` + `voomWithQualityWeights`, optional `treat.lfc` threshold).
 - [x] Directional ORA goana/kegga (full DE table, Up/Down per pathway) + per-pathway barcodeplot.
