@@ -68,6 +68,26 @@ test_that("le canal drive DÉLÈGUE au cœur (une seule source de défauts)", {
   expect_identical(.sc_ap_drive_inputs(), sc_ap_normalize_params(list()))
 })
 
+# Jalon marqueurs-par-cluster : la modal UI ne doit pas CONTRAIRE le défaut
+# moteur. sc_ap_normalize_params ne comble que les NULL (sc_pipeline.R, %||%) :
+# un `value=FALSE` explicite de la checkbox gagne sur le défaut `TRUE` du cœur
+# et Step 7 (FindAllMarkers, sc_pipeline.R) ne tournait jamais depuis l'UI.
+# Épingle par motif de source (même pattern que test-mod-bulk.R B1-F).
+test_that("la modal UI porte sc_ap_markers DÉFAUT TRUE (alignée sur le défaut moteur)", {
+  ln <- readLines(file.path(ts_project_root(), "modules/sc/mod_sc.R"), warn = FALSE,
+                  encoding = "UTF-8")
+  hits <- grep('ns_m("sc_ap_markers")', ln, fixed = TRUE)
+  expect_equal(length(hits), 1L,
+               info = "input sc_ap_markers : absent ou dupliqué dans la modal")
+  zone <- paste(ln[max(1, hits[1] - 1):min(length(ln), hits[1] + 2)], collapse = " ")
+  expect_true(grepl("checkboxInput", zone, fixed = TRUE),
+              info = "sc_ap_markers : pas une checkboxInput")
+  expect_true(grepl("value=TRUE", zone, fixed = TRUE),
+              info = "sc_ap_markers : défaut TRUE exigé (opt-out, aligné sur sc_pipeline.R)")
+  expect_false(grepl("value=FALSE", zone, fixed = TRUE),
+               info = "sc_ap_markers : défaut opt-in FALSE interdit (Step 7 ne tournerait jamais)")
+})
+
 # ── Cœur pur QC ─────────────────────────────────────────────────────────────
 skip_if_not_installed("Seurat")
 library(Seurat)

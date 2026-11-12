@@ -30,6 +30,37 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — Marqueurs par cluster : FindAllMarkers opt-out depuis la modal UI] — 2026-11-12
+
+Signalement opérateur : « marqueurs par cluster absents » après ▶ Lancer sans toucher aux
+options. Le moteur avait pourtant le défaut `sc_ap_markers = TRUE` (sc_pipeline.R) et tout
+le chemin d'affichage existait déjà (onglet Table Marqueurs, export CSV, sync
+`shared_rv$markers_data`) : la case de la modal UI était le SEUL `FALSE` du canon — un
+`value=FALSE` explicite gagne sur le défaut du cœur (`%||%` ne comble que les NULL), donc
+Step 7 (FindAllMarkers) ne tournait jamais depuis l'UI.
+
+### Corrigé
+- `modules/sc/mod_sc.R` (1 ligne) : checkbox `sc_ap_markers` (« 🧬 FindAllMarkers après
+  clustering ») `value=FALSE` → `value=TRUE` — opt-out au lieu d'opt-in, aligné sur le
+  défaut moteur (sc_pipeline.R) et le canal drive (`.sc_ap_drive_inputs`). Décocher la
+  case reste un opt-out effectif (FALSE explicite > défaut). Épingle ROUGE→VERT ajoutée
+  dans `tests/testthat/test-sc-ap-params.R` (zone de source, pattern B1-F de
+  test-mod-bulk.R) : filtre sc-ap-params passé de 28 à 30 expectations, 0 fail mesuré.
+
+### Limites (assumées)
+- Sous-échantillonnage Step 7 plafonné à 500 cellules/cluster sur le chemin auto
+  (`params$max_cells_heavy %||% 500L`, sc_pipeline.R) — la modal n'expose pas ce plafond ;
+  les chemins drive (`run_markers` : 5000) et manuel (`shared_rv$max_cells_heavy`) gardent
+  les leurs.
+- Un run auto réussi atterrit toujours sur l'onglet Visualisation
+  (`active_tab="tab_viz"`, épinglé par test-mod-sc-drive.R) — la Table Marqueurs reste à
+  ouvrir dans son onglet.
+- `TS_MAX_PER_CLUSTER_MARKERS` (defaults.R) reste orphelin (aucun consommateur) —
+  nettoyage séparé, hors périmètre de ce jalon d'une ligne.
+- Un run UI avec la case DÉCOCHÉE affiche encore l'étape marqueurs en « error » dans les
+  derniers pas drive (le recorder mod_sc.R compare à la sélection drive figée
+  `markers=TRUE`, pas aux params réels) — préexistant, non traité ici.
+
 ## [RENAME — Cerberus → Biomentat] — 2026-11-05
 
 **Rupture d'identité assumée** : le projet abandonne « Cerberus » (collision same-field

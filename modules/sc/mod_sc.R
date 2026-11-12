@@ -1611,7 +1611,7 @@ mod_sc_server <- function(id, global_data) {
                        selected = "difference", inline = TRUE)
         ),
         checkboxInput(ns_m("sc_ap_markers"),
-                      paste("\U0001f9ec", .tr("FindAllMarkers après clustering")), value=FALSE),
+                      paste("\U0001f9ec", .tr("FindAllMarkers après clustering")), value=TRUE),
         checkboxInput(ns_m("sc_ap_pathway"),
                       paste("\U0001f9ec", .tr("Pathway ORA sur top marqueurs")), value=FALSE),
         conditionalPanel(
