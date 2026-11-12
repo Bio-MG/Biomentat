@@ -228,27 +228,32 @@ mod_sc_annotation_ui <- function(id) {
 
 mod_sc_annotation_output_ui <- function(id) {
   ns <- NS(id)
-  tagList(
-    card(
-      full_screen=TRUE,
-      card_header(div(style="display:flex;justify-content:space-between;align-items:center;",
-                      h5(i18n$t("Annotation Automatique (SingleR)"),class="mb-0"),
-                      downloadButton(ns("dl_annotation"),"Export CSV",class="btn-sm btn-info"))),
-      layout_columns(col_widths=c(12),
+  navset_card_pill(
+    id = ns("annotation_out_tabs"),
+    title = i18n$t("Annotation"),
+    nav_panel(
+      title = i18n$t("Annotation Automatique (SingleR)"),
+      value = "tab_singler",
+      div(style = "display:flex;justify-content:flex-end;margin-bottom:8px;",
+          downloadButton(ns("dl_annotation"), "Export CSV", class = "btn-sm btn-info")),
+      layout_columns(
+        col_widths = c(6, 6),
         card(card_header(i18n$t("UMAP — types cellulaires predits")),
-             plotOutput(ns("annot_umap_plot"),height="380px")),
+             plotOutput(ns("annot_umap_plot"), height = "520px")),
         card(card_header(i18n$t("Table — distribution par cluster")),
-             DTOutput(ns("annot_table"))))
+             DTOutput(ns("annot_table")))
+      )
     ),
-    # ── SE (2026-11-09) : sorties MapQuery ─────────────────────────────────
-    card(
-      full_screen=TRUE,
-      card_header(h5(i18n$t("Reference mapping (MapQuery)"), class="mb-0")),
-      layout_columns(col_widths=c(12),
+    nav_panel(
+      title = i18n$t("Reference mapping (MapQuery)"),
+      value = "tab_mapquery",
+      layout_columns(
+        col_widths = c(6, 6),
         card(card_header(i18n$t("Query projetée sur l'UMAP de référence (ref.umap)")),
-             plotOutput(ns("mq_umap_plot"), height="380px")),
+             plotOutput(ns("mq_umap_plot"), height = "520px")),
         card(card_header(i18n$t("Scores de confiance (max par cellule)")),
-             plotOutput(ns("mq_score_plot"), height="380px")))
+             plotOutput(ns("mq_score_plot"), height = "520px"))
+      )
     )
   )
 }

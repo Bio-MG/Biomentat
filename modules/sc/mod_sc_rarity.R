@@ -55,13 +55,17 @@ mod_sc_rarity_output_ui <- function(id) {
                     h5(i18n$t("Rareté par population (descriptif)"), class = "mb-0"),
                     downloadButton(ns("dl_rarity"), "Export CSV",
                                    class = "btn-sm btn-info"))),
-    layout_columns(col_widths = c(12),
-      card(card_header(i18n$t("Populations et rareté déclarée")),
-           DTOutput(ns("rarity_table"))),
-      card(card_header(i18n$t("Règle déclarée et compteurs")),
-           tableOutput(ns("rarity_summary"))),
+    layout_columns(
+      col_widths = c(6, 6),
+      tagList(
+        card(card_header(i18n$t("Règle déclarée et compteurs")),
+             tableOutput(ns("rarity_summary"))),
+        card(card_header(i18n$t("Populations et rareté déclarée")),
+             DTOutput(ns("rarity_table")))
+      ),
       card(card_header(i18n$t("Composition par population (descriptif)")),
-           plotOutput(ns("rarity_plot"), height = "340px")))
+           plotOutput(ns("rarity_plot"), height = "520px"))
+    )
   )
 }
 
