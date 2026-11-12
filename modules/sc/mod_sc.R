@@ -769,13 +769,17 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
             # (condition / réplicat) — sans cette colonne, tout le volet
             # A-vs-B (pseudobulk, Milo/scCODA, plots par condition) est
             # structurellement inaccessible (mod_sc.R:798, da_design:152).
-            accordion_panel(i18n$t("0.5 Métadonnées — condition / réplicat"), icon = icon("table"),
+            accordion_panel(tagList(i18n$t("0.5 Métadonnées — condition / réplicat"),
+                                    span(class = "badge text-bg-secondary ms-1", "Optionnel")),
+                            icon = icon("table"),
                             value = "0_metadata",
                             mod_sc_metadata_ui(ns("metadata"))),
             # MD-4 (décision 5) : gestion du conteneur sc_datasets — enregistrer
             # l'objet SC courant (brut ou traité) sous un label avec relation
             # déclarée (mode 1 = paramètres partagés, mode 2 = distincts).
-            accordion_panel(i18n$t("Datasets SC enregistrés (double jeu)"), icon = icon("database"),
+            accordion_panel(tagList(i18n$t("Datasets SC enregistrés (double jeu)"),
+                                    span(class = "badge text-bg-secondary ms-1", "Optionnel")),
+                            icon = icon("database"),
                             value = "0_sc_datasets",
                             mod_sc_datasets_ui(ns("sc_datasets")))
           )),
@@ -919,7 +923,8 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
         nav_panel(i18n$t("Rareté par population"), value = "tab_rarity", mod_sc_rarity_output_ui(ns("rarity")))
       ),
       nav_menu(i18n$t("Différentiel & DA"),
-        nav_panel(i18n$t("Pseudobulk DE"), value = "tab_pseudobulk", mod_sc_pseudobulk_output_ui(ns("pseudobulk"))),
+        nav_panel(uiOutput(ns("pseudobulk_tab_title")), value = "tab_pseudobulk",
+                  uiOutput(ns("pseudobulk_guarded"))),
         nav_panel(i18n$t("DA design"), value = "tab_da_design", mod_sc_da_design_output_ui(ns("da_design"))),
         # 1E (O28, spéc §2.5) : garde contextuelle single-sample — onglet
         # VISIBLE (jamais masqué ni grisé muet), libellé 🔒 dynamique + carte
@@ -1092,6 +1097,23 @@ mod_sc_server <- function(id, global_data) {
         try(accordion_panel_open(ns("acc_workflow"), values = "grp_prep"), silent = TRUE)
         try(accordion_panel_open(ns("acc_prep"), values = "0_metadata"), silent = TRUE)
       }, ignoreInit = TRUE)
+    })
+    observeEvent(input$pseudobulk_goto_design, {
+      try(accordion_panel_open(ns("acc_workflow"), values = "grp_prep"), silent = TRUE)
+      try(accordion_panel_open(ns("acc_prep"), values = "0_metadata"), silent = TRUE)
+    }, ignoreInit = TRUE)
+    output$pseudobulk_tab_title <- renderUI({
+      .sc_da_tab_title(.tr("Pseudobulk DE"))
+    })
+    output$pseudobulk_guarded <- renderUI({
+      if (isTRUE(.da_eligible())) {
+        mod_sc_pseudobulk_output_ui(ns("pseudobulk"))
+      } else {
+        .sc_da_lock_card(
+          .tr("Pseudobulk — agrégation des cellules par échantillon"),
+          "pseudobulk"
+        )
+      }
     })
     # P1-8 (fix 2026-11-07, plan post-E2E ADJUSTMENTS_PLAN.md #8) : boucle for →
     # lapply. La closure renderUI capture `da_pfx` PARESSEUSEMENT (résolu au
