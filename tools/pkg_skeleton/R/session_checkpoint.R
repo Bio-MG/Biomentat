@@ -652,8 +652,8 @@ ts_session_checkpoint_write_async <- function(layers, dir = NULL, trigger = "man
 #' engine only probes, never boots.
 ts_session_checkpoint_daemons_active <- function() {
   if (!requireNamespace("mirai", quietly = TRUE)) return(FALSE)
-  n <- tryCatch(mirai::daemons(), error = function(e) 0L)
-  is.numeric(n) && length(n) == 1L && !is.na(n) && n > 0
+  conns <- tryCatch(mirai::status()$connections, error = function(e) 0L)
+  is.numeric(conns) && length(conns) == 1L && !is.na(conns) && conns > 0
 }
 
 # -----------------------------------------------------------------------------
