@@ -30,6 +30,30 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — P1.4 GOLDEN : parité numérique des 3 moteurs DE + propriétés affines spatiales (harnais)] — 2026-11-13
+
+Harnais de parité S-tier (PRE_ROADMAP §P1.4 ; audit externe #5 « parité numérique vs
+scripts de référence dans une tolérance explicite ») : `tests/testthat/
+test-golden-bulk-de-parity.R` — **23 PASS / 0 FAIL** à la clôture ; conventions 0/0.
+
+### Ajouté
+- Fixture déterministe auto-contenue (graine 20261113, 200 gènes × 12 échantillons, 30
+  gènes DE à effet connu — aucun jeu externe requis).
+- **3 blocs de parité** : le moteur d'un onglet vs la recette de référence miroir
+  documentée file:line — `run_limma_voom_de` (voomWithQualityWeights → eBayes →
+  topTable, bulk_helpers.R:702-728), `run_edger_de` (estimateDisp → glmQLFit →
+  glmQLFTest coef=2, :558-585), DESeq2 (`build_dds` → `extract_deseq2_contrast
+  shrink=FALSE` vs DESeq+results direct). Tolérances explicites : 1e-8 sur logFC,
+  1e-6 relatif sur p/padj. **Parité mesurée quasi exacte sur les 3 moteurs** —
+  toute dérive de recette future rendra ces tests rouges avant l'utilisateur.
+- **Propriétés affines** de `apply_coord_orientation()` : identité, involutions
+  (swap, flip image), couplage dims↔swap, miroir combiné 3 drapeaux.
+- **Première prise du harnais** : le repli sans image de `flip_x`/`flip_y`
+  miroitait autour de `diff(range)` au lieu du centre de l'emprise — le nuage
+  était DÉPORTÉ hors de son bbox (mesuré : x ∈ [110,150] → [-110,-70]). FIX
+  `spatial_io.R` : repli = miroir intra-bbox (`sum(range) - x`), emprise
+  min/max préservée (Xenium/CosMx sans histologie) ; docstring à jour.
+
 ## [V1.x — BOOST P2.2 + P0.3 : i18n fileInput/fontes/littéraux FR sur 16 fichiers + README honnête] — 2026-11-13
 
 Exécution workflow dynamique (recon → builders → portes boost → vérificateur indépendant),

@@ -630,8 +630,9 @@ get_spatial_coords <- function(spatial_obj) {
 #'   image dimensions in pixels. When available, mirroring reflects around
 #'   the IMAGE extent rather than just the point cloud's own bounding box
 #'   (more correct when the tissue doesn't fill the whole capture area).
-#'   Falls back to the point cloud's own range when NULL (e.g. Xenium/CosMx,
-#'   or Visium with no histology extracted).
+#'   Falls back to mirroring WITHIN the point cloud's own bounding box when
+#'   NULL (e.g. Xenium/CosMx, or Visium with no histology extracted) — the
+#'   min/max footprint is preserved (propriété GOLDEN P1.4, 2026-11-13).
 #' @return coords, geometry corrected. Unchanged if all three flags are FALSE.
 apply_coord_orientation <- function(coords, swap_xy = FALSE, flip_x = FALSE, flip_y = FALSE,
                                      img_width = NULL, img_height = NULL) {
@@ -648,11 +649,15 @@ apply_coord_orientation <- function(coords, swap_xy = FALSE, flip_x = FALSE, fli
     img_height <- tmp_dim
   }
   if (isTRUE(flip_x)) {
-    w <- img_width %||% diff(range(coords$x, na.rm = TRUE))
+    # P1.4 GOLDEN (2026-11-13) : le repli sans image miroite AUTOUR DU CENTRE
+    # de l'emprise du nuage (min+max-x), pas autour de diff(range) — l'ancien
+    # repli `diff(range) - x` déportait le nuage hors de son emprise (mesuré :
+    # x ∈ [110,150] → [-110,-70]). Avec étendue image, le miroir reste [0, w].
+    w <- img_width %||% sum(range(coords$x, na.rm = TRUE))
     coords$x <- w - coords$x
   }
   if (isTRUE(flip_y)) {
-    h <- img_height %||% diff(range(coords$y, na.rm = TRUE))
+    h <- img_height %||% sum(range(coords$y, na.rm = TRUE))
     coords$y <- h - coords$y
   }
   coords
