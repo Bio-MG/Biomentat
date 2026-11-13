@@ -50,6 +50,10 @@ source_project_file("tools/pkg_skeleton/R/bulk_import_engine.R")
 source_project_file("tools/pkg_skeleton/R/session_checkpoint.R")
 source_project_file("tools/pkg_skeleton/R/biomentat_handoff.R")
 source_project_file("tools/pkg_skeleton/R/dataset_directory.R")
+# Moteur du registre multi-jeux : le chargeur par LOT enregistre chaque
+# dataset coché via bulk_multi_register() (producteur "import") — sans cette
+# ligne le handler de lot ne teste que son ordre de chargement (leçon :26-33).
+source_project_file("tools/pkg_skeleton/R/bulk_multi.R")
 source_project_file("modules/import/mod_import_bulk.R")
 
 suppressPackageStartupMessages(library(shiny))
@@ -66,6 +70,18 @@ suppressPackageStartupMessages(library(shiny))
   "section « Datasets découverts » absente de ", .MDD_MOD,
   " : PoC répertoire de datasets jalon P1 (fiche ",
   "PROPOSAL_DATASET_DIRECTORY_POC_2026-11-02.md §3.3/AC3/T6) non livré"
+)
+
+# ── Porte RED sur le SOURCE — multi-sélecteur (2026-11-13) : cases à cocher
+#    par ligne (ids chk_ds_<id>) + bouton de lot statique + enregistrement au
+#    registre bulk_multi. Motif .mdd_wired : asserted on the SOURCE so the
+#    test cannot survive the wiring deletion.
+.mdd_batch_wired <- grepl("chk_ds_", .mdd_src, fixed = TRUE) &&
+  grepl("btn_load_selected", .mdd_src, fixed = TRUE) &&
+  grepl("bulk_multi_register(", .mdd_src, fixed = TRUE)
+.mdd_red_batch_info <- paste0(
+  "multi-sélecteur absent de ", .MDD_MOD,
+  " : cases à cocher + « Charger la sélection » + enregistrement bulk_multi non livrés"
 )
 
 # ── Fixtures (gabarit v1 compact — 120 gènes, 4x2 pour le valide) ------------
@@ -283,5 +299,146 @@ test_that("T6-5 double garde : un clic (forcé) sur le bouton d'un invalid est r
     expect_true(any(grepl("pseudoreplication_detected|DS_UI_PSEUDO",
                           shiny::isolate(logs()))),
                 info = "le refus est tracé avec la raison v1")
+  })
+})
+
+# ── T6-6 -- multi-sélecteur : une case à cocher par ligne du scan table ------
+# Choix de surface (2026-11-13) : cases à cocher par LIGNE, PAS de conversion
+# DT — la table n'est pas un DT (renderUI + builder pur) et la conversion
+# casserait les assertions structurelles T6-3 pour zéro gain. Le builder pur
+# rend un widget shiny CORE par ligne (checkboxInput, zéro dépendance), en
+# champ ADDITIF `checkbox` : les assertions T6-3 sur $button/$loadable restent
+# inchangées.
+
+test_that("T6-6 multi-sélection : une case à cocher chk_ds_<id> par ligne, boutons Charger inchangés", {
+  expect_true(.mdd_batch_wired, info = .mdd_red_batch_info)
+  if (!.mdd_batch_wired) return(invisible(NULL))
+
+  root <- .mdd_fixtures()
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+  Sys.setenv(TRANSCRIPTO_DATASETS_DIR = root)
+  on.exit(Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR"), add = TRUE)
+
+  gd <- .mdd_env()
+  shiny::testServer(mod_import_bulk_server, args = list(global_data = gd), expr = {
+    session$setInputs(bulk_import_mode = "merged_matrix", counts_format = "rows",
+                      counts_has_header = TRUE, counts_has_rownames = TRUE,
+                      min_counts = 10, project_name = "P")
+    session$setInputs(btn_scan_datasets = 1L)
+    session$flushReact()
+    sc <- shiny::isolate(ds_scan_rv())
+    rows <- .bulk_datasets_table_rows(sc, ns = function(x) x, tr = function(k) k)
+    # un champ ADDITIF `checkbox` par entrée (row/button/loadable intacts)
+    expect_false(is.null(rows$DS_UI_VALID$checkbox),
+                 info = "le builder rend une case à cocher par ligne")
+    expect_false(is.null(rows$DS_UI_PSEUDO$checkbox))
+    expect_false(is.null(rows$DS_UI_EMPTY$checkbox))
+    # l'id d'input chk_ds_<id> est porté par la ligne (assertable, motif
+    # row_html T6-3 :221 — sérialisation d'affichage, pas de verdict DOM)
+    row_html <- paste(capture.output(print(rows$DS_UI_VALID$row)), collapse = "\n")
+    expect_match(row_html, "chk_ds_DS_UI_VALID", fixed = TRUE,
+                 info = "la case porte l'id d'input chk_ds_<id>")
+    # invariants T6-3 intacts : Charger actif sur valid, désactivé sinon (AC3)
+    expect_identical(rows$DS_UI_VALID$loadable, TRUE)
+    expect_null(shiny::tagGetAttribute(rows$DS_UI_VALID$button, "disabled"))
+    expect_false(is.null(shiny::tagGetAttribute(rows$DS_UI_PSEUDO$button, "disabled")))
+  })
+})
+
+# ── T6-7 -- lot : cocher 2 valids + « Charger la sélection » → 2 jeux au
+#    registre (labels = ids de scan), jeu actif = dernier chargé --------------
+
+test_that("T6-7 lot : cocher 2 valids + Charger la sélection -> 2 enregistrements bulk_multi, actif = dernier chargé", {
+  expect_true(.mdd_batch_wired, info = .mdd_red_batch_info)
+  if (!.mdd_batch_wired) return(invisible(NULL))
+
+  root <- .mdd_fixtures()
+  .mdd_drop(root, "DS_UI_VALID_2", samples = paste0("w", seq_len(4L)))
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+  Sys.setenv(TRANSCRIPTO_DATASETS_DIR = root)
+  on.exit(Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR"), add = TRUE)
+
+  gd <- .mdd_env()
+  shiny::testServer(mod_import_bulk_server, args = list(global_data = gd), expr = {
+    session$setInputs(bulk_import_mode = "merged_matrix", counts_format = "rows",
+                      counts_has_header = TRUE, counts_has_rownames = TRUE,
+                      min_counts = 10, project_name = "P")
+    session$setInputs(btn_scan_datasets = 1L)
+    session$flushReact()
+    # les inputs dynamiques chk_ds_ n'existent qu'APRÈS le scan (même
+    # discipline que btn_load_ds_ en T6-4 :246)
+    session$setInputs(chk_ds_DS_UI_VALID = TRUE, chk_ds_DS_UI_VALID_2 = TRUE)
+    session$flushReact()
+    session$setInputs(btn_load_selected = 1L)
+    session$flushReact()
+    reg <- shiny::isolate(global_data$bulk_datasets)
+    expect_false(is.null(reg),
+                info = "le registre multi-jeux est alimenté par le lot")
+    expect_length(reg, 2L)
+    expect_setequal(names(reg), c("DS_UI_VALID", "DS_UI_VALID_2"))
+    expect_identical(sort(names(reg)), sort(c("DS_UI_VALID", "DS_UI_VALID_2")),
+                     info = "labels du registre = ids de scan (manifest dataset_id)")
+    expect_identical(reg$DS_UI_VALID$producer, "import",
+                     info = "producteur 'import' du contrat bulk_multi")
+    expect_identical(reg$DS_UI_VALID_2$producer, "import")
+    expect_identical(ncol(reg$DS_UI_VALID$obj$counts), 4L)
+    expect_identical(nrow(reg$DS_UI_VALID$obj$counts), 120L)
+    expect_identical(ncol(reg$DS_UI_VALID_2$obj$counts), 4L)
+    # jeu ACTIF = dernier chargé (fixture VALID_2 = échantillons w1..w4)
+    obj <- shiny::isolate(global_data$bulk_obj)
+    expect_false(is.null(obj))
+    expect_identical(colnames(obj$counts), paste0("w", seq_len(4L)),
+                     info = "l'objet actif est le DERNIER dataset chargé du lot")
+    # bilan honnête du lot tracé dans le log opérateur
+    expect_true(any(grepl("2/2", shiny::isolate(logs()))),
+                info = "le bilan du lot (2/2) est tracé")
+    # résumé du registre — la même donnée que le DT ds_summary (Bulk > Multi-jeux)
+    expect_identical(nrow(bulk_multi_summary(reg)), 2L)
+  })
+})
+
+# ── T6-8 -- lot honnête : un invalid coché est refusé, le lot CONTINUE -------
+
+test_that("T6-8 lot honnête : un invalid coché est refusé (double garde), les 2 valids chargés (2/3), pas d'abandon du lot", {
+  expect_true(.mdd_batch_wired, info = .mdd_red_batch_info)
+  if (!.mdd_batch_wired) return(invisible(NULL))
+
+  root <- .mdd_fixtures()
+  .mdd_drop(root, "DS_UI_VALID_2", samples = paste0("w", seq_len(4L)))
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+  Sys.setenv(TRANSCRIPTO_DATASETS_DIR = root)
+  on.exit(Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR"), add = TRUE)
+
+  gd <- .mdd_env()
+  shiny::testServer(mod_import_bulk_server, args = list(global_data = gd), expr = {
+    session$setInputs(bulk_import_mode = "merged_matrix", counts_format = "rows",
+                      counts_has_header = TRUE, counts_has_rownames = TRUE,
+                      min_counts = 10, project_name = "P")
+    session$setInputs(btn_scan_datasets = 1L)
+    session$flushReact()
+    # ordre canonique du scan (sort list.dirs) : DS_UI_PSEUDO est cochée AVANT
+    # les valids — son refus ne doit PAS abandonner le lot (motif isolation §5)
+    session$setInputs(chk_ds_DS_UI_PSEUDO = TRUE, chk_ds_DS_UI_VALID = TRUE,
+                      chk_ds_DS_UI_VALID_2 = TRUE)
+    session$flushReact()
+    session$setInputs(btn_load_selected = 1L)
+    session$flushReact()
+    reg <- shiny::isolate(global_data$bulk_datasets)
+    expect_identical(length(reg), 2L,
+                     info = "les 2 valids sont enregistrés malgré le refus du milieu")
+    expect_setequal(names(reg), c("DS_UI_VALID", "DS_UI_VALID_2"))
+    expect_identical(sort(names(reg)), sort(c("DS_UI_VALID", "DS_UI_VALID_2")),
+                     info = "labels du registre = ids de scan (manifest dataset_id)")
+    lgs <- paste(shiny::isolate(logs()), collapse = "\n")
+    expect_match(lgs, "DS_UI_PSEUDO", fixed = TRUE,
+                 info = "le refus du dataset invalid est tracé avec son id")
+    expect_match(lgs, "refused", fixed = TRUE,
+                 info = "le bilan de lot nomme l'échec (statut refused)")
+    expect_match(lgs, "2/3", fixed = TRUE,
+                 info = "le bilan honnête du lot (2/3) est tracé")
+    # le jeu actif reste le dernier VALID chargé (le refus du milieu n'a
+    # laissé aucun objet invalide derrière lui)
+    obj <- shiny::isolate(global_data$bulk_obj)
+    expect_identical(colnames(obj$counts), paste0("w", seq_len(4L)))
   })
 })

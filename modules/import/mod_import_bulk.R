@@ -63,19 +63,28 @@
 #' PURE (no session symbol): takes the scan table returned by
 #' `ts_dataset_dir_scan()`, the module `ns` and a translator, and returns ONE
 #' named entry per dataset: `row` (the <tr> tag), `button` (the per-dataset
-#' « Charger » actionButton — DISABLED unless status == "valid", AC3) and
+#' « Charger » actionButton — DISABLED unless status == "valid", AC3),
+#' `checkbox` (the multi-selector checkboxInput `chk_ds_<id>`, champ ADDITIF
+#' 2026-11-13 — cf. bouton de lot `btn_load_selected`) and
 #' `loadable` (logical, headless-assertable). Top-level FILE function (not a
 #' server closure) so tests assert the structure directly, without HTML
 #' serialisation. Zero CSS: bootstrap utility classes only.
 #'
+#' Multi-sélecteur : cases à cocher par LIGNE, PAS de conversion DT — la
+#' table n'est pas un DT et la conversion casserait les assertions
+#' structurelles T6-3 pour zéro gain ; `checkboxInput` est du shiny CORE
+#' (zéro nouvelle dépendance, zéro JS).
+#'
 #' @param scan Named list as returned by `ts_dataset_dir_scan()`.
 #' @param ns Module namespace function.
 #' @param tr Translator (server `.tr` / identity in tests).
-#' @return Named list of list(row =, button =, loadable =).
+#' @return Named list of list(row =, button =, checkbox =, loadable =).
 .bulk_datasets_table_rows <- function(scan, ns, tr) {
   out <- list()
   for (id in names(scan)) {
     e <- scan[[id]]
+    checkbox <- shiny::checkboxInput(ns(paste0("chk_ds_", id)),
+                                     label = NULL, width = NULL)
     btn <- shiny::actionButton(ns(paste0("btn_load_ds_", id)),
                                label = tr("Charger"),
                                class = "btn-outline-primary btn-sm")
@@ -95,6 +104,7 @@
     if (is.null(nsamp)) nsamp <- e$checks$matrix_semantics$n_samples
     nsamp_txt <- if (is.null(nsamp) || length(nsamp) != 1L || is.na(nsamp)) "" else as.character(nsamp)
     row <- shiny::tags$tr(
+      shiny::tags$td(checkbox),
       shiny::tags$td(id),
       shiny::tags$td(espece),
       shiny::tags$td(mtype),
@@ -103,7 +113,8 @@
       shiny::tags$td(raison),
       shiny::tags$td(btn)
     )
-    out[[id]] <- list(row = row, button = btn, loadable = loadable)
+    out[[id]] <- list(row = row, button = btn, checkbox = checkbox,
+                      loadable = loadable)
   }
   out
 }
@@ -289,6 +300,12 @@ mod_import_bulk_ui <- function(id) {
             textInput(ns("multi_label"), i18n$t("Label multi-datasets (optionnel)"),
                       placeholder = .tr_plain("ex : GSE123_T2")),
             helpText(i18n$t("Si renseigné, le jeu importé est aussi enregistré sous ce nom pour la comparaison multi-jeux (Bulk > Multi-jeux).")),
+            # MULTI-SELECTOR (2026-11-13) : interaction connue, documentée
+            # plutôt que corrigée dans l'importeur — si ce label est renseigné,
+            # CHAQUE chargement du lot déclenche aussi .register_multi_dataset
+            # (2e+ chargement = avertissement duplicate_label, non bloquant)
+            # pendant que l'enregistrement du lot sous l'id de scan aboutit.
+            helpText(i18n$t("Le chargement par lot (« Charger la sélection ») enregistre chaque dataset coché sous son identifiant de scan, indépendamment du label ci-dessus.")),
 
             conditionalPanel(
               condition = sprintf("input['%s'] === 'merged_matrix'", ns("bulk_import_mode")),
@@ -377,6 +394,13 @@ mod_import_bulk_ui <- function(id) {
             div(class = "d-flex align-items-center gap-2 mb-2",
                 actionButton(ns("btn_scan_datasets"), i18n$t("Scanner le répertoire"),
                              class = "btn-outline-secondary btn-sm"),
+                # MULTI-SELECTOR (2026-11-13) : chargement par LOT des datasets
+                # cochés dans la table de scan — un seul actionButton statique ;
+                # libellé « Charger la sélection (N) » + état désactivé tant
+                # qu'aucune case n'est cochée, via le motif shinyjs existant
+                # (observe + toggleState/html, bloc btn_load).
+                actionButton(ns("btn_load_selected"), .tr_plain("Charger la sélection"),
+                             class = "btn-outline-primary btn-sm"),
                 uiOutput(ns("datasets_dir_txt"))
             ),
             uiOutput(ns("datasets_table_ui")),
@@ -979,19 +1003,22 @@ mod_import_bulk_server <- function(id, global_data) {
 
     .charger_dataset <- function(id) {
       entry <- shiny::isolate(ds_scan_rv())[[id]]
-      if (is.null(entry)) return(invisible(NULL))
+      if (is.null(entry)) return(invisible(list(ok = FALSE, status = "unknown")))
       if (!identical(entry$status, "valid")) {
         raison <- if (is.null(entry$raison) || is.na(entry$raison)) "?" else entry$raison
         msg <- sprintf(.tr("Refusé : dataset « %s » non valide (raison : %s)."), id, raison)
         add_log(paste("⛔", msg))
         showNotification(msg, type = "warning", duration = 8)
-        return(invisible(NULL))
+        # MULTI-SELECTOR (2026-11-13) : le retour RENSEIGNE le lot (statut
+        # exploitable par le handler btn_load_selected) — les appelants
+        # unitaires ignorent la valeur, zéro changement de comportement.
+        return(invisible(list(ok = FALSE, status = "refused")))
       }
       imp <- ts_drive_importer_of(global_data, "import_bulk")
       if (is.null(imp)) {
         showNotification(.tr("Importeur bulk indisponible — relancez l'application."),
                          type = "error", duration = 10)
-        return(invisible(NULL))
+        return(invisible(list(ok = FALSE, status = "no_importer")))
       }
       add_log(paste0("📂 ", sprintf(.tr("Chargement du dataset « %s » depuis le répertoire..."), id)))
       res <- tryCatch(
@@ -1008,7 +1035,7 @@ mod_import_bulk_server <- function(id, global_data) {
                                  paste(unlist(res$errors), collapse = " ; ")),
                          type = "error", duration = 10)
       }
-      invisible(NULL)
+      invisible(res)
     }
 
     observeEvent(input$btn_scan_datasets, {
@@ -1036,6 +1063,88 @@ mod_import_bulk_server <- function(id, global_data) {
       add_log(sprintf(.tr("Scan du répertoire des datasets : %d dataset(s)."), length(res)))
     })
 
+    # ── MULTI-SELECTOR : chargement par LOT des datasets cochés (2026-11-13)
+    # Un SEUL observeEvent statique (pas d'observateur dynamique : les ids
+    # sont lus au clic). Chaque dataset coché passe par le chemin unitaire
+    # EXISTANT (.charger_dataset -> importeur publié — zéro nouveau chemin)
+    # puis est enregistré au registre bulk_multi : producer "import" (tag du
+    # vocabulaire gelé), label = id de scan (manifest dataset_id),
+    # overwrite = TRUE comme « Save current state » (mod_bulk_datasets.R:88-90)
+    # — re-batch idempotent au lieu d'un refus duplicate_label. Le moteur est
+    # PUR : c'est l'appelant qui assigne global_data$bulk_datasets
+    # (bulk_multi.R:7-9). Jeu actif = dernier chargé (conséquence naturelle de
+    # global_data$bulk_obj écrasé par l'importeur à chaque passage).
+    # Isolation : UN échec (refus serveur, erreur d'import, capacity_exceeded)
+    # ne stoppe JAMAIS le lot (motif isolation du scan, dataset_directory.R §5)
+    # — chaque échec est collecté puis récapitulé honnêtement au bilan.
+    observeEvent(input$btn_load_selected, {
+      sc <- shiny::isolate(ds_scan_rv())
+      if (is.null(sc) || length(sc) == 0L) return()
+      ids <- names(sc)
+      sel <- ids[vapply(ids, function(id) isTRUE(input[[paste0("chk_ds_", id)]]),
+                        logical(1))]
+      if (length(sel) == 0L) {
+        showNotification(.tr("Aucun dataset sélectionné — cochez au moins une case."),
+                         type = "warning", duration = 6)
+        return()
+      }
+      n_tot <- length(sel)
+      n_ok <- 0L
+      failures <- character(0)
+      for (i in seq_along(sel)) {
+        id <- sel[[i]]
+        res <- .charger_dataset(id)
+        if (!isTRUE(res$ok)) {
+          raison <- if (length(res$errors) > 0L) paste(unlist(res$errors), collapse = " ; ")
+                    else if (!is.null(res$status)) as.character(res$status)
+                    else "erreur"
+          failures <- c(failures, sprintf("%s (%s)", id, raison))
+          next
+        }
+        new_ds <- tryCatch(
+          bulk_multi_register(global_data$bulk_datasets, id, global_data$bulk_obj,
+                              producer = "import", overwrite = TRUE),
+          bulk_multi_error = function(e) e)
+        if (inherits(new_ds, "bulk_multi_error")) {
+          failures <- c(failures, sprintf("%s (%s)", id, new_ds$message))
+          next
+        }
+        global_data$bulk_datasets <- new_ds
+        n_ok <- n_ok + 1L
+        showNotification(sprintf(.tr("✓ Dataset « %s » chargé (%d/%d)."), id, i, n_tot),
+                         type = "message", duration = 5)
+      }
+      bilan <- sprintf(.tr("%d/%d dataset(s) chargé(s) et enregistré(s) pour la comparaison multi-jeux"),
+                       n_ok, n_tot)
+      if (length(failures) > 0L) {
+        bilan <- paste(bilan, sprintf(.tr("— échecs : %s"),
+                                      paste(failures, collapse = ", ")))
+        showNotification(bilan, type = "warning", duration = 10)
+        add_log(paste("⚠️", bilan))
+      } else {
+        showNotification(bilan, type = "message", duration = 6)
+        add_log(paste("📦", bilan))
+      }
+    })
+
+    # État du bouton de lot : désactivé tant qu'aucune case n'est cochée,
+    # libellé « Charger la sélection (N) » reflétant le compte — motif shinyjs
+    # existant (observe + toggleState/html, bloc btn_load ci-dessus).
+    observe({
+      sc <- ds_scan_rv()
+      ids <- if (is.null(sc)) character(0) else names(sc)
+      n_sel <- if (length(ids) > 0L) {
+        sum(vapply(ids, function(id) isTRUE(input[[paste0("chk_ds_", id)]]),
+                   logical(1)))
+      } else {
+        0L
+      }
+      shinyjs::toggleState("btn_load_selected", condition = n_sel > 0L)
+      shinyjs::html("btn_load_selected",
+                    html = if (n_sel > 0L) sprintf(.tr("Charger la sélection (%d)"), n_sel)
+                    else .tr("Charger la sélection"))
+    })
+
     output$datasets_dir_txt <- renderUI({
       d <- ds_dir_rv()
       if (is.null(d)) return(NULL)
@@ -1053,7 +1162,9 @@ mod_import_bulk_server <- function(id, global_data) {
       rows <- .bulk_datasets_table_rows(sc, ns, .tr)
       tags$table(class = "table table-sm table-striped align-middle",
         tags$thead(tags$tr(
-          lapply(c("Identifiant", "Espèce", "Type", "Échantillons", "État", "Raison", "Charger"),
+          # MULTI-SELECTOR (2026-11-13) : colonne de sélection en tête —
+          # même convention que les en-têtes existants (.tr repli sur la clé).
+          lapply(c("☑", "Identifiant", "Espèce", "Type", "Échantillons", "État", "Raison", "Charger"),
                  function(h) tags$th(.tr(h)))
         )),
         tags$tbody(lapply(rows, function(r) r$row))

@@ -13236,6 +13236,34 @@
     {
       "fr": "Pool mirai indisponible — relancez l'application.",
       "en": "mirai pool unavailable — restart the application."
+    },
+    {
+      "fr": "Charger la sélection",
+      "en": "Load selection"
+    },
+    {
+      "fr": "Charger la sélection (%d)",
+      "en": "Load selection (%d)"
+    },
+    {
+      "fr": "Aucun dataset sélectionné — cochez au moins une case.",
+      "en": "No dataset selected — check at least one box."
+    },
+    {
+      "fr": "✓ Dataset « %s » chargé (%d/%d).",
+      "en": "✓ Dataset \"%s\" loaded (%d/%d)."
+    },
+    {
+      "fr": "%d/%d dataset(s) chargé(s) et enregistré(s) pour la comparaison multi-jeux",
+      "en": "%d/%d dataset(s) loaded and registered for the multi-dataset comparison"
+    },
+    {
+      "fr": "— échecs : %s",
+      "en": "— failures: %s"
+    },
+    {
+      "fr": "Le chargement par lot (« Charger la sélection ») enregistre chaque dataset coché sous son identifiant de scan, indépendamment du label ci-dessus.",
+      "en": "Batch loading (\"Load selection\") registers each checked dataset under its scan id, independently of the label above."
     }
   ]
 }
