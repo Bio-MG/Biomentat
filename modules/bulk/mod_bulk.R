@@ -3,6 +3,41 @@
 # `open=` still matches once titles become JS-shim tags. Dynamic strings via
 # global_data$i18n + global_data$language trigger.
 
+.BULK_TAB_STEP_MAP <- list(
+  tab_pca          = list(step = "1",  panel = "panel_filter",     key = "1. Pipeline Bulk — Contrôle qualité & filtrage"),
+  tab_qc           = list(step = "1",  panel = "panel_filter",     key = "1. Pipeline Bulk — Contrôle qualité & filtrage"),
+  tab_batch_qc     = list(step = "1",  panel = "panel_filter",     key = "1. Pipeline Bulk — Contrôle qualité & filtrage"),
+  tab_volcano      = list(step = "2",  panel = "panel_de",         key = "2. Design & Contrastes"),
+  tab_ma           = list(step = "2",  panel = "panel_de",         key = "2. Design & Contrastes"),
+  tab_heatmap      = list(step = "2",  panel = "panel_de",         key = "2. Design & Contrastes"),
+  tab_table        = list(step = "2",  panel = "panel_de",         key = "2. Design & Contrastes"),
+  tab_updown       = list(step = "2",  panel = "panel_de",         key = "2. Design & Contrastes"),
+  tab_multimethod  = list(step = "3",  panel = "panel_de",         key = "2. Design & Contrastes"),
+  tab_venn         = list(step = "3",  panel = "panel_de",         key = "2. Design & Contrastes"),
+  tab_pathway      = list(step = "3",  panel = "panel_pathways",   key = "3. Pathway Enrichment"),
+  tab_signatures   = list(step = "3b", panel = "panel_signatures", key = "3b. Signatures cellulaires"),
+  tab_wgcna        = list(step = "3c", panel = "panel_wgcna",      key = "3c. Réseau de co-expression (WGCNA)"),
+  tab_survival     = list(step = "3d", panel = "panel_survival",   key = "3d. Survie & association clinique"),
+  tab_pattern      = list(step = "3e", panel = "panel_pattern",    key = "3e. Clustering de profils"),
+  tab_dose         = list(step = "3f", panel = "panel_dose",       key = "3f. Dose–réponse / time-course"),
+  tab_bulk_network = list(step = "3g", panel = "panel_network",    key = "3g. Réseau PCSF (interactome)"),
+  tab_bulk_multi   = list(step = "6",  panel = "panel_datasets",   key = "Multi-jeux — Datasets enregistrés"),
+  tab_bulk_merge   = list(step = "6",  panel = "panel_merge",      key = "Multi-jeux — Fusion de jeux"),
+  tab_resume       = list(step = "4",  panel = "panel_report",     key = "4. Livrables — Rapport & Script R")
+)
+
+.bulk_tab_step_meta <- function(tab) {
+  if (is.null(tab) || !is.character(tab) || length(tab) != 1L || !nzchar(tab)) return(NULL)
+  .BULK_TAB_STEP_MAP[[tab]]
+}
+
+.bulk_signatures_ready <- function(shared_rv) {
+  has_vst <- !is.null(shared_rv$vst_mat)
+  ac <- shared_rv$active_contrast
+  has_contrast <- !is.null(ac) && length(ac) > 0L && nzchar(as.character(ac)[1L])
+  list(ready = has_vst && has_contrast, has_vst = has_vst, has_contrast = has_contrast)
+}
+
 mod_bulk_ui <- function(id) {
   ns <- NS(id)
   # BULK-9 (fix 2026-11-06) : layout_sidebar est rendu ENFANT UNIQUE direct du
@@ -67,7 +102,9 @@ mod_bulk_ui <- function(id) {
                           value = "panel_survival",
                           icon = icon("heart-pulse"), mod_bulk_survival_ui(ns("survival"))),
           # STAT-S3 : clustering de profils d'expression (kmeans MVP, descriptif).
-          accordion_panel(i18n$t("3e. Clustering de profils"), value = "panel_pattern",
+          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("3e. Clustering de profils"), '</span>',
+                                      ' 🔒')),
+                          value = "panel_pattern",
                           icon = icon("chart-line"), mod_bulk_pattern_ui(ns("pattern"))),
           # NEW-1 : dose-réponse / time-course (drc, descriptif).
           accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("3f. Dose–réponse / time-course"), '</span>',
@@ -78,7 +115,9 @@ mod_bulk_ui <- function(id) {
           # (heuristique, hors ligne ; N'EST PAS un PPI).
           # B1-D (O21, 2026-10-28) : 3g REMONTE avant « 4. Livrables » — la
           # progression redevient 3e → 3f → 3g → 4 → Multi-jeux.
-          accordion_panel(i18n$t("3g. Réseau PCSF (interactome)"), value = "panel_network",
+          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("3g. Réseau PCSF (interactome)"), '</span>',
+                                      ' 🔒')),
+                          value = "panel_network",
                           icon = icon("share-nodes"), mod_bulk_network_ui(ns("network"))),
           # LOT 3A (V1.x UX): deliverables come after the analysis steps
           # (B1-D : report + reproducible R script already live together in
@@ -101,7 +140,11 @@ mod_bulk_ui <- function(id) {
         # sticky se monte EN TÊTE des onglets de visualisation DE (slot header
         # du navset). Miroir bidirectionnel de `active_contrast_view` (sidebar
         # Étape 2, source de vérité) — synchro dans mod_bulk_de_run.R.
-        header = mod_bulk_de_contrast_bar_ui(ns("de")),
+        header = tagList(
+          mod_bulk_de_contrast_bar_ui(ns("de")),
+          uiOutput(ns("bulk_step_sync_bar")),
+          uiOutput(ns("bulk_signatures_guard_ui"))
+        ),
         # Chantier 4 (PROPOSAL_UIUX_HARMONIZATION 2026-11-06) : 20 onglets à
         # plat sur 3-4 rangées → gabarit Spatial généralisé, ≤9 items de
         # 1er niveau numérotés par étape. Les groupes sont des `nav_menu()` —
@@ -215,6 +258,52 @@ mod_bulk_server <- function(id, global_data) {
     observeEvent(input$main_tabs, {
       shared_rv$main_tabs_current <- input$main_tabs
     }, ignoreNULL = TRUE)
+
+    output$bulk_step_sync_bar <- renderUI({
+      global_data$language
+      meta <- .bulk_tab_step_meta(input$main_tabs)
+      if (is.null(meta)) return(NULL)
+      div(
+        class = "d-flex align-items-center gap-2 px-3 py-1 border-bottom bg-light small",
+        actionLink(
+          session$ns("sync_sidebar_step"),
+          label = tagList(
+            span(class = "badge bg-secondary me-1", meta$step),
+            span(.tr(meta$key))
+          ),
+          class = "text-decoration-none text-body"
+        )
+      )
+    })
+
+    observeEvent(input$sync_sidebar_step, {
+      meta <- .bulk_tab_step_meta(input$main_tabs)
+      if (!is.null(meta) && requireNamespace("bslib", quietly = TRUE)) {
+        try(bslib::accordion_panel_open(id = "acc_bulk", values = meta$panel, session = session),
+            silent = TRUE)
+      }
+    }, ignoreInit = TRUE)
+
+    output$bulk_signatures_guard_ui <- renderUI({
+      global_data$language
+      tab <- input$main_tabs
+      if (is.null(tab) || !(tab %in% c("tab_signatures", "tab_wgcna", "tab_pattern",
+                                       "tab_dose", "tab_survival"))) {
+        return(NULL)
+      }
+      st <- .bulk_signatures_ready(shared_rv)
+      if (isTRUE(st$ready)) return(NULL)
+      msgs <- c(
+        if (!st$has_vst) .tr("Lancez d'abord l'étape 1 (Filtrage & VST)."),
+        if (!st$has_contrast) .tr("⚠️ Lancez d'abord l'étape 2 (Analyse Différentielle).")
+      )
+      div(
+        class = "alert alert-warning d-flex align-items-center gap-2 mx-3 mt-2 mb-1 py-2 small",
+        role = "alert",
+        span("\U0001f512"),
+        span(paste(msgs, collapse = " "))
+      )
+    })
 
     # Pipeline status bar — language-aware.
     output$pipeline_status_bar <- renderUI({
