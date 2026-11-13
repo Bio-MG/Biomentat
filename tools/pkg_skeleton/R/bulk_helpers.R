@@ -742,6 +742,26 @@ run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_targ
 
 
 
+#' GEMS PA v2b : disponibilite du moteur mixte variancePartition::dream()
+#'
+#' Verifie la presence des packages requis ET l'absence d'incompatibilite
+#' connue lme4 >= 2.0 / variancePartition < 1.38 (as_lmerModLmerTest2 attend
+#' le formel 'theta' alors que lme4 2.0+ expose 'par').
+bulk_dream_available <- function() {
+  if (!requireNamespace("variancePartition", quietly = TRUE) ||
+      !requireNamespace("limma", quietly = TRUE) ||
+      !requireNamespace("edgeR", quietly = TRUE) ||
+      !requireNamespace("BiocParallel", quietly = TRUE)) {
+    return(FALSE)
+  }
+  if (requireNamespace("lme4", quietly = TRUE) &&
+      utils::packageVersion("lme4") >= "2.0.0" &&
+      utils::packageVersion("variancePartition") < "1.38.0") {
+    return(FALSE)
+  }
+  TRUE
+}
+
 #' GEMS PA v2a : modèle mixte variancePartition::dream() pour blocs appariés
 run_dream_de <- function(counts_matrix, metadata, condition_col,
                          group_target, group_ref,

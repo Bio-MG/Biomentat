@@ -113,7 +113,8 @@
     c(
       if (requireNamespace("DESeq2", quietly = TRUE)) stats::setNames(c("deseq2"), c(.trl("DESeq2 (recommand\u00e9)"))),
       if (requireNamespace("edgeR",  quietly = TRUE)) c("edgeR" = "edger"),
-      if (has_limma)                                  c("limma-voom" = "limma")
+      if (has_limma)                                  c("limma-voom" = "limma"),
+      if (has_limma && bulk_dream_available())        c("limma-dream" = "dream")
     )
   })
 

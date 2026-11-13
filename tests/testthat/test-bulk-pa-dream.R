@@ -107,6 +107,25 @@ test_that("PA-v2a : echec dream() encapsule en bulk_de_error (jamais d'erreur br
   }
 })
 
+test_that("PA-v2b : bulk_dream_available() garde lme4 >= 2.0 + variancePartition < 1.38 et UI gatee", {
+  expect_true(exists("bulk_dream_available", mode = "function"))
+  avail <- bulk_dream_available()
+  if (.dream_lme4_incompat()) {
+    expect_false(avail)
+  } else if (requireNamespace("variancePartition", quietly = TRUE) &&
+             requireNamespace("limma", quietly = TRUE) &&
+             requireNamespace("edgeR", quietly = TRUE)) {
+    expect_true(avail)
+  }
+
+  eng_src <- paste(readLines(file.path(ts_project_root(), "modules/bulk_de/mod_bulk_de_engine.R"),
+                             warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  pb_src <- paste(readLines(file.path(ts_project_root(), "modules/sc/mod_sc_pseudobulk.R"),
+                            warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_true(grepl("bulk_dream_available()", eng_src, fixed = TRUE))
+  expect_true(grepl("bulk_dream_available()", pb_src, fixed = TRUE))
+})
+
 test_that("PA-v2a : refus honnete bulk_de_error si pair_col absent, singleton ou treat_lfc > 0", {
   skip_if_not_installed("variancePartition")
   d <- .dream_fixture()

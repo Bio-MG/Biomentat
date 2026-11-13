@@ -194,8 +194,13 @@ mod_sc_pseudobulk_ui <- function(id) {
     selectInput(ns("group_target"), i18n$t("Groupe Cible"), choices = NULL),
     selectInput(ns("group_ref"), i18n$t("Groupe Référence"), choices = NULL),
     radioButtons(ns("engine"), i18n$t("Moteur Statistique"),
-                 choices = setNames(c("deseq2", "edger", "limma"),
-                                    c(.tr_plain("DESeq2 (recommandé)"), "edgeR", "limma-voom")),
+                 choices = c(
+                   setNames(c("deseq2", "edger", "limma"),
+                            c(.tr_plain("DESeq2 (recommandé)"), "edgeR", "limma-voom")),
+                   if (exists("bulk_dream_available", mode = "function") && bulk_dream_available()) {
+                     c("limma-dream" = "dream")
+                   }
+                 ),
                  selected = "deseq2"),
     uiOutput(ns("pb_no_rep_ui")),
     fluidRow(
