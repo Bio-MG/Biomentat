@@ -30,6 +30,26 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — P0.3 final : licence univoque GPL-3 — LICENSE à la racine, badge README aligné (Q2)] — 2026-11-13
+
+Résolution **Q2** (PRE_ROADMAP §3a) sur mesure des licences installées : famille
+copyleft de l'analyse (`limma`/`edgeR` GPL ≥2 · `scran`/`SingleCellExperiment` GPL-3 ·
+`variancePartition` GPL-2 · `SoupX` GPL-2 · `DESeq2` LGPL-3) vs permissifs (shiny/Seurat/
+celda MIT, data.table MPL-2.0, BPCells Apache-or-MIT, reticulate Apache-2.0). AGPL-3
+écarté (O6 figé : 1-utilisateur/1-process, pas de service réseau) ; Apache-2.0/MPL/BSD/
+CC-BY-NC/dual écartés (table d'arbitrage opérateur 2026-11-13).
+
+### Corrigé
+- **`LICENSE` créé à la racine** — texte canonique GPL-3 (copié de la base de licences
+  locale de R, `R-4.4.2/share/licenses/GPL-3`, sans réseau) ; la contradiction triple
+  (README MIT / `DESCRIPTION:34` GPL-3 / GitHub `license: null`) est **soldée** —
+  GitHub détectera `GPL-3` au prochain push.
+- **`README.md:8`** badge MIT → badge GPL-3 ; **`:421` (FR)** et **`:778` (EN)** —
+  sections Licence réécrites (résolution Q2 consignée, référence racine `LICENSE`).
+- `tools/pkg_skeleton/DESCRIPTION:34` GPL-3 : inchangé (déjà correct).
+- Gardes : `audit_doc_refs` **0 erreur** (sections 1&3 — les refs `LICENSE` de README
+  résolvent désormais) · conventions **0 err/0 avert**.
+
 ## [V1.x — P1.4 GOLDEN : parité numérique des 3 moteurs DE + propriétés affines spatiales (harnais)] — 2026-11-13
 
 Harnais de parité S-tier (PRE_ROADMAP §P1.4 ; audit externe #5 « parité numérique vs

@@ -5,7 +5,7 @@ Une plateforme R/Shiny modulaire, **local-first**, dédiée à l’exploration e
 > ℹ️ **Anciennement « Cerberus »** (octobre–novembre 2026) — renommé le 2026-11-05. À ne pas confondre avec [`mortazavilab/cerberus`](https://github.com/mortazavilab/cerberus) (outil Python/Streamlit de comparaison de modèles de transcrits long-read), sans lien avec ce projet.
 
 [![R](https://img.shields.io/badge/language-R-blue.svg)](https://www.r-project.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 **Langues :** [Français](#français) · [English](#english)
 
@@ -418,7 +418,7 @@ En cas de problème, ouvrez une GitHub Issue en incluant :
 
 ## Licence
 
-Ce projet est distribué sous licence MIT. Consultez le fichier `LICENSE` du dépôt pour le texte complet.
+Ce projet est distribué sous licence **GNU GPL-3** (résolution Q2 du PRE_ROADMAP §3a, 2026-11-13 — cohérent avec `tools/pkg_skeleton/DESCRIPTION` et la famille des dépendances d'analyse ; les packages permissifs liés restent intacts). Consultez le fichier `LICENSE` à la racine du dépôt pour le texte complet.
 
 ---
 
@@ -775,4 +775,4 @@ If you encounter issues, please open a GitHub Issue and include:
 
 ## License
 
-This project is distributed under the MIT License. See the `LICENSE` file in the repository for full details.
+This project is distributed under the **GNU GPL-3** license (Q2 resolution of the PRE_ROADMAP §3a, 2026-11-13 — coherent with `tools/pkg_skeleton/DESCRIPTION` and the analysis-dependency family; the permissive linked packages remain untouched). See the root `LICENSE` file for the full text.
