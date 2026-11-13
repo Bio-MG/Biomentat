@@ -6326,8 +6326,8 @@
       "en": "Bulk RNA: Differential analysis with DESeq2/edgeR"
     },
     {
-      "fr": "Spatial: Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation WebGL → Multi-echantillons (integration Harmony conjointe, asynchrone) → Export (paquet .zip / script R reproductible)",
-      "en": "Spatial: Auto pipeline (1 click) OR QC → Clustering (BANKSY, async) → Deconvolution (RCTD/Label Transfer/STdeconvolve, async) → WebGL Visualization → Multi-sample (Harmony joint integration, async) → Export (.zip bundle / reproducible R script)"
+      "fr": "Spatial: Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation spatiale (WebGL optionnel via leafgl) → Multi-echantillons (integration Harmony conjointe, asynchrone) → Export (paquet .zip / script R reproductible)",
+      "en": "Spatial: Auto pipeline (1 click) OR QC → Clustering (BANKSY, async) → Deconvolution (RCTD/Label Transfer/STdeconvolve, async) → Spatial visualization (optional WebGL via leafgl) → Multi-sample (Harmony joint integration, async) → Export (.zip bundle / reproducible R script)"
     },
     {
       "fr": "💾 Gestion de la Mémoire",
