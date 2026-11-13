@@ -742,6 +742,113 @@ run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_targ
 
 
 
+#' GEMS PA v2a : modèle mixte variancePartition::dream() pour blocs appariés
+run_dream_de <- function(counts_matrix, metadata, condition_col,
+                         group_target, group_ref,
+                         covariates = character(0), p_adjust_method = "BH",
+                         pair_col = NULL, treat_lfc = 0) {
+  p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
+
+  if (is.numeric(treat_lfc) && length(treat_lfc) == 1L &&
+      is.finite(treat_lfc) && treat_lfc > 0) {
+    stop(errorCondition(
+      "Le seuil treat_lfc > 0 n'est pas supporte par dream (utilisez limma-voom pour treat).",
+      class = "bulk_de_error"
+    ))
+  }
+
+  missing_pkgs <- c(
+    if (!requireNamespace("variancePartition", quietly = TRUE)) "variancePartition",
+    if (!requireNamespace("limma", quietly = TRUE)) "limma",
+    if (!requireNamespace("edgeR", quietly = TRUE)) "edgeR",
+    if (!requireNamespace("BiocParallel", quietly = TRUE)) "BiocParallel"
+  )
+  if (length(missing_pkgs) > 0L) {
+    stop(errorCondition(
+      paste0("Package(s) manquant(s) pour dream : ", paste(missing_pkgs, collapse = ", "), "."),
+      class = "bulk_de_error"
+    ))
+  }
+
+  common <- intersect(colnames(counts_matrix), rownames(metadata))
+  counts_matrix <- counts_matrix[, common, drop = FALSE]
+  metadata      <- metadata[common, , drop = FALSE]
+
+  grp <- factor(metadata[[condition_col]], levels = c(group_ref, group_target))
+  covariates <- intersect(covariates, colnames(metadata))
+  keep <- !is.na(grp)
+  for (cov in covariates) keep <- keep & !is.na(metadata[[cov]])
+
+  if (is.null(pair_col) || length(pair_col) != 1L || !nzchar(trimws(as.character(pair_col)))) {
+    stop(errorCondition(
+      "Le moteur dream requiert une colonne d'appariement (pair_col) non vide.",
+      class = "bulk_de_error"
+    ))
+  }
+  pair_col <- trimws(as.character(pair_col))
+  if (!pair_col %in% colnames(metadata)) {
+    stop(errorCondition(
+      paste0("Colonne d'appariement '", pair_col, "' introuvable dans les metadonnees."),
+      class = "bulk_de_error"
+    ))
+  }
+  keep <- keep & !is.na(metadata[[pair_col]])
+  if (sum(keep) < 4L) {
+    stop(errorCondition(
+      "Trop peu d'echantillons valides pour dream (minimum 4 recommande).",
+      class = "bulk_de_error"
+    ))
+  }
+
+  meta_keep <- droplevels(metadata[keep, , drop = FALSE])
+  grp_keep  <- droplevels(grp[keep])
+  pair_keep <- droplevels(factor(meta_keep[[pair_col]]))
+  blk_tbl   <- table(pair_keep)
+  if (nlevels(pair_keep) < 2L || min(blk_tbl) < 2L) {
+    stop(errorCondition(
+      paste0("Colonne d'appariement '", pair_col, "' invalide pour dream : ",
+             "au moins 2 blocs et 2 observations par bloc requis (mesure : blocs = ",
+             nlevels(pair_keep), ", min bloc = ", if (length(blk_tbl)) min(blk_tbl) else 0L, ")."),
+      class = "bulk_de_error"
+    ))
+  }
+
+  meta_keep[[pair_col]] <- pair_keep
+  data_df <- data.frame(grp_keep = grp_keep, meta_keep, check.names = FALSE)
+  rhs <- c("grp_keep", setdiff(covariates, pair_col), sprintf("(1 | `%s`)", pair_col))
+  form <- stats::as.formula(paste("~", paste(rhs, collapse = " + ")))
+
+  y <- edgeR::DGEList(counts = round(counts_matrix[, keep, drop = FALSE]))
+  y <- edgeR::calcNormFactors(y)
+  bp <- BiocParallel::SerialParam()
+  v <- tryCatch(
+    variancePartition::voomWithDreamWeights(y, form, data_df, BPPARAM = bp),
+    error = function(e) stop(errorCondition(
+      paste0("Echec voomWithDreamWeights() : ", conditionMessage(e)),
+      class = "bulk_de_error"
+    ))
+  )
+  fit <- tryCatch(
+    variancePartition::dream(v, form, data_df, BPPARAM = bp),
+    error = function(e) stop(errorCondition(
+      paste0("Echec variancePartition::dream() : ", conditionMessage(e)),
+      class = "bulk_de_error"
+    ))
+  )
+  fit <- variancePartition::eBayes(fit)
+  res <- variancePartition::topTable(
+    fit, coef = 2L, number = Inf, sort.by = "P", adjust.method = p_adjust_method
+  )
+
+  res$gene <- rownames(res)
+  colnames(res)[colnames(res) == "logFC"]     <- "log2FoldChange"
+  colnames(res)[colnames(res) == "P.Value"]   <- "pvalue"
+  colnames(res)[colnames(res) == "adj.P.Val"] <- "padj"
+  res[order(res$padj), ]
+}
+
+
+
 #' Dispatch DE engine call
 
 run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
@@ -762,14 +869,13 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
   bulk_assert_raw_counts(counts_matrix, paste0("analyse différentielle (", engine, ")"),
                          allow_non_integer = allow_non_integer)
 
-  # GEMS PA v1 : le bloc apparié (pair_col) n'est supporté que par le moteur
-  # limma (D1 — v1 = duplicateCorrelation+weights, dream en seconde vague).
+  # GEMS PA v1/v2 : le bloc apparié (pair_col) est supporté par limma et dream.
   # Refus HONNÊTE plutôt qu'un traitement silencieux comme indépendant —
   # c'est précisément l'analyse fausse que PA corrige.
   if (!is.null(pair_col) && length(pair_col) == 1L && nzchar(trimws(as.character(pair_col))) &&
-      !identical(engine, "limma")) {
-    stop(errorCondition(paste0("Le bloc apparié (pair_col) n'est supporté que par le moteur limma (GEMS PA v1) — moteur demandé : ", engine,
-                               ". Choisissez limma, ou désélectionnez la colonne d'appariement."), class = "bulk_de_error"))
+      !(engine %in% c("limma", "dream"))) {
+    stop(errorCondition(paste0("Le bloc apparié (pair_col) n'est supporté que par les moteurs limma et dream — moteur demandé : ", engine,
+                               ". Choisissez limma ou dream, ou désélectionnez la colonne d'appariement."), class = "bulk_de_error"))
   }
 
   switch(engine,
@@ -788,6 +894,8 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
                          fixed_dispersion = fixed_dispersion),
 
     limma = run_limma_voom_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method, pair_col = pair_col, treat_lfc = treat_lfc),
+
+    dream = run_dream_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method, pair_col = pair_col, treat_lfc = treat_lfc),
 
     stop(errorCondition(paste0("Moteur DE non supporté : ", engine), class = "bulk_de_error"))
 
@@ -966,6 +1074,7 @@ bulk_de_engine_label <- function(engine) {
          deseq2 = "DESeq2",
          edger  = "edgeR",
          limma  = "limma-voom",
+         dream  = "limma-dream",
          toupper(eng))
 }
 
