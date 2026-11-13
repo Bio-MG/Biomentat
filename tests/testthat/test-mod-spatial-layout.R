@@ -210,19 +210,39 @@ test_that("the Spatial sidebar GEOMETRY is read from the real sources, not from 
   expect_identical(as.integer(mod[1]), 340L)
 })
 
-test_that("EVERY Spatial sub-panel sidebar is enumerated, and the worst is named", {
-  # MEASURED live: the hotspot panel was the one REPORTED, but the geometry is
-  # shared. A test that only looked at mod_spatial_qc.R would have called a
-  # nine-panel problem a one-panel one — the mistake the handoff's item nearly became.
-  panels <- .tsl_panel_files()
-  widths <- lapply(panels, function(f) .tsl_sidebar_widths(file.path("modules", "spatial", f)))
-  names(widths) <- panels
+test_that("P3.1 RC3: ZERO mounted Spatial step sub-panels declare an inner sidebar (single-sidebar fill chain)", {
+  mounted_steps <- c(
+    "mod_spatial_qc.R",
+    "mod_spatial_cluster.R",
+    "mod_spatial_viz.R",
+    "mod_spatial_multi.R",
+    "mod_spatial_niche.R",
+    "mod_spatial_export.R",
+    "mod_spatial_report.R",
+    file.path("deconv", "mod_spatial_deconv_ui.R")
+  )
+  widths <- lapply(mounted_steps, function(f) .tsl_sidebar_widths(file.path("modules", "spatial", f)))
+  names(widths) <- mounted_steps
   declared <- widths[vapply(widths, length, integer(1)) > 0L]
 
-  expect_gte(length(declared), 8L)
-  expect_true("mod_spatial_qc.R" %in% names(declared))
-  expect_identical(as.integer(declared[["mod_spatial_qc.R"]][1]), 350L)
-  for (f in names(declared)) expect_gte(as.integer(declared[[f]][1]), 320L)
+  expect_identical(length(declared), 0L,
+                   info = sprintf("Inner sidebars remain in Spatial step UIs: %s",
+                                  paste(names(declared), collapse = ", ")))
+
+  parent <- paste(.tsl_code(file.path("modules", "spatial", "mod_spatial.R")), collapse = "\n")
+  for (fn_call in c(
+    'mod_spatial_qc_controls_ui(ns("qc"))',
+    'mod_spatial_cluster_controls_ui(ns("cluster"))',
+    'mod_spatial_deconv_controls_ui(ns("deconv"))',
+    'mod_spatial_viz_controls_ui(ns("viz"))',
+    'mod_spatial_multi_controls_ui(ns("multi"))',
+    'mod_spatial_niche_controls_ui(ns("niche"))',
+    'mod_spatial_export_controls_ui(ns("export"))',
+    'mod_spatial_report_controls_ui(ns("report"))'
+  )) {
+    expect_match(parent, fn_call, fixed = TRUE,
+                 info = sprintf("mod_spatial.R must mount %s in its left workflow accordion", fn_call))
+  }
 })
 
 test_that("DISPROVEN PREMISE, KEPT AS A RECORD: 576px is a FLOOR, not a budget", {
@@ -296,41 +316,23 @@ test_that("the module-level sidebar stays as shipped: closing it was measured an
   expect_true("mod_spatial_qc.R" %in% .tsl_panel_files())
 })
 
-test_that("RED: the QC panel's OWN sidebar starves its plots, and one lever clears it", {
-  # THE REGRESSION, and it is deliberately QC-ONLY: the app's module-level skeleton
-  # and the eight other sub-panels are NOT touched. With the module sidebar as
-  # shipped, this panel's column is 334 px (MEASURED, .MEASURED_QC_COLUMN_PX) and its
-  # own `sidebar(width = 350)` takes `min(334 - 48, 350) = 286`, leaving main 48 px.
-  # The bslib law says NO width value fixes that — any sidebar at or above
-  # `column - 48` leaves exactly 48 px — so the only single-argument lever is this
-  # panel's own initial state: `open = "closed"` on its `sidebar()` call, which
-  # collapses the 286 px track to 0, hands the panel its whole 334 px, and keeps the
-  # QC controls (title, thresholds, sliders, the hotspot button) one click away on
-  # bslib's own toggle. No CSS is forced and no `!important` is added anywhere.
-  # ⚠️ This does NOT promise the plots become readable: 334 px split 7/5 by
-  # `layout_columns()` is ~191 px and ~137 px, and the measured card heights were
-  # 120 px. The live measurement owns that verdict; what this test owns is the
-  # STRUCTURE (the starved main) and the single lever.
+test_that("P3.1 RC2+RC3: the QC panel has no inner sidebar (full 334 px column goes to plots) and #spatial-results tab strip is hidden in favor of active_step_breadcrumb_ui", {
   qc_file <- file.path("modules", "spatial", "mod_spatial_qc.R")
-  declared <- .tsl_sidebar_open(qc_file)
-  qc_sidebar <- .tsl_sidebar_widths(qc_file)[1]
-  column <- .MEASURED_QC_COLUMN_PX
+  qc_sidebars <- .tsl_sidebar_widths(qc_file)
+  expect_identical(length(qc_sidebars), 0L,
+                   info = "mod_spatial_qc_ui() must not wrap results in an inner layout_sidebar")
 
-  # 1. the declaration, read from CODE (comments are stripped, see .tsl_code)
-  expect_identical(declared, "closed",
-                   info = "the QC panel sidebar must declare open = \"closed\"")
+  main_width <- .MEASURED_QC_COLUMN_PX
+  expect_true(main_width >= .USABLE_MAIN_PX,
+              info = sprintf("QC panel main is %d px (usable floor %d px)", main_width, .USABLE_MAIN_PX))
 
-  # 2. the starved main it produces WITHOUT the lever, asserted so the fix cannot be a
-  #    no-op, and computed from the product's OWN declared width rather than a copy
-  main_open <- .tsl_main_width(column, as.integer(qc_sidebar))
-  expect_identical(main_open, 48L)
-
-  # 3. the consequence of the lever, from the same measured column
-  main_closed <- if (identical(declared, "closed")) column else main_open
-  expect_true(main_closed >= .USABLE_MAIN_PX,
-              info = sprintf("QC panel main is %d px (column %d, sidebar %d declared open = \"%s\"); the usable floor is %d px",
-                            main_closed, column, as.integer(qc_sidebar),
-                            if (nzchar(declared)) declared else "none", .USABLE_MAIN_PX))
+  parent <- paste(.tsl_read(file.path("modules", "spatial", "mod_spatial.R")), collapse = "\n")
+  expect_match(parent, "#%s { display: none; }", fixed = TRUE,
+               info = "mod_spatial.R must visually hide the duplicate #spatial-results outer tab strip (Option A)")
+  expect_false(grepl("!important", parent, fixed = TRUE),
+               info = "mod_spatial.R Option A CSS must not use !important")
+  expect_match(parent, 'uiOutput(ns("active_step_breadcrumb_ui"))', fixed = TRUE,
+               info = "mod_spatial.R must render active_step_breadcrumb_ui in the results header")
 })
 
 # =============================================================================

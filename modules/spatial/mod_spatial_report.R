@@ -27,12 +27,9 @@
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
-mod_spatial_report_ui <- function(id) {
+mod_spatial_report_controls_ui <- function(id) {
   ns <- NS(id)
-  layout_sidebar(
-    sidebar = sidebar(
-      title = i18n$t("Rapport"), width = 380,
-
+  tagList(
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("file-earmark-text"),
           i18n$t("Genere un rapport HTML et/ou PDF a partir de TOUS les resultats DEJA CALCULES (QC, clustering, deconvolution, Moran's I, niches, UMAP) -- une section n'apparait que si le calcul correspondant a deja ete lance au moins une fois, MEME si vous ne consultez pas cet onglet actuellement.")),
@@ -70,9 +67,12 @@ mod_spatial_report_ui <- function(id) {
 
       downloadButton(ns("dl_report"), i18n$t("\U0001F4C4 Generer le rapport"), class = "btn-success w-100 mt-2"),
       div(class = "small text-muted mt-1", textOutput(ns("report_status")))
-    ),
-    uiOutput(ns("report_preview_ui"))
   )
+}
+
+mod_spatial_report_ui <- function(id) {
+  ns <- NS(id)
+  uiOutput(ns("report_preview_ui"))
 }
 
 mod_spatial_report_server <- function(id, global_data, shared_rv) {

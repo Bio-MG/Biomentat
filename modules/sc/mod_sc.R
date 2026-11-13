@@ -706,18 +706,72 @@ run_markers <- function(input, global_data, shared_rv, session) {
        n_removed = applied$n_removed, n_remaining = applied$n_remaining)
 }
 
+# P3.1 (O28 / UIUX_SINGLECELL_FLAW_TRIAGE RC2): Canonical Step <-> Result Tab
+# mapping for Single-Cell workflow unification (Spatial-inspired 1-step-at-a-time).
+.SC_STEP_TAB_MAP <- list(
+  "0_autopipeline"      = list(group = "grp_prep",      acc = "acc_prep",      tab = "tab_summary",          label_key = "Pipeline auto (1 clic)"),
+  "1_pipeline"          = list(group = "grp_prep",      acc = "acc_prep",      tab = "tab_qc",               label_key = "1. Pipeline"),
+  "2_annotation"        = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_annotation",       label_key = "2. Annotation"),
+  "2b_rarity"           = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_rarity",           label_key = "2b. Rareté par population"),
+  "3_viz"               = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_viz",              label_key = "3. Visualisation"),
+  "4_markers"           = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_table",            label_key = "4. Marqueurs"),
+  "5_corr"              = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_correlation",      label_key = "5. Gene Correlation"),
+  "6_pathway"           = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_pathway",          label_key = "6. Pathway Enrichment"),
+  "7_trajectory"        = list(group = "grp_dynamique", acc = "acc_dynamique", tab = "tab_trajectory",       label_key = "7. Trajectory Analysis"),
+  "8_velocity"          = list(group = "grp_dynamique", acc = "acc_dynamique", tab = "tab_velocity",         label_key = "Vélocité ARN — orientation des trajectoires"),
+  "8b_communication"    = list(group = "grp_dynamique", acc = "acc_dynamique", tab = "tab_communication",    label_key = "8b. Communication (import)"),
+  "4b_pseudobulk"       = list(group = "grp_abondance", acc = "acc_abondance", tab = "tab_pseudobulk",       label_key = "Pseudobulk — agrégation des cellules par échantillon"),
+  "8_da_merged"         = list(group = "grp_abondance", acc = "acc_abondance", tab = "tab_da_design",        label_key = "Abondance différentielle — design, méthodes & vues croisées"),
+  "9b_report_consolide" = list(group = "grp_livrables", acc = "acc_livrables", tab = "tab_report_consolide", label_key = "9b. Rapport consolidé (4F)")
+)
+
+.sc_step_to_tab_map <- function(step, da_tab = NULL, da_method_tab = NULL) {
+  if (is.null(step) || !nzchar(as.character(step[1]))) return(NULL)
+  s <- as.character(step[1])
+  if (identical(s, "8_da_merged")) {
+    if (identical(da_tab, "da_cross")) return("tab_da_cross")
+    if (identical(da_tab, "da_methods")) {
+      if (identical(da_method_tab, "da_sccoda")) return("tab_da_sccoda")
+      return("tab_da_milo")
+    }
+    return("tab_da_design")
+  }
+  entry <- .SC_STEP_TAB_MAP[[s]]
+  if (is.null(entry)) return(NULL)
+  entry$tab
+}
+
+.sc_tab_to_step_info <- function(tab) {
+  if (is.null(tab) || !nzchar(as.character(tab[1]))) return(NULL)
+  t <- as.character(tab[1])
+  if (t %in% c("tab_da_design", "tab_da_milo", "tab_da_sccoda", "tab_da_cross")) {
+    e <- .SC_STEP_TAB_MAP[["8_da_merged"]]
+    return(list(group = e$group, acc = e$acc, panel = "8_da_merged", label_key = e$label_key))
+  }
+  for (nm in names(.SC_STEP_TAB_MAP)) {
+    e <- .SC_STEP_TAB_MAP[[nm]]
+    if (identical(e$tab, t)) {
+      return(list(group = e$group, acc = e$acc, panel = nm, label_key = e$label_key))
+    }
+  }
+  NULL
+}
+
 mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
   ns <- NS(id)
-  # 3A (O28, UX-1) : compte QC « complet » — le log du pipeline auto est rendu
-  # dans un `pre` dont la largeur de colonne coupait la fin de ligne
-  # (« … (retirées: »). Portée au conteneur .sc-auto-log-wrap uniquement.
-  tags$style(HTML(
-    ".sc-auto-log-wrap pre { white-space: pre-wrap; overflow-wrap: anywhere; }"))
   layout_sidebar(
     sidebar = sidebar(
       # 2J (O28) : width paramétrable (voir .sc_sidebar_width ci-dessus) —
       # était figé à 420.
       width = sidebar_width, title = i18n$t("Single-Cell Workflow"),
+      # 3A (O28, UX-1) + P3.1 : single scroll owner (.bslib-card > .tab-content > .tab-pane)
+      # et repli des lignes <pre> dans les deux panneaux (placés DANS sidebar pour émission DOM).
+      tags$style(HTML(paste0(
+        ".sc-auto-log-wrap pre, #", ns("acc_workflow"), " pre, .bslib-card:has(#", ns("main_tabs"), ") pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }\n",
+        ".bslib-card:has(#", ns("main_tabs"), ") > .tab-content > .tab-pane { overflow-y: auto; overflow-x: hidden; }\n",
+        ".bslib-card:has(#", ns("main_tabs"), ") > .tab-content > .tab-pane .card { min-height: min-content; }\n",
+        ".ts-sc-step-sync-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.85rem; }"
+      ))),
       # LOT 1 (V1.x UX): paradigm badge — auto-pipeline exists, manual steps stay optional.
       div(class = "alert alert-success", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
           icon("bolt"), " ", i18n$t("Auto-pipeline disponible — les étapes manuelles restent optionnelles")),
@@ -726,13 +780,13 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
       # Mutualized auto-pipeline paradigm (V1.x UX): in EVERY domain the 1-click
       # auto pipeline is the FIRST accordion panel (0.), manual steps follow.
       accordion(
-        id = ns("acc_workflow"), open = "grp_prep",
+        id = ns("acc_workflow"), open = "grp_prep", multiple = FALSE,
         # ── LOT 2 (V1.x UX): 5 parent sections replace the flat 17-panel list.
         # Section bodies are nested accordions; every historical panel value is
         # preserved (0_mapping, 1_pipeline, ..., 9b_report_consolide).
         # ── 1. Préparation ────────────────────────────────────────────────
         accordion_panel(i18n$t("Préparation"), icon = icon("layer-group"), value = "grp_prep",
-          accordion(id = ns("acc_prep"), open = "1_pipeline",
+          accordion(id = ns("acc_prep"), open = "1_pipeline", multiple = FALSE,
             # Mutualized paradigm (V1.x UX): auto pipeline first, same panel
             # title/position as Bulk and Spatial (ids unchanged).
             accordion_panel(i18n$t("Pipeline auto (1 clic)"), icon = icon("bolt"),
@@ -785,7 +839,7 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
           )),
         # ── 2. Analyse ────────────────────────────────────────────────────
         accordion_panel(i18n$t("Analyse"), icon = icon("chart-area"), value = "grp_analyse",
-          accordion(id = ns("acc_analyse"),
+          accordion(id = ns("acc_analyse"), multiple = FALSE,
             accordion_panel(i18n$t("2. Annotation"), icon = icon("user-tag"),
                             value = "2_annotation",
                             mod_sc_annotation_ui(ns("annotation"))),
@@ -810,7 +864,7 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
           )),
         # ── 3. Dynamique ──────────────────────────────────────────────────
         accordion_panel(i18n$t("Dynamique"), icon = icon("route"), value = "grp_dynamique",
-          accordion(id = ns("acc_dynamique"),
+          accordion(id = ns("acc_dynamique"), multiple = FALSE,
             accordion_panel(i18n$t("7. Trajectory Analysis"), icon = icon("route"),
                             value = "7_trajectory",
                             mod_sc_trajectory_ui(ns("trajectory"))),
@@ -824,7 +878,7 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
           )),
         # ── 4. Abondance cellulaire ───────────────────────────────────────
         accordion_panel(i18n$t("Abondance cellulaire"), icon = icon("balance-scale"), value = "grp_abondance",
-          accordion(id = ns("acc_abondance"),
+          accordion(id = ns("acc_abondance"), multiple = FALSE,
             # LOT 5 (V1.x UX glossary): dual label — what "pseudobulk" means.
             accordion_panel(i18n$t("Pseudobulk — agrégation des cellules par échantillon"), icon = icon("layer-group"),
                             value = "4b_pseudobulk",
@@ -858,7 +912,7 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
           )),
         # ── 5. Livrables (LOT 3A: reports are the workflow's outcome) ─────
         accordion_panel(i18n$t("Livrables"), icon = icon("file-export"), value = "grp_livrables",
-          accordion(id = ns("acc_livrables"),
+          accordion(id = ns("acc_livrables"), multiple = FALSE,
             accordion_panel(
               i18n$t("9. Rapport Complet"), icon = icon("file-export"),
               value = "9_report",
@@ -915,6 +969,7 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
     # les libellés).
     navset_card_underline(
       id = ns("main_tabs"), title = i18n$t("Résultats"),
+      header = bslib::card_body(fill = FALSE, class = "p-0", uiOutput(ns("sc_step_sync_bar"))),
       nav_menu(i18n$t("Exploration"),
         nav_panel(i18n$t("Graphiques"), value = "tab_viz", mod_sc_viz_output_ui(ns("viz"))),
         # MAJ 2
@@ -1177,6 +1232,75 @@ mod_sc_server <- function(id, global_data) {
       req(state_get(shared_rv, "active_tab"))
       nav_select(id="main_tabs", selected=state_get(shared_rv, "active_tab"), session=session)
     })
+
+    # P3.1: Spatial-inspired step <-> result tab synchronization
+    active_sc_step_rv <- reactiveVal("1_pipeline")
+    .sync_sc_step_to_tab <- function(step_val) {
+      if (is.null(step_val) || !length(step_val) || !nzchar(as.character(step_val[1]))) return()
+      s <- as.character(step_val[1])
+      active_sc_step_rv(s)
+      target_tab <- .sc_step_to_tab_map(
+        s,
+        da_tab = isolate(input$da_tabs),
+        da_method_tab = isolate(input$da_methods_tabs)
+      )
+      if (!is.null(target_tab) && !identical(target_tab, isolate(input$main_tabs))) {
+        state_set(shared_rv, "active_tab", target_tab)
+        try(nav_select(id = "main_tabs", selected = target_tab, session = session), silent = TRUE)
+      }
+    }
+    lapply(c("acc_prep", "acc_analyse", "acc_dynamique", "acc_abondance", "acc_livrables"), function(acc_id) {
+      observeEvent(input[[acc_id]], {
+        .sync_sc_step_to_tab(input[[acc_id]])
+      }, ignoreInit = TRUE)
+    })
+    observeEvent(list(input$da_tabs, input$da_methods_tabs), {
+      if (identical(isolate(active_sc_step_rv()), "8_da_merged")) {
+        .sync_sc_step_to_tab("8_da_merged")
+      }
+    }, ignoreInit = TRUE)
+
+    output$sc_step_sync_bar <- renderUI({
+      global_data$language
+      cur_tab <- input$main_tabs %||% state_get(shared_rv, "active_tab") %||% "tab_qc"
+      info <- .sc_tab_to_step_info(cur_tab)
+      if (is.null(info)) return(NULL)
+      div(
+        class = "ts-sc-step-sync-bar",
+        div(
+          class = "d-flex align-items-center gap-2 text-truncate",
+          span(class = "badge bg-primary", .tr("Single-Cell Workflow")),
+          span(class = "fw-semibold text-truncate", .tr(info$label_key))
+        ),
+        actionButton(
+          ns("sc_sync_open_step"),
+          label = .tr(info$label_key),
+          icon = icon("sliders"),
+          class = "btn-sm btn-outline-primary py-0 px-2 flex-shrink-0"
+        )
+      )
+    })
+
+    observeEvent(input$sc_sync_open_step, {
+      cur_tab <- isolate(input$main_tabs) %||% isolate(state_get(shared_rv, "active_tab")) %||% "tab_qc"
+      info <- .sc_tab_to_step_info(cur_tab)
+      if (is.null(info)) return()
+      active_sc_step_rv(info$panel)
+      try(bslib::accordion_panel_open(id = "acc_workflow", values = info$group, session = session), silent = TRUE)
+      try(bslib::accordion_panel_open(id = info$acc, values = info$panel, session = session), silent = TRUE)
+      if (identical(info$panel, "8_da_merged")) {
+        if (identical(cur_tab, "tab_da_cross")) {
+          try(nav_select(id = "da_tabs", selected = "da_cross", session = session), silent = TRUE)
+        } else if (cur_tab %in% c("tab_da_milo", "tab_da_sccoda")) {
+          try(nav_select(id = "da_tabs", selected = "da_methods", session = session), silent = TRUE)
+          try(nav_select(id = "da_methods_tabs",
+                         selected = if (identical(cur_tab, "tab_da_sccoda")) "da_sccoda" else "da_milo",
+                         session = session), silent = TRUE)
+        } else {
+          try(nav_select(id = "da_tabs", selected = "da_design", session = session), silent = TRUE)
+        }
+      }
+    }, ignoreInit = TRUE)
 
     # ── 3A (O28) : seuils QC appliqués — capture, violons tracés, rappel ────
     # État MODULE-LOCAL (aucun champ ad hoc dans shared_rv — règle state.R:19-22,

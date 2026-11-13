@@ -54,12 +54,9 @@
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
-mod_spatial_multi_ui <- function(id) {
+mod_spatial_multi_controls_ui <- function(id) {
   ns <- NS(id)
-  layout_sidebar(
-    sidebar = sidebar(
-      title = i18n$t("Multi-echantillons"), width = 360,
-
+  tagList(
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("info-circle"),
           i18n$t(" Comparez et integrez conjointement plusieurs echantillons spatiaux deja importes (onglet Import > Spatial). L'integration s'execute sur les \"sketches\" en RAM (echantillon <= max_sketch cellules par jeu de donnees, jamais les matrices pleine resolution) pour rester leger sur une machine CPU/32 Go.")),
@@ -87,8 +84,11 @@ mod_spatial_multi_ui <- function(id) {
       div(class = "alert alert-light", style = "font-size:0.72rem;",
           bsicons::bs_icon("bar-chart-steps"),
           i18n$t(" Le test de composition differentielle (onglet \"Composition differentielle\") se recalcule automatiquement des qu'une integration conjointe est disponible ci-dessus — aucun bouton separe."))
-    ),
+  )
+}
 
+mod_spatial_multi_ui <- function(id) {
+  ns <- NS(id)
     navset_card_underline(
       nav_panel(
         i18n$t("Cartes par section"),
@@ -134,7 +134,6 @@ mod_spatial_multi_ui <- function(id) {
         DT::DTOutput(ns("n_per_dataset_table"))
       )
     )
-  )
 }
 
 mod_spatial_multi_server <- function(id, global_data, shared_rv) {

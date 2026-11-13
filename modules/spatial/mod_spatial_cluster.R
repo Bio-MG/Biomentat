@@ -49,12 +49,9 @@
 # ceiling (R/utils_spatial_async.R) guarantees this never hangs forever.
 # =============================================================================
 
-mod_spatial_cluster_ui <- function(id) {
+mod_spatial_cluster_controls_ui <- function(id) {
   ns <- NS(id)
-  layout_sidebar(
-    sidebar = sidebar(
-      title = i18n$t("Clustering spatial (BANKSY-lite)"), width = 350,
-
+  tagList(
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("info-circle"),
           " ",
@@ -83,8 +80,11 @@ mod_spatial_cluster_ui <- function(id) {
       bslib::input_task_button(ns("btn_find_markers"), i18n$t("Rechercher les marqueurs"),
                                 icon = icon("magnifying-glass-chart")),
       verbatimTextOutput(ns("markers_progress_text"), placeholder = TRUE)
-    ),
+  )
+}
 
+mod_spatial_cluster_ui <- function(id) {
+  ns <- NS(id)
     navset_card_underline(
       nav_panel(i18n$t("Resume clustering"),
                 uiOutput(ns("cluster_summary")),
@@ -94,7 +94,6 @@ mod_spatial_cluster_ui <- function(id) {
                     i18n$t("Top marqueurs (triés par log2FC decroissant, p-adj < 0.05) par cluster — utilisez ces genes pour interpreter biologiquement chaque domaine spatial.")),
                 card(full_screen = TRUE, DT::DTOutput(ns("markers_table"))))
     )
-  )
 }
 
 mod_spatial_cluster_server <- function(id, global_data, shared_rv) {

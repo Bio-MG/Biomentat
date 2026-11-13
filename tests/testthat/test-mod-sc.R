@@ -518,3 +518,61 @@ test_that("P1-9 : le bouton modal ne porte plus la sous-chaîne « Lancer Pipeli
   expect_false(is.na(idx), info = "clé FR absente de translation.json")
   expect_true(nzchar(j$translation[[idx]]$en %||% ""), info = "traduction EN manquante")
 })
+
+# =============================================================================
+# P3.1 — Unification UX/UI Single-Cell (paradigme Spatial : 1 accordéon ouvert
+# à la fois + synchro bidirectionnelle étape ↔ résultats + 1 propriétaire scroll)
+# =============================================================================
+test_that("P3.1 SC unification: acc_workflow and all 5 child accordions declare multiple = FALSE", {
+  lines <- readLines(file.path(ts_project_root(), .MSCR_FILE),
+                     warn = FALSE, encoding = "UTF-8")
+  code <- paste(grep("^\\s*#", lines, value = TRUE, invert = TRUE), collapse = "\n")
+  for (acc_id in c("acc_workflow", "acc_prep", "acc_analyse",
+                   "acc_dynamique", "acc_abondance", "acc_livrables")) {
+    pat <- sprintf('accordion\\([^)]*id\\s*=\\s*ns\\("%s"\\)[^)]*multiple\\s*=\\s*FALSE', acc_id)
+    expect_match(code, pat, perl = TRUE,
+                 info = sprintf("accordion('%s') must declare multiple = FALSE", acc_id))
+  }
+})
+
+test_that("P3.1 SC unification: .sc_step_to_tab_map maps every workflow step and DA sub-tab to its canonical main_tabs value", {
+  expect_identical(.sc_step_to_tab_map("0_autopipeline"), "tab_summary")
+  expect_identical(.sc_step_to_tab_map("1_pipeline"), "tab_qc")
+  expect_identical(.sc_step_to_tab_map("2_annotation"), "tab_annotation")
+  expect_identical(.sc_step_to_tab_map("2b_rarity"), "tab_rarity")
+  expect_identical(.sc_step_to_tab_map("3_viz"), "tab_viz")
+  expect_identical(.sc_step_to_tab_map("4_markers"), "tab_table")
+  expect_identical(.sc_step_to_tab_map("5_corr"), "tab_correlation")
+  expect_identical(.sc_step_to_tab_map("6_pathway"), "tab_pathway")
+  expect_identical(.sc_step_to_tab_map("7_trajectory"), "tab_trajectory")
+  expect_identical(.sc_step_to_tab_map("8_velocity"), "tab_velocity")
+  expect_identical(.sc_step_to_tab_map("8b_communication"), "tab_communication")
+  expect_identical(.sc_step_to_tab_map("4b_pseudobulk"), "tab_pseudobulk")
+  expect_identical(.sc_step_to_tab_map("8_da_merged"), "tab_da_design")
+  expect_identical(.sc_step_to_tab_map("8_da_merged", da_tab = "da_methods", da_method_tab = "da_milo"), "tab_da_milo")
+  expect_identical(.sc_step_to_tab_map("8_da_merged", da_tab = "da_methods", da_method_tab = "da_sccoda"), "tab_da_sccoda")
+  expect_identical(.sc_step_to_tab_map("8_da_merged", da_tab = "da_cross"), "tab_da_cross")
+  expect_identical(.sc_step_to_tab_map("9b_report_consolide"), "tab_report_consolide")
+  expect_null(.sc_step_to_tab_map("0_mapping"))
+
+  info_qc <- .sc_tab_to_step_info("tab_qc")
+  expect_identical(info_qc$group, "grp_prep")
+  expect_identical(info_qc$acc, "acc_prep")
+  expect_identical(info_qc$panel, "1_pipeline")
+
+  info_milo <- .sc_tab_to_step_info("tab_da_milo")
+  expect_identical(info_milo$group, "grp_abondance")
+  expect_identical(info_milo$acc, "acc_abondance")
+  expect_identical(info_milo$panel, "8_da_merged")
+})
+
+test_that("P3.1 SC unification: mod_sc_ui emits single-scroll-owner CSS inside sidebar and mounts sc_step_sync_bar", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCR_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src, 'uiOutput(ns("sc_step_sync_bar"))', fixed = TRUE)
+  expect_match(src, "overflow-wrap: anywhere; max-width: 100%;", fixed = TRUE)
+  sb_pos <- regexpr("sidebar\\s*=\\s*sidebar\\(", src)
+  style_pos <- regexpr("\\.sc-auto-log-wrap pre", src)
+  expect_true(sb_pos > 0L && style_pos > sb_pos,
+              info = "tags$style(HTML(...)) must sit INSIDE sidebar = sidebar(...) so shiny emits it in the DOM")
+})

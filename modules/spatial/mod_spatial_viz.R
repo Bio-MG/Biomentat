@@ -9,13 +9,9 @@
 # spatial plotly pour comparer". The checkbox is kept so people with very
 # large sketches can hide it again to save render time.
 
-mod_spatial_viz_ui <- function(id) {
+mod_spatial_viz_controls_ui <- function(id) {
   ns <- NS(id)
-  
-  layout_sidebar(
-    sidebar = sidebar(
-      title = i18n$t("Visualisation"), width = 320,
-      
+  tagList(
       uiOutput(ns("sketch_norm_status_ui")),
       
       selectInput(
@@ -210,8 +206,11 @@ mod_spatial_viz_ui <- function(id) {
         icon = icon("chart-line")
       ),
       verbatimTextOutput(ns("umap_progress_text"), placeholder = TRUE)
-    ),
-    
+  )
+}
+
+mod_spatial_viz_ui <- function(id) {
+  ns <- NS(id)
     navset_card_underline(
       nav_panel(
         i18n$t("Carte spatiale"),
@@ -395,7 +394,6 @@ mod_spatial_viz_ui <- function(id) {
         )
       )
     )
-  )
 }
 
 mod_spatial_viz_server <- function(id, global_data, shared_rv) {

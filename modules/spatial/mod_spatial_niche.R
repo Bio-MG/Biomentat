@@ -52,12 +52,9 @@
 # computation + the composition summary (interpretation aid).
 # =============================================================================
 
-mod_spatial_niche_ui <- function(id) {
+mod_spatial_niche_controls_ui <- function(id) {
   ns <- NS(id)
-  layout_sidebar(
-    sidebar = sidebar(
-      title = i18n$t("Niches spatiales (BuildNicheAssay-lite)"), width = 380,
-
+  tagList(
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("info-circle"),
           " ",
@@ -113,8 +110,11 @@ mod_spatial_niche_ui <- function(id) {
       bslib::input_task_button(ns("btn_ripley"), i18n$t("Calculer Ripley's K"),
                                 icon = icon("chart-line")),
       verbatimTextOutput(ns("ripley_progress_text"), placeholder = TRUE)
-    ),
+  )
+}
 
+mod_spatial_niche_ui <- function(id) {
+  ns <- NS(id)
     navset_card_underline(
       nav_panel(i18n$t("Composition par niche"),
                 div(class = "alert alert-light small mb-2",
@@ -136,7 +136,6 @@ mod_spatial_niche_ui <- function(id) {
                     i18n$t("Ligne + points = K(r) observe pour le label cible (couleur = significativite). Bande grise = enveloppe a 95% sous etiquetage aleatoire. Au-dessus = agregation spatiale ; en-dessous = dispersion.")),
                 card(full_screen = TRUE, plotOutput(ns("ripley_plot"), height = "500px")))
     )
-  )
 }
 
 mod_spatial_niche_server <- function(id, global_data, shared_rv) {

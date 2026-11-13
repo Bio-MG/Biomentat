@@ -108,6 +108,10 @@ mod_spatial_ui <- function(id) {
     sidebar = sidebar(
       width = 340,
       title = i18n$t("Workflow Spatial"),
+      tags$style(HTML(sprintf(
+        "#%s { display: none; }\n.ts-spatial-step-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.85rem; }",
+        ns("results")
+      ))),
       # LOT 1 (V1.x UX): paradigm badge — async auto-pipeline (mirai).
       div(class = "alert alert-success", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
           icon("bolt"), " ", i18n$t("Pipeline automatique asynchrone (mirai) — le statut reste visible ci-dessous")),
@@ -136,19 +140,24 @@ mod_spatial_ui <- function(id) {
                                 bslib::tooltip(icon("circle-info"),
                                                i18n$t("Autocorrélation spatiale (Moran) — gènes spatialement variables"))),
                         icon = icon("filter"),
-                        value = "panel_qc"),
+                        value = "panel_qc",
+                        mod_spatial_qc_controls_ui(ns("qc"))),
 
         accordion_panel(i18n$t("2. Clustering (BANKSY-lite)"), icon = icon("shapes"),
-                        value = "panel_cluster"),
+                        value = "panel_cluster",
+                        mod_spatial_cluster_controls_ui(ns("cluster"))),
 
         accordion_panel(i18n$t("3. Deconvolution"), icon = icon("puzzle-piece"),
-                        value = "panel_deconv"),
+                        value = "panel_deconv",
+                        mod_spatial_deconv_controls_ui(ns("deconv"))),
 
         accordion_panel(i18n$t("4. Visualisation"), icon = icon("eye"),
-                        value = "panel_viz"),
+                        value = "panel_viz",
+                        mod_spatial_viz_controls_ui(ns("viz"))),
 
         accordion_panel(i18n$t("5. Multi-echantillons"), icon = icon("layer-group"),
-                        value = "panel_multi"),
+                        value = "panel_multi",
+                        mod_spatial_multi_controls_ui(ns("multi"))),
 
         # LOT 5 (V1.x UX glossary): dual label — what "spatial niches" means.
         # FIX 2026-11-08 (harmonisation opérateur) : numérotée « 6. » comme les
@@ -156,14 +165,24 @@ mod_spatial_ui <- function(id) {
         # non numéroté ; mod_spatial_pipeline.R:216 référençait déjà
         # « l'onglet "6. Niches spatiales" »).
         accordion_panel(i18n$t("6. Niches spatiales — micro-environnements cellulaires"), icon = icon("diagram-project"),
-                        value = "panel_niche"),
+                        value = "panel_niche",
+                        mod_spatial_niche_controls_ui(ns("niche"))),
 
         accordion_panel(i18n$t("7. Export & Rapport"), icon = icon("file-export"),
-                        value = "panel_export")
+                        value = "panel_export",
+                        navset_pill(
+                          id = ns("export_report_controls_tabs"),
+                          nav_panel(i18n$t("Paquet & Script"), value = "export",
+                                    mod_spatial_export_controls_ui(ns("export"))),
+                          nav_panel(i18n$t("Rapport HTML/PDF"), value = "report",
+                                    mod_spatial_report_controls_ui(ns("report")))
+                        ))
       )
     ),
     navset_card_underline(
       id = ns("results"), title = i18n$t("Résultats"),
+      header = bslib::card_body(fill = FALSE, class = "p-0",
+                                uiOutput(ns("active_step_breadcrumb_ui"))),
 
       # Pipeline step: results/summary on the right (controls live in the
       # accordion). Same "spatial-pipeline" namespace => server untouched.
@@ -197,6 +216,7 @@ mod_spatial_ui <- function(id) {
       nav_panel(i18n$t("7. Export & Rapport"), icon = icon("file-export"),
                 value = "results_export_report",
                 navset_pill(
+                  id = ns("export_report_tabs"),
                   nav_panel(i18n$t("Paquet & Script"), value = "export",
                             mod_spatial_export_ui(ns("export"))),
                   nav_panel(i18n$t("Rapport HTML/PDF"), value = "report",
@@ -428,11 +448,7 @@ mod_spatial_server <- function(id, global_data) {
     mod_spatial_export_server("export", global_data, shared_rv)
     mod_spatial_report_server("report", global_data, shared_rv)
 
-    # ── V1.x UX container: accordion steps ↔ right results navset sync ──────
-    # The old horizontal nav (input$spatial_nav) is gone. Opening an accordion
-    # step selects the matching right panel; shared_rv$active_tab keeps its
-    # historical values ("pipeline", "qc", ..., "export_report") so any
-    # existing reader sees the same semantics.
+    # ── P3.1 UX container: Option A breadcrumb + bidirectional sync ──────────
     .step_results <- c(
       panel_pipeline = "results_pipeline", panel_qc      = "results_qc",
       panel_cluster  = "results_cluster",  panel_deconv  = "results_deconv",
@@ -444,6 +460,34 @@ mod_spatial_server <- function(id, global_data) {
       panel_deconv   = "deconv",   panel_viz = "viz",     panel_multi   = "multi",
       panel_niche    = "niche",    panel_export = "export_report"
     )
+    .step_labels <- c(
+      panel_pipeline = "0. Pipeline auto",
+      panel_qc       = "1. QC & Autocorrelation",
+      panel_cluster  = "2. Clustering (BANKSY-lite)",
+      panel_deconv   = "3. Deconvolution",
+      panel_viz      = "4. Visualisation",
+      panel_multi    = "5. Multi-echantillons",
+      panel_niche    = "6. Niches spatiales — micro-environnements cellulaires",
+      panel_export   = "7. Export & Rapport"
+    )
+    .step_order <- names(.step_results)
+    .results_to_step <- stats::setNames(.step_order, unname(.step_results))
+    current_step_rv <- reactiveVal("panel_pipeline")
+
+    .activate_spatial_step <- function(panel, sync_accordion = TRUE, sync_results = TRUE) {
+      if (is.null(panel) || !panel %in% .step_order) return(invisible(NULL))
+      current_step_rv(panel)
+      shared_rv$active_tab <- .step_tab[[panel]] %||% panel
+      sel <- .step_results[[panel]]
+      if (isTRUE(sync_results) && !is.null(sel) && !identical(isolate(input$results), sel)) {
+        try(nav_select(id = "results", selected = sel, session = session), silent = TRUE)
+      }
+      if (isTRUE(sync_accordion)) {
+        try(bslib::accordion_panel_set(id = "steps", values = panel, session = session), silent = TRUE)
+      }
+      invisible(NULL)
+    }
+
     observeEvent(input$steps, {
       # Defensive: bslib returns a vector of ALL open panels (or NULL). Take
       # the LAST one (most recently opened step) so a multiple-open regression
@@ -452,9 +496,65 @@ mod_spatial_server <- function(id, global_data) {
       if (is.null(panels) || length(panels) == 0) return(invisible(NULL))
       panel <- utils::tail(panels, 1)
       if (length(panel) != 1 || is.na(panel)) return(invisible(NULL))
-      sel <- .step_results[[panel]]
-      if (!is.null(sel)) try(nav_select(id = "results", selected = sel, session = session), silent = TRUE)
-      shared_rv$active_tab <- .step_tab[[panel]] %||% panel
+      .activate_spatial_step(panel, sync_accordion = FALSE, sync_results = TRUE)
     }, ignoreNULL = TRUE)
+
+    observeEvent(input$results, {
+      res_tab <- input$results
+      if (is.null(res_tab) || length(res_tab) != 1L || is.na(res_tab)) return(invisible(NULL))
+      panel <- .results_to_step[[res_tab]]
+      if (is.null(panel) || identical(panel, isolate(current_step_rv()))) return(invisible(NULL))
+      .activate_spatial_step(panel, sync_accordion = TRUE, sync_results = FALSE)
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$export_report_controls_tabs, {
+      sub_tab <- input$export_report_controls_tabs
+      if (!is.null(sub_tab) && !identical(sub_tab, isolate(input$export_report_tabs))) {
+        try(nav_select(id = "export_report_tabs", selected = sub_tab, session = session), silent = TRUE)
+      }
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$export_report_tabs, {
+      sub_tab <- input$export_report_tabs
+      if (!is.null(sub_tab) && !identical(sub_tab, isolate(input$export_report_controls_tabs))) {
+        try(nav_select(id = "export_report_controls_tabs", selected = sub_tab, session = session), silent = TRUE)
+      }
+    }, ignoreInit = TRUE)
+
+    output$active_step_breadcrumb_ui <- renderUI({
+      global_data$language
+      cur <- current_step_rv()
+      idx <- match(cur, .step_order)
+      if (is.na(idx)) idx <- 1L
+      lbl <- .tr(.step_labels[[.step_order[idx]]])
+      div(
+        class = "ts-spatial-step-bar",
+        div(
+          class = "d-flex align-items-center gap-2 text-truncate",
+          span(class = "badge bg-primary", .tr("Workflow Spatial")),
+          span(class = "fw-semibold text-truncate", lbl)
+        ),
+        div(
+          class = "d-flex align-items-center gap-1 flex-shrink-0",
+          actionButton(ns("btn_prev_step"), NULL, icon = icon("chevron-left"),
+                       class = paste("btn-sm btn-outline-secondary py-0 px-2",
+                                     if (idx <= 1L) "disabled")),
+          span(class = "text-muted small px-1", sprintf("%d / %d", idx, length(.step_order))),
+          actionButton(ns("btn_next_step"), NULL, icon = icon("chevron-right"),
+                       class = paste("btn-sm btn-outline-secondary py-0 px-2",
+                                     if (idx >= length(.step_order)) "disabled"))
+        )
+      )
+    })
+
+    observeEvent(input$btn_prev_step, {
+      idx <- match(isolate(current_step_rv()), .step_order)
+      if (!is.na(idx) && idx > 1L) .activate_spatial_step(.step_order[idx - 1L])
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$btn_next_step, {
+      idx <- match(isolate(current_step_rv()), .step_order)
+      if (!is.na(idx) && idx < length(.step_order)) .activate_spatial_step(.step_order[idx + 1L])
+    }, ignoreInit = TRUE)
   })
 }

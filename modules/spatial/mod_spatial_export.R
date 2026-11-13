@@ -32,12 +32,9 @@
                                   "enrichment", "hotspots", "ripley", "multi", "maps", "custom_viz")
 
 
-mod_spatial_export_ui <- function(id) {
+mod_spatial_export_controls_ui <- function(id) {
   ns <- NS(id)
-  layout_sidebar(
-    sidebar = sidebar(
-      title = i18n$t("Export"), width = 360,
-
+  tagList(
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("archive"),
           i18n$t("Regroupe les resultats DEJA CALCULES (QC, clustering, deconvolution, niches, statistiques spatiales avancees, cartes) pour l'echantillon actif dans une archive .zip, ou genere un script R autonome (+ contexte) pour reproduire le pipeline hors Shiny.")),
@@ -68,9 +65,12 @@ mod_spatial_export_ui <- function(id) {
           i18n$t("Le script reproduit UNIQUEMENT les etapes DEJA LANCEES dans l'app (QC/clustering/deconvolution RCTD/niches) avec les MEMES parametres. Necessite que le dossier BPCells reste accessible au meme chemin (voir README/commentaires inclus dans le script). Les statistiques spatiales avancees (enrichissement/hotspots/Ripley's K) ne sont PAS re-executees par ce script -- leurs resultats DEJA calcules restent disponibles en CSV dans le paquet complet ci-dessus.")),
       downloadButton(ns("dl_script"), i18n$t("\U0001F9FE Script R reproductible (.zip)"),
                      class = "btn-outline-secondary w-100")
-    ),
-    uiOutput(ns("export_preview_ui"))
   )
+}
+
+mod_spatial_export_ui <- function(id) {
+  ns <- NS(id)
+  uiOutput(ns("export_preview_ui"))
 }
 
 mod_spatial_export_server <- function(id, global_data, shared_rv) {

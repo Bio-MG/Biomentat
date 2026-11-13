@@ -10,13 +10,10 @@
 # choice VALUES ("rctd"/"labeltransfer"/...) stay untranslated ASCII tokens.
 # =============================================================================
 
-#' Main layout: sidebar (controls) + navset (3 output panels)
-mod_spatial_deconv_ui <- function(id) {
+#' Controls panel mounted inside parent accordion step
+mod_spatial_deconv_controls_ui <- function(id) {
   ns <- NS(id)
-  layout_sidebar(
-    sidebar = sidebar(
-      title = i18n$t("Deconvolution cellulaire"), width = 380,
-
+  tagList(
       radioButtons(ns("mode"), i18n$t("Methode"),
                    choices = stats::setNames(
                      c("rctd", "labeltransfer", "stdeconvolve"),
@@ -98,8 +95,12 @@ mod_spatial_deconv_ui <- function(id) {
       bslib::input_task_button(ns("btn_deconv"), i18n$t("2) Lancer la deconvolution"),
                                 icon = icon("puzzle-piece")),
       verbatimTextOutput(ns("deconv_progress_text"), placeholder = TRUE)
-    ),
+  )
+}
 
+#' Main results layout: navset (3 output panels)
+mod_spatial_deconv_ui <- function(id) {
+  ns <- NS(id)
     navset_card_underline(
       nav_panel(i18n$t("Proportions par spot/cellule"),
                 plotOutput(ns("deconv_bar_plot"), height = "550px"),
@@ -121,5 +122,4 @@ mod_spatial_deconv_ui <- function(id) {
                                   "fortement correles positivement tendent a co-localiser ; negativement, a s'exclure."))),
                 plotOutput(ns("deconv_coloc_plot"), height = "520px"))
     )
-  )
 }

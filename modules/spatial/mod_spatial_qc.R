@@ -331,28 +331,9 @@ run_spatial_hotspots <- function(coords, qc_metrics,
        n_results = n_results, step = "ran")
 }
 
-mod_spatial_qc_ui <- function(id) {  ns <- NS(id)
-  layout_sidebar(
-    sidebar = sidebar(
-      # 🔴 CLOSED BY DEFAULT — the SECOND half of the same layout fix, and this one
-      # is what the two PLOTS need. MEASURED at 992x1323 after the module-level
-      # `open = "closed"` landed: this panel's column is 226 px, and its own 350 px
-      # sidebar takes `min(226 - 48, 350) = 178`, leaving main **48 px** — the
-      # hotspot map and histogram measured 49x5 and 16x14, i.e. crushed, while the
-      # TABLE (outside `layout_columns()`) rendered fine at 179x76 with 2 695
-      # entries. bslib's law says no width value fixes that: any sidebar at or above
-      # `column - 48` leaves exactly 48 px.
-      # `open = "closed"` is the same single supported argument, on `sidebar()`
-      # (`layout_sidebar()` has no `open` formal in bslib 0.11.0), it keeps the QC
-      # controls — title, thresholds, sliders, the hotspot button — one click away
-      # via bslib's own toggle, and it hands the panel its whole 226 px. No CSS is
-      # forced and no `!important` is added anywhere.
-      # Locked by test-mod-spatial-layout.R. 🔴 It does NOT by itself promise the
-      # plots become readable: 226 px split 7/5 is ~130 and ~93 px, and the measured
-      # card heights were 120 px. The live measurement owns that verdict.
-      open = "closed",
-      title = i18n$t("QC & filtres"), width = 350,
-
+mod_spatial_qc_controls_ui <- function(id) {
+  ns <- NS(id)
+  tagList(
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("info-circle"),
           " ",
@@ -431,8 +412,11 @@ mod_spatial_qc_ui <- function(id) {  ns <- NS(id)
       actionButton(ns("btn_hotspots"), i18n$t("Detecter les hotspots"),
                    class = "btn-outline-primary w-100", icon = icon("fire")),
       uiOutput(ns("hotspot_status_ui"))
-    ),
+  )
+}
 
+mod_spatial_qc_ui <- function(id) {
+  ns <- NS(id)
     # S1. `id` + `selected` are NEW, and they are what made the hotspots panel
     # reachable at all. Declared without an `id`, bslib builds the tab list with
     # an auto-generated key that nothing — not a human click, not
@@ -583,7 +567,6 @@ mod_spatial_qc_ui <- function(id) {  ns <- NS(id)
                     downloadButton(ns("dl_hotspot_csv"),
                                    label = .tr_plain("\U0001F4CE Exporter la table des hotspots (CSV)"),
                                    class = "btn-sm btn-outline-secondary")))
-    )
   )
 }
 
