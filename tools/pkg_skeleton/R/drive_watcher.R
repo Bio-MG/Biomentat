@@ -1950,6 +1950,26 @@ ts_drive_table_descriptor <- function(x, kind = "table", convention = NULL,
 
 
 #' @noRd
+ts_drive_append_audit <- function(entry, audit_path = ts_drive_path("agent_audit.jsonl")) {
+  tryCatch({
+    if (!requireNamespace("jsonlite", quietly = TRUE)) return(invisible(FALSE))
+    if (dir.exists(audit_path)) return(invisible(FALSE))
+    parent <- dirname(audit_path)
+    if (!dir.exists(parent)) dir.create(parent, recursive = TRUE, showWarnings = FALSE)
+    payload <- as.list(entry %||% list())
+    if (is.null(payload$timestamp) || !nzchar(as.character(payload$timestamp)[1L])) {
+      payload$timestamp <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+    }
+    line <- as.character(jsonlite::toJSON(payload, auto_unbox = TRUE, null = "null"))
+    con <- file(audit_path, open = "a", encoding = "UTF-8")
+    on.exit(close(con), add = TRUE)
+    writeLines(line, con, sep = "\n")
+    invisible(TRUE)
+  }, error = function(e) invisible(FALSE))
+}
+
+
+#' @noRd
 ts_drive_write_result <- function(seq, status, active_module, armed,
                                  preserve_data = TRUE, errors = character(0),
                                  warnings = character(0), snapshot = NULL,
@@ -4511,6 +4531,14 @@ ts_drive_error_ring_push <- ts_drive_record_error
       errors   = errors,
       snapshot = ts_drive_snapshot(global_data)
     )
+    ts_drive_append_audit(list(
+      seq       = job$seq,
+      status    = wire_status,
+      module    = job$module,
+      action    = job$action,
+      elapsed_s = pend$elapsed_s,
+      errors    = errors
+    ))
     if (isTRUE(attr(wrote, "written"))) {
       message(sprintf("[drive] job seq=%s module=%s finished status=%s elapsed=%.1fs",
                       job$seq, job$module, pend$status, pend$elapsed_s))
@@ -4571,6 +4599,13 @@ ts_drive_error_ring_push <- ts_drive_record_error
                           "invalid", NA_character_, out$armed,
                           errors = v$errors, warnings = v$warnings,
                           snapshot = ts_drive_snapshot(global_data))
+    ts_drive_append_audit(list(
+      seq    = if (is.null(v$scenario)) last_seq else v$scenario$seq,
+      status = "invalid",
+      module = if (!is.null(v$scenario)) v$scenario$module else NA_character_,
+      action = if (!is.null(v$scenario)) v$scenario$action else NA_character_,
+      errors = v$errors
+    ))
     out$consumed <- TRUE
     out$new_scenario <- TRUE
     # `invalid` is CONSUMED but deliberately NOT reported as an error badge:
@@ -4616,6 +4651,14 @@ ts_drive_error_ring_push <- ts_drive_record_error
       ts_drive_export_descriptor
     }
   )
+  ts_drive_append_audit(list(
+    seq       = scn$seq,
+    status    = res$status,
+    module    = res$active_module %||% scn$module,
+    action    = scn$action,
+    elapsed_s = as.numeric(difftime(Sys.time(), t0, units = "secs")),
+    errors    = c(v$errors, res$errors)
+  ))
 
   out$consumed <- TRUE
   out$new_scenario <- TRUE
