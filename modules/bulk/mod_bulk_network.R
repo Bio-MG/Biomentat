@@ -140,9 +140,9 @@ mod_bulk_network_ui <- function(id) {
   ns <- NS(id)
   tagList(
     div(class = "alert alert-warning", style = "font-size:0.9em;border-left:3px solid #E67E22;",
-        strong(.tr_plain("Interactome dérivé des voies Reactome — ce n'est PAS un PPI.")),
+        strong(.tr("Interactome dérivé des voies Reactome — ce n'est PAS un PPI.")),
         br(),
-        .tr_plain("Une arête signifie « ces deux protéines participent à la même voie », pas « interaction physique démontrée ». Les nœuds gris (relais) sont des CO-MEMBRES DE VOIE prédits, pas des partenaires de liaison.")),
+        .tr("Une arête signifie « ces deux protéines participent à la même voie », pas « interaction physique démontrée ». Les nœuds gris (relais) sont des CO-MEMBRES DE VOIE prédits, pas des partenaires de liaison.")),
     selectInput(ns("network_species"), i18n$t("Espèce (déclarée)"),
                 choices = setNames("hsapiens", .tr_plain("Humain (hsapiens)")),
                 selected = "hsapiens"),
@@ -158,7 +158,7 @@ mod_bulk_network_ui <- function(id) {
     numericInput(ns("network_threshold"), i18n$t("Seuil de prime (déclaré)"),
                  value = 1.3, min = 0, step = 0.1),
     div(class = "small text-muted",
-        .tr_plain("Seuls les gènes dont la prime DÉPASSE strictement ce seuil deviennent des primes. 1,3 = p = 0,05 sur l'échelle -log10(padj).")),
+        .tr("Seuls les gènes dont la prime DÉPASSE strictement ce seuil deviennent des primes. 1,3 = p = 0,05 sur l'échelle -log10(padj).")),
     hr(),
     h6(i18n$t("Paramètres du moteur (heuristique)")),
     fluidRow(

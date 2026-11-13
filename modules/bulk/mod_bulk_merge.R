@@ -330,9 +330,11 @@ mod_bulk_merge_server <- function(id, global_data) {
     # ── i18n push on language switch ────────────────────────────────────────
     observeEvent(global_data$language, {
       updateSelectizeInput(session, "merge_datasets",
-                           label = .tr("Datasets à fusionner (>= 2)"))
+                           label = .tr("Datasets à fusionner (>= 2)"),
+                           options = list(placeholder = .tr("Sélectionnez des datasets...")))
       updateSelectizeInput(session, "merge_condition",
-                           label = .tr("Colonne condition commune (optionnel)"))
+                           label = .tr("Colonne condition commune (optionnel)"),
+                           options = list(placeholder = .tr("Aucune — correction à l'aveugle si ComBat")))
       updateCheckboxInput(session, "merge_combat",
                           label = .tr("Harmonisation ComBat-seq (lot = jeu d'origine)"))
       updateTextInput(session, "merge_project",
