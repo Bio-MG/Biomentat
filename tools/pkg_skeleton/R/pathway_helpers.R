@@ -1730,9 +1730,98 @@ packs_convergence_dt <- function(convergence_data, dt_tr) {
 #' @return data.frame enrichi (ou vide au même contrat) + attribut enrich_obj.
 #' @refusals pathway_error : TERM2GENE malformé, gènes vides après nettoyage,
 #'   qval hors ]0;1], méthode d'ajustement inconnue.
+#' D4 (P2.4) : mapping orthologue souris -> symboles humains via babelgene (offline)
+#'
+#' @param genes Vecteur caractere de symboles murins (non vide).
+#' @param min_support Entier >= 1 : score minimal `support_n` dans babelgene.
+#' @return list(human_genes, mapping, stats).
+packs_map_mouse_to_human_symbols <- function(genes, min_support = 1L) {
+  if (missing(genes) || !is.character(genes) || length(genes) == 0L) {
+    stop(errorCondition(
+      "Orthologie D4 : vecteur de genes murins non vide attendu.",
+      class = "pathway_error"
+    ))
+  }
+  genes_clean <- unique(trimws(genes[!is.na(genes) & nzchar(trimws(genes))]))
+  if (length(genes_clean) == 0L) {
+    stop(errorCondition(
+      "Orthologie D4 : aucun symbole murin valide apres nettoyage.",
+      class = "pathway_error"
+    ))
+  }
+  min_support <- suppressWarnings(as.integer(min_support)[1L])
+  if (is.na(min_support) || min_support < 1L) {
+    stop(errorCondition(
+      "Orthologie D4 : min_support doit etre un entier >= 1.",
+      class = "pathway_error"
+    ))
+  }
+  if (!requireNamespace("babelgene", quietly = TRUE)) {
+    stop(errorCondition(
+      "Package 'babelgene' requis pour le mapping orthologue souris -> humain.",
+      class = "pathway_error"
+    ))
+  }
+
+  raw_map <- babelgene::orthologs(genes = genes_clean, species = "mouse", human = FALSE)
+  if (!is.data.frame(raw_map) || nrow(raw_map) == 0L) {
+    empty_map <- data.frame(
+      mouse_symbol = character(0),
+      human_symbol = character(0),
+      support_n    = integer(0),
+      stringsAsFactors = FALSE
+    )
+    return(list(
+      human_genes = character(0),
+      mapping     = empty_map,
+      stats       = list(n_input = length(genes_clean), n_mapped = 0L,
+                         n_unmapped = length(genes_clean), method = "babelgene")
+    ))
+  }
+
+  df <- data.frame(
+    mouse_symbol = as.character(raw_map$symbol),
+    human_symbol = as.character(raw_map$human_symbol),
+    support_n    = suppressWarnings(as.integer(raw_map$support_n)),
+    stringsAsFactors = FALSE
+  )
+  df <- df[!is.na(df$mouse_symbol) & nzchar(df$mouse_symbol) &
+             !is.na(df$human_symbol) & nzchar(df$human_symbol) &
+             !is.na(df$support_n) & df$support_n >= min_support, , drop = FALSE]
+
+  if (nrow(df) > 0L) {
+    # Departage deterministe par symbole murin : support_n decroissant, puis human_symbol alphabetique
+    ord <- order(df$mouse_symbol, -df$support_n, df$human_symbol, method = "radix")
+    df <- df[ord, , drop = FALSE]
+    df <- df[!duplicated(df$mouse_symbol), , drop = FALSE]
+    rownames(df) <- NULL
+  }
+
+  human_genes <- unique(df$human_symbol)
+  n_mapped <- length(unique(df$mouse_symbol))
+  list(
+    human_genes = human_genes,
+    mapping     = df,
+    stats       = list(
+      n_input    = length(genes_clean),
+      n_mapped   = n_mapped,
+      n_unmapped = length(genes_clean) - n_mapped,
+      method     = "babelgene"
+    )
+  )
+}
+
 run_packs_enrichment <- function(genes, term2gene, term2name = NULL,
                                  universe = NULL, pval_cutoff = 0.05,
-                                 qval_cutoff = 0.2, p_adjust_method = "BH") {
+                                 qval_cutoff = 0.2, p_adjust_method = "BH",
+                                 organism = c("human", "mouse")) {
+  organism <- match.arg(organism)
+  orth_stats <- NULL
+  if (identical(organism, "mouse")) {
+    mapped <- packs_map_mouse_to_human_symbols(genes)
+    genes <- mapped$human_genes
+    orth_stats <- mapped$stats
+  }
   p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
   qval_cutoff <- suppressWarnings(as.numeric(qval_cutoff))
   if (length(qval_cutoff) != 1L || is.na(qval_cutoff) ||
@@ -1796,18 +1885,21 @@ run_packs_enrichment <- function(genes, term2gene, term2name = NULL,
     universe      = universe_used
   )
   if (is.null(enrich_result) || nrow(as.data.frame(enrich_result)) == 0L) {
-    return(data.frame(
+    empty_df <- data.frame(
       ID          = character(0),
       Description = character(0),
       p.adjust    = numeric(0),
       Count       = integer(0),
       GeneRatio   = character(0)
-    ))
+    )
+    if (!is.null(orth_stats)) attr(empty_df, "orthology_stats") <- orth_stats
+    return(empty_df)
   }
   res_df <- as.data.frame(enrich_result)
   # STAT-S2 (additif — motif gsea_obj) : l'objet brut reste porté pour les
   # vues réseau enrichplot (cnetplot/emapplot + pairwise_termsim).
   attr(res_df, "enrich_obj") <- enrich_result
+  if (!is.null(orth_stats)) attr(res_df, "orthology_stats") <- orth_stats
   res_df
 }
 
