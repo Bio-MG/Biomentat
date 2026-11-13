@@ -171,7 +171,7 @@ rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
         ),
         h6(tr("Contenu .RData — choisissez les objets à importer ou à sauvegarder"),
            class = "text-muted mt-2"),
-        helpText(style = "font-size:0.78rem;",
+        helpText(style = "font-size:0.8rem;",
                  tr("Les listes nommées sont explorées (chemins type objet$enfant) — sélectionnez la feuille à importer ou à sauvegarder.")),
         DT::DTOutput(ns("preview_table")),
         layout_columns(
@@ -187,7 +187,7 @@ rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
                          class = "btn-outline-info btn-sm w-100")
         ),
         if (n_sel != 1L) helpText(
-          style = "font-size:0.78rem;",
+          style = "font-size:0.8rem;",
           tr("Sélectionnez exactement un objet à importer."),
           " ", tr("Sélectionnez au moins un objet à exporter."),
           " ", tr("Sélectionnez exactement un objet à exporter en .rds.")

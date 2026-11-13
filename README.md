@@ -215,8 +215,8 @@ BiocManager::install(c("Seurat", "SeuratObject", "SingleR", "celldex",
 | Visium HD (parquet) | arrow | Import HD incomplet (alternative légère : nanoparquet) |
 | Inférence de lignées | slingshot | Trajectoire limitée au pseudotemps graphe |
 | scCODA | Environnement Python + dépendances scCODA | scCODA indisponible (erreur guidée) |
-| Doublets (SC) | scDblFinder | QC doublets indisponible |
-| ARN ambiant opt-in (SC) | celda (`decontX`) ou SoupX | Décontamination ambiante indisponible (erreur classée) |
+| Doublets (SC) | scDblFinder | Sans `scDblFinder` : QC doublets indisponible |
+| ARN ambiant opt-in (SC) | celda (`decontX`) ou SoupX | Sans `celda`/`SoupX` : décontamination ambiante indisponible (erreur classée `sc_ambient_package_missing`) |
 | Vues spatiales WebGL | leafgl | Rendu de grands nuages de points dégradé |
 
 *Note : les workflows spatiaux peuvent exiger des packages supplémentaires tels que `BPCells`, `mirai`, `RANN` et `spacexr`. scCODA requiert un environnement **Python 3.13** dédié (`python_env_sccoda/` ou variable `TS_SCCODA_PYTHON`) — sans lui, une erreur classée avec guidance est levée, sans repli silencieux. CellChat (épinglé), LIANA, `drc`, `GSVA` et `WGCNA` sont inclus dans `renv.lock` — aucune installation séparée ; en leur absence (installation manuelle), les moteurs de communication natifs restent indisponibles avec une erreur guidée, l'import de résultats externes restant disponible. Le PDF par domaine requiert TinyTeX ; le rapport consolidé 4F génère un HTML autonome sans pandoc.*
@@ -619,8 +619,8 @@ BiocManager::install(c("Seurat", "SeuratObject", "SingleR", "celldex",
 | Visium HD (parquet) | arrow | Incomplete HD import (lightweight alternative: nanoparquet) |
 | Lineage inference | slingshot | Trajectory limited to graph pseudotime |
 | scCODA | Python env + scCODA deps | scCODA unavailable (guided error) |
-| Doublets (SC) | scDblFinder | Doublet QC unavailable |
-| Opt-in ambient RNA (SC) | celda (`decontX`) or SoupX | Ambient decontamination unavailable (classed error) |
+| Doublets (SC) | scDblFinder | Without `scDblFinder`: doublet QC unavailable |
+| Opt-in ambient RNA (SC) | celda (`decontX`) or SoupX | Without `celda`/`SoupX`: ambient decontamination unavailable (classed error) |
 | Spatial WebGL views | leafgl | Degraded large point-cloud rendering |
 *Note: Spatial workflows may require additional packages such as `BPCells`, `mirai`, `RANN`, and `spacexr`. scCODA requires a dedicated **Python 3.13** environment (`python_env_sccoda/` or the `TS_SCCODA_PYTHON` variable) — without it, a classed error with guidance is raised, with no silent fallback. CellChat (pinned), LIANA, `drc`, `GSVA`, and `WGCNA` are included in `renv.lock` — no separate install; if absent (manual install), the native communication engines remain unavailable with a guided error while external result import stays available. Per-domain PDF requires TinyTeX; the consolidated 4F report produces standalone HTML without pandoc.*
 

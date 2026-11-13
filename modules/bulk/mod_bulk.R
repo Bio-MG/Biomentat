@@ -17,7 +17,7 @@ mod_bulk_ui <- function(id) {
         width = 420,
         title = i18n$t("RNA Bulk \u2014 Analyse"),
         # LOT 1 (V1.x UX): paradigm badge — guided manual pipeline is the norm here.
-        div(class = "alert alert-warning", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
+        div(class = "alert alert-warning", style = "font-size:0.8rem;padding:5px;margin-bottom:5px;",
             icon("list-check"), " ", i18n$t("Mode guidé — suivez les étapes numérotées dans l'ordre")),
         div(class = "alert alert-info", style = "font-size:0.8rem;padding:5px;",
             bsicons::bs_icon("info-circle"),

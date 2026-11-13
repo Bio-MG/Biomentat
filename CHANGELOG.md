@@ -30,6 +30,32 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — BOOST P2.2 + P0.3 : i18n fileInput/fontes/littéraux FR sur 16 fichiers + README honnête] — 2026-11-13
+
+Exécution workflow dynamique (recon → builders → portes boost → vérificateur indépendant),
+suite à P1.1 Leads D–J. Portes boost MESURÉES vertes à la clôture : conventions 0 err/0
+avert ; suites chirurgicales 26 fichiers **1677 PASS / 0 FAIL / 1 skip** (i18n-integrity,
+sources-manifest, mod-sc-pipeline, app-sourcing, cqf4-ui-cosmetics, sc-communication,
+sc-metadata, mod-bulk-de-run 123, mod-import-bulk, mod-geo, session-checkpoint…).
+
+### Corrigé
+- **P2.2 (45 sites, 15 fichiers modules/)** : `fileInput()` sans `buttonLabel` i18n
+  harmonisés sur le motif `0959681` (communication ×5, metadata ×1 + balance
+  `test-cqf4-ui-cosmetics.R` étendue et verte) ; fontes `<0.8rem` remontées au minimum
+  maison ; littéraux FR ASCII emballés i18n. Restent volontairement hors lot (jamais-
+  toucher, lane concurrente) : `mod_sc_velocity.R` ×11, `modules/spatial/*` ×72 fontes +
+  ×67 littéraux — réconciliation 45 fixés + 72 skippés = 117 arbre.
+- **i18n/translation.json** : +41 clés en append pur (0 suppression ; JSON re-validé,
+  3318 entrées).
+- **P0.3 résidu** : `README.md:218/:621` (FR+EN) — les lignes « indisponible » deviennent
+  honnêtes conditionnelles (« Sans `scDblFinder` : QC doublets indisponible », classe
+  `sc_ambient_package_missing` citée) ; `docs/benchmarks/SOTA_OMICS_BENCHMARK.md` —
+  assertions GDPR/HIPAA/egress retirées ou qualifiées (docs/ local, hors git) ;
+  `audit_doc_refs` **2 → 0 erreur** (`file:///` :4-5 du PROMPT_SOTA_TIERLIST), advisories
+  9566 → 9564.
+- Correctif au vol du builder : double notification de succès en chargement batch
+  (`mod_import_bulk.R`) dédupliquée.
+
 ## [V1.x — P1.1 Leads I+J : vérification checkpoint en flux + jeton de session crypto-aléatoire] — 2026-11-13
 
 Audit externe #4 §4 (2026-11-12), RED→GREEN (session-checkpoint-engine 132/0 ;

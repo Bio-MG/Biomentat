@@ -16,6 +16,9 @@
 #         « Parcourir... » existe déjà (mod_bulk_pathways la consomme) ;
 #         périmètre CQF-4 = sites HORS modules/sc/ — la session concurrente
 #         CCC-DRAW-OPT possède modules/sc/ (protocole essaim, jamais -A)
+#         (P2.2 2026-11-13 : extension aux 2 modules/sc/ sans propriétaire
+#         concurrent actif — mod_sc_communication.R, mod_sc_metadata.R ;
+#         mod_sc_velocity.R reste au propriétaire concurrent, hors lot)
 # Périmètre volontairement limité : mod_spatial_pipeline.R, mod_spatial_qc.R,
 # mod_import_spatial.R + fileInput hors modules/sc/. « Deconvolution »
 # (9 fichiers + i18n + gelés) = CQF-4bis, hors lot.
@@ -80,7 +83,7 @@ test_that("CQF-4 : les labels nav QC spatial sont accentés (et les ASCII absent
 
 # --- 5. buttonLabel FR sur les fileInput hors modules/sc/ (RC4) -----------------
 
-test_that("CQF-4 : tout fileInput hors modules/sc/ porte buttonLabel Parcourir...", {
+test_that("CQF-4 : tout fileInput hors modules/sc/ (et les 2 modules/sc/ sans propriétaire concurrent) porte buttonLabel Parcourir...", {
   # mod_bulk_pathways.R est le site de référence (buttonLabel déjà présent).
   files <- c(
     "modules/import/mod_geo.R",
@@ -89,7 +92,9 @@ test_that("CQF-4 : tout fileInput hors modules/sc/ porte buttonLabel Parcourir..
     "modules/import/mod_import_spatial.R",
     "modules/spatial/deconv/mod_spatial_deconv_ui.R",
     "modules/bulk/mod_bulk_signatures.R",
-    "modules/bulk/mod_bulk_pathways.R"
+    "modules/bulk/mod_bulk_pathways.R",
+    "modules/sc/mod_sc_communication.R",
+    "modules/sc/mod_sc_metadata.R"
   )
   offenders <- character(0)
   for (rel in files) {

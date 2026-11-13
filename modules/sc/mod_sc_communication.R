@@ -57,7 +57,8 @@ mod_sc_communication_ui <- function(id) {
     conditionalPanel(
       condition = "input.comm_source == 'cellchat'", ns = ns,
       fileInput(ns("comm_cellchat_file"), i18n$t("Table CellChat exportee (CSV/TSV)"),
-                accept = c(".csv", ".tsv", ".txt"), width = "100%"),
+                accept = c(".csv", ".tsv", ".txt"), width = "100%",
+                buttonLabel = i18n$t("Parcourir...")),
       div(class = "small text-muted mb-2",
           i18n$t("Colonnes attendues : source, target, ligand, receptor, prob (pathway/pval optionnels)."))
     ),
@@ -65,7 +66,8 @@ mod_sc_communication_ui <- function(id) {
     conditionalPanel(
       condition = "input.comm_source == 'cellchat_object'", ns = ns,
       fileInput(ns("comm_cellchat_obj"), i18n$t("Objet CellChat sauvegarde (.rds)"),
-                accept = c(".rds", ".RDS", ".rda", ".RData"), width = "100%"),
+                accept = c(".rds", ".RDS", ".rda", ".RData"), width = "100%",
+                buttonLabel = i18n$t("Parcourir...")),
       div(class = "small text-muted mb-2",
           i18n$t("Extraction des resultats deja calcules (net$prob) — aucune methode CellChat n'est relancee. La colonne pathway reste vide pour cette route."))
     ),
@@ -73,9 +75,11 @@ mod_sc_communication_ui <- function(id) {
     conditionalPanel(
       condition = "input.comm_source == 'cellphonedb'", ns = ns,
       fileInput(ns("comm_cpdb_means"), i18n$t("CellPhoneDB means.txt (requis)"),
-                accept = c(".txt", ".tsv", ".csv"), width = "100%"),
+                accept = c(".txt", ".tsv", ".csv"), width = "100%",
+                buttonLabel = i18n$t("Parcourir...")),
       fileInput(ns("comm_cpdb_pvalues"), i18n$t("CellPhoneDB pvalues.txt (optionnel)"),
-                accept = c(".txt", ".tsv", ".csv"), width = "100%"),
+                accept = c(".txt", ".tsv", ".csv"), width = "100%",
+                buttonLabel = i18n$t("Parcourir...")),
       div(class = "small text-muted mb-2",
           i18n$t("Format v2 : colonne interacting_pair (ligand|receptor) + une colonne par paire sender|receiver."))
     ),
@@ -87,7 +91,8 @@ mod_sc_communication_ui <- function(id) {
     conditionalPanel(
       condition = "input.comm_source == 'liana'", ns = ns,
       fileInput(ns("comm_liana_file"), i18n$t("Table LIANA agregee (CSV/TSV)"),
-                accept = c(".csv", ".tsv", ".txt"), width = "100%"),
+                accept = c(".csv", ".tsv", ".txt"), width = "100%",
+                buttonLabel = i18n$t("Parcourir...")),
       radioButtons(ns("comm_liana_mode"), i18n$t("Mode d'agregation LIANA (requis)"),
                    choices = setNames(c("specificity", "magnitude"),
                                       c(.tr_plain("Specificite — l'interaction est-elle specifique de ces types cellulaires ?"),

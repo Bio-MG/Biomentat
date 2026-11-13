@@ -186,13 +186,13 @@ mod_import_spatial_ui <- function(id) {
                         value = FALSE),
           conditionalPanel(
             condition = sprintf("input['%s']", ns("load_raw_also")),
-            div(class = "alert alert-light", style = "font-size:0.72rem;",
+            div(class = "alert alert-light", style = "font-size:0.8rem;",
                 bsicons::bs_icon("info-circle"),
                 " ", i18n$t("Charge EN PLUS 'raw_feature_bc_matrix.h5' (tous les barcodes, y compris hors-tissu) dans une matrice BPCells separee — reservee a un futur usage (ex: correction de bruit ambiant). N'affecte AUCUN calcul actuel (QC/clustering/deconvolution continuent d'utiliser uniquement la matrice filtree). Non disponible pour Visium HD."))
           ),
           
           hr(),
-          div(class = "alert alert-light", style = "font-size:0.75rem;",
+          div(class = "alert alert-light", style = "font-size:0.8rem;",
               bsicons::bs_icon("compass"),
               " ", i18n$t("Si le fond histologique apparait tourne/inverse par rapport aux spots apres import (probleme connu, cause = convention de colonnes GetTissueCoordinates() qui a change entre versions de Seurat), corrigez ici puis re-importez — verifiez visuellement dans l'onglet \"4. Visualisation\" > Carte spatiale.")),
           checkboxInput(ns("orient_swap_xy"), i18n$t("Inverser X / Y (corrige une rotation de 90\u00b0)"), value = FALSE),
@@ -203,13 +203,13 @@ mod_import_spatial_ui <- function(id) {
         conditionalPanel(
           condition = sprintf("input['%s'] == 'slideseq'", ns("technology")),
           hr(),
-          div(class = "alert alert-warning", style = "font-size:0.78rem;",
+          div(class = "alert alert-warning", style = "font-size:0.8rem;",
               bsicons::bs_icon("lightbulb"),
               " ", i18n$t("Slide-seq (BETA) : counts (MTX ou DGE) + coordonnees des beads (CSV/TSV), sans image histologique (technologie sans imagerie associee).")),
           tags$details(
-            tags$summary(style = "cursor:pointer; font-size:0.72rem; color:#666;",
+            tags$summary(style = "cursor:pointer; font-size:0.8rem; color:#666;",
                          i18n$t("Formats de fichiers reconnus")),
-            tags$ul(style = "font-size:0.72rem; padding-left:1.1rem;",
+            tags$ul(style = "font-size:0.8rem; padding-left:1.1rem;",
               tags$li(tags$b(i18n$t("Comptages")), i18n$t("— triplet 10x :"), tags$code("matrix.mtx[.gz]"),
                       " + ", tags$code("barcodes.tsv[.gz]"), " + ",
                       tags$code("features.tsv[.gz]"), "/", tags$code("genes.tsv[.gz]"),
@@ -224,7 +224,7 @@ mod_import_spatial_ui <- function(id) {
                       i18n$t("si possible, sinon signale avec des exemples de barcodes des deux cotes."))
             )
           ),
-          div(class = "alert alert-light", style = "font-size:0.7rem;",
+          div(class = "alert alert-light", style = "font-size:0.8rem;",
               bsicons::bs_icon("check2-circle"),
               " ", i18n$t("Deja disponibles apres import, sans code supplementaire (ces onglets sont generiques a toutes les technologies) : SCTransform (case ci-dessous) ; clustering spatial onglet 2 (Lambda = 0 \u2192 equivalent PCA/UMAP/clusters \"classique\", sans terme de voisinage) ; indice de Moran onglet 1 (options avancees x.cuts/y.cuts pour accelerer sur un gros puck) ; deconvolution RCTD et transfert d'annotations scRNA-seq onglet 3 ; multi-pucks onglet 5.")),
           numericInput(ns("min_counts_ss"), i18n$t("nCount minimum"), 100, min = 0, step = 10),
@@ -250,7 +250,7 @@ mod_import_spatial_ui <- function(id) {
                      selected = "lognorm"),
         conditionalPanel(
           condition = sprintf("input['%s'] == 'sct'", ns("norm_method")),
-          div(class = "alert alert-warning", style = "font-size:0.75rem;",
+          div(class = "alert alert-warning", style = "font-size:0.8rem;",
               bsicons::bs_icon("exclamation-triangle"),
               " ", i18n$t("SCTransform est significativement plus lourd que LogNormalize et s'execute de maniere SYNCHRONE pendant l'import (pas de mirai a cette etape) — reduisez la taille du sketch ci-dessus (ex: 10 000-20 000) si l'import devient trop long. N'affecte que le sketch (visualisation gene/UMAP) : le clustering spatial (BANKSY-lite) et l'indice de Moran restent en LogNormalize rapide sur les donnees completes, inchanges."))
         ),
@@ -293,7 +293,7 @@ mod_import_spatial_ui <- function(id) {
       # reference partagee existe (voir son radio "Source de la reference").
       card(
         card_header(i18n$t("Reference scRNA-seq partagee (RCTD / Label Transfer)")),
-        div(class = "alert alert-light", style = "font-size:0.78rem;",
+        div(class = "alert alert-light", style = "font-size:0.8rem;",
             bsicons::bs_icon("info-circle"),
             " ", i18n$t("Chargez et preparez UNE FOIS une reference scRNA-seq annotee ici pour la reutiliser directement dans l'onglet \"Spatial > 3. Deconvolution\" (RCTD ET Label Transfer), sans avoir a la re-uploader/re-preparer a chaque echantillon ou a chaque session (tant que l'artefact reste sur ce disque — voir sauvegarde de session dans le panneau lateral).")),
         fileInput(ns("shared_ref_file"), i18n$t("Fichier reference (.rds Seurat, .h5ad, .h5, .loom)"),
@@ -468,7 +468,7 @@ mod_import_spatial_server <- function(id, global_data) {
 
       if (identical(mode, "visium_hd_flat")) {
         return(div(
-          class = "alert alert-danger", style = "font-size:0.78rem;",
+          class = "alert alert-danger", style = "font-size:0.8rem;",
           bsicons::bs_icon("exclamation-octagon"),
           " ", .tr("Format non pris en charge : ce dossier contient un .h5 \"feature slice\"/imagerie Visium HD (ex: '..._spatial.h5'), pas une matrice de comptage par spot/bin — l'import echouera si vous cliquez sur \"Importer\". Reexportez au format Space Ranger standard ('outs/binned_outputs/square_0XXum/' pour du HD, ou 'filtered_feature_bc_matrix.h5' + 'spatial/' pour du Visium classique).")
         ))
@@ -480,18 +480,18 @@ mod_import_spatial_server <- function(id, global_data) {
       has_nanoparquet <- requireNamespace("nanoparquet", quietly = TRUE)
 
       tagList(
-        div(class = "alert alert-info", style = "font-size:0.78rem;",
+        div(class = "alert alert-info", style = "font-size:0.8rem;",
             bsicons::bs_icon("grid-3x3-gap"),
             " ", .tr("Visium HD detecte ('binned_outputs/'). Choisissez UNE resolution a importer — reimportez ce meme dossier pour ajouter l'autre resolution comme echantillon distinct (onglet Spatial > \"5. Multi-echantillons\").")),
 
         if (length(bins) == 0) {
-          div(class = "alert alert-warning", style = "font-size:0.75rem;",
+          div(class = "alert alert-warning", style = "font-size:0.8rem;",
               bsicons::bs_icon("exclamation-triangle"),
               " ", .tr("Dossier 'binned_outputs/' detecte mais aucun binning 8um/16um exploitable n'y a ete trouve (fichier .h5 manquant sous square_008um/ ou square_016um/)."))
         },
 
         if (!has_arrow && !has_nanoparquet) {
-          div(class = "alert alert-danger", style = "font-size:0.75rem;",
+          div(class = "alert alert-danger", style = "font-size:0.8rem;",
               bsicons::bs_icon("exclamation-octagon"),
               " ", .tr("Ni 'arrow' ni 'nanoparquet' installes — necessaires pour lire les positions de bins (tissue_positions.parquet). L'import utilisera un chargeur degrade (coordonnees + comptages uniquement, PAS de fond histologique) si un fichier .csv de positions est aussi present ; sinon il echouera avec un message clair. Pour un import complet, installez l'un des deux : "),
               tags$code("install.packages('nanoparquet')"),
@@ -499,7 +499,7 @@ mod_import_spatial_server <- function(id, global_data) {
               tags$code("install.packages('arrow', repos = c('https://apache.r-universe.dev', getOption('repos')))"),
               ".")
         } else if (!has_arrow && has_nanoparquet) {
-          div(class = "alert alert-warning", style = "font-size:0.72rem;",
+          div(class = "alert alert-warning", style = "font-size:0.8rem;",
               bsicons::bs_icon("info-circle"),
               " ", .tr("Package 'arrow' absent mais 'nanoparquet' present : import complet toujours possible, via un lecteur Parquet plus leger."))
         },
@@ -595,7 +595,7 @@ mod_import_spatial_server <- function(id, global_data) {
           raw_obj <- switch(technology,
                             "visium" = {
                               if (is_hd) {
-                                add_log(sprintf("  Visium HD detecte -- import du binning %sum.", hd_bin_size))
+                                add_log(sprintf(.tr("  Visium HD détecté -- import du binning %sum."), hd_bin_size))
                                 load_spatial_visium_hd(path, bin_size = as.integer(hd_bin_size),
                                                        sample_name = sample_name,
                                                        min_counts = min_counts,
@@ -614,13 +614,9 @@ mod_import_spatial_server <- function(id, global_data) {
                             stop(errorCondition(.tr("Technologie inconnue."), class = "spatial_import_error"))
           )
           if (isTRUE(attr(raw_obj, "ts_manual_hd_loader"))) {
-            add_log(paste0(
-              "  ⚠ Chargeur HD degrade utilise (pas de package Parquet complet) : ",
-              "coordonnees et comptages disponibles, PAS de fond histologique natif ",
-              "pour cet echantillon (le fond depuis 'spatial/' racine reste tente separement)."
-            ))
+            add_log(.tr("  ⚠ Chargeur HD dégradé utilisé (pas de package Parquet complet) : coordonnées et comptages disponibles, PAS de fond histologique natif pour cet échantillon (le fond depuis 'spatial/' racine reste tenté séparément)."))
           }
-          add_log(sprintf("  ✓ Objet brut charge : %d genes x %d %s%s",
+          add_log(sprintf(.tr("  ✓ Objet brut chargé : %d gènes x %d %s%s"),
                           nrow(raw_obj), ncol(raw_obj),
                           if (technology == "visium") "spots" else "cellules",
                           if (is_hd) sprintf(" (bin %sum)", hd_bin_size) else ""))
@@ -640,13 +636,13 @@ mod_import_spatial_server <- function(id, global_data) {
               add_log(sprintf("  \u2713 Matrice brute (raw) lue : %d barcodes (avant filtrage tissu).",
                               ncol(raw_bg_obj)))
             } else {
-              add_log("  \u26a0 Aucune matrice brute (raw_feature_bc_matrix.h5) trouvee ou lecture impossible.")
+              add_log(.tr("  \u26a0 Aucune matrice brute (raw_feature_bc_matrix.h5) trouvée ou lecture impossible."))
             }
           }
           
           incProgress(0.3, detail = .tr("Conversion BPCells (disque)..."))
           norm_label <- if (norm_method == "sct") "SCTransform" else "LogNormalize"
-          add_log(sprintf("  Normalisation du sketch : %s", norm_label))
+          add_log(sprintf(.tr("  Normalisation du sketch : %s"), norm_label))
           if (norm_method == "sct") {
             incProgress(0.1, detail = .tr("SCTransform sur le sketch (synchrone, peut prendre du temps)..."))
           }
@@ -688,13 +684,10 @@ mod_import_spatial_server <- function(id, global_data) {
                           ncol(spatial_pkg$sketch), spatial_pkg$n_total, norm_label))
           if (!is.null(spatial_pkg$histology)) {
             n_fonds <- length(spatial_pkg$histology$images %||% list())
-            add_log(sprintf("  \u2713 %d fond(s) histologique(s) detecte(s) (voir selecteur de resolution, onglet Visualisation).",
+            add_log(sprintf(.tr("  \u2713 %d fond(s) histologique(s) détecté(s) (voir sélecteur de résolution, onglet Visualisation)."),
                             n_fonds))
           } else if (is_hd) {
-            add_log(paste0(
-              "  \u26a0 Aucun fond histologique detecte pour cet echantillon HD (verifiez que le ",
-              "dossier racine contient bien 'spatial/')."
-            ))
+            add_log(.tr("  \u26a0 Aucun fond histologique détecté pour cet échantillon HD (vérifiez que le dossier racine contient bien 'spatial/')."))
           }
           
           incProgress(0.9, detail = .tr("Finalisation..."))
@@ -706,8 +699,8 @@ mod_import_spatial_server <- function(id, global_data) {
           # seul echantillon), avec un avertissement explicite.
           was_already_active <- identical(sample_name, global_data$active_spatial_dataset)
           if (sample_name %in% names(global_data$spatial_datasets)) {
-            add_log(sprintf("  \u26a0 Un echantillon nomme '%s' existait deja — remplace.", sample_name))
-            showNotification(sprintf("\u26a0\ufe0f Echantillon '%s' deja existant — remplace.", sample_name),
+            add_log(sprintf(.tr("  \u26a0 Un échantillon nommé '%s' existait déjà — remplace."), sample_name))
+            showNotification(sprintf(.tr("\u26a0\ufe0f Échantillon '%s' déjà existant — remplace."), sample_name),
                              type = "warning", duration = 6)
           }
           # (c) Purge le cache par-echantillon pour CE nom -- un import frais
@@ -877,7 +870,7 @@ mod_import_spatial_server <- function(id, global_data) {
         }, error = function(e) NULL)
         if (is.null(staged_path)) {
           shared_ref_state$status  <- "error"
-          shared_ref_state$message <- "Copie du fichier uploade impossible."
+          shared_ref_state$message <- .tr("Copie du fichier uploadé impossible.")
           return(invisible(FALSE))
         }
 
@@ -916,15 +909,15 @@ mod_import_spatial_server <- function(id, global_data) {
       global_data$language  # i18n: re-render on language switch
       st <- shared_ref_state$status
       switch(st,
-        "empty" = div(class = "alert alert-light", style = "font-size:0.75rem;",
+        "empty" = div(class = "alert alert-light", style = "font-size:0.8rem;",
                      bsicons::bs_icon("circle"), " ", .tr("Aucune reference partagee chargee.")),
-        "loading" = div(class = "alert alert-info", style = "font-size:0.75rem;",
+        "loading" = div(class = "alert alert-info", style = "font-size:0.8rem;",
                         bsicons::bs_icon("hourglass-split"), " ", .tr("Chargement en cours...")),
-        "error" = div(class = "alert alert-danger", style = "font-size:0.75rem;",
+        "error" = div(class = "alert alert-danger", style = "font-size:0.8rem;",
                       bsicons::bs_icon("x-circle"), " ",
                       .t_fmt(.tr("Erreur : {msg}"),
                              msg = shared_ref_state$message %||% .tr("cause inconnue"))),
-        "loaded" = div(class = "alert alert-success", style = "font-size:0.75rem;",
+        "loaded" = div(class = "alert alert-success", style = "font-size:0.8rem;",
                        bsicons::bs_icon("check-circle"), " ",
                        .t_fmt(.tr("Reference lue : {cells} cellules x {genes} genes — choisissez la colonne 'type cellulaire' puis preparez-la ci-dessous."),
                               cells = ncol(shared_ref_state$obj), genes = nrow(shared_ref_state$obj))),
@@ -987,7 +980,7 @@ mod_import_spatial_server <- function(id, global_data) {
 
       tagList(
         # Bandeau récapitulatif — AU-DESSUS du sélecteur (§4c, motif SPMV-2).
-        div(class = "alert alert-light", style = "font-size:0.72rem; margin-bottom:4px;",
+        div(class = "alert alert-light", style = "font-size:0.8rem; margin-bottom:4px;",
             bsicons::bs_icon("info-circle"), " ",
             .t_fmt(.tr("Colonnes evaluees : {n_ok} compatibles, {n_warn} a verifier, {n_danger} incompatibles."),
                    n_ok = n_ok, n_warn = n_warn, n_danger = n_danger)),
@@ -1001,7 +994,7 @@ mod_import_spatial_server <- function(id, global_data) {
                                            HTML(.opt_label(cn)))
                              }))),
         # Ligne d'explication du tri (§4c : ordre visible et expliqué, §7-4).
-        div(class = "text-muted", style = "font-size:0.68rem;",
+        div(class = "text-muted", style = "font-size:0.8rem;",
             .tr("Colonnes triees : compatibles en premier (vert), a verifier (orange), incompatibles (rouge) — chaque colonne est evaluee par le composant de validation des metadonnees.")),
         checkboxInput(ns("shared_merge_rare_types"),
                       .tr("Fusionner/exclure les types rares (< 25 cellules)"), value = TRUE),
@@ -1052,17 +1045,17 @@ mod_import_spatial_server <- function(id, global_data) {
       global_data$language  # i18n: re-render on language switch
       info <- global_data$spatial_reference
       if (is.null(info)) {
-        return(div(class = "text-muted", style = "font-size:0.7rem;",
+        return(div(class = "text-muted", style = "font-size:0.8rem;",
                    .tr("Pas encore de reference partagee active.")))
       }
-      div(class = "alert alert-success", style = "font-size:0.72rem;",
+      div(class = "alert alert-success", style = "font-size:0.8rem;",
           bsicons::bs_icon("share-fill"),
           " ", .t_fmt(.tr("Reference partagee ACTIVE : {cells} cellules x {genes} genes (colonne '{col}') — "),
                       cells = format(info$n_cells, big.mark = ","), genes = format(info$n_genes, big.mark = ","),
                       col = info$celltype_col),
           .tr("utilisable directement dans Spatial > 3. Deconvolution."),
           actionLink(ns("btn_clear_shared_ref"), paste(" ", .tr("Retirer")),
-                     style = "font-size:0.7rem; margin-left:6px;"))
+                     style = "font-size:0.8rem; margin-left:6px;"))
     })
 
     observeEvent(input$btn_clear_shared_ref, {

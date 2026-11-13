@@ -45,7 +45,7 @@ mod_bulk_multi_ui <- function(id) {
                 h6(i18n$t("Gènes par intersection"), style = "font-weight:bold; margin-top:12px;"),
                 DTOutput(ns("intersection_table"))),
       nav_panel(i18n$t("Concordance de direction"), value = "tab_concordance",
-                div(class = "alert alert-light", style = "font-size:0.78rem;",
+                div(class = "alert alert-light", style = "font-size:0.8rem;",
                     i18n$t("Jaccard = recouvrement des ensembles Up (resp. Down) entre deux jeux. « % même direction » = proportion des gènes significatifs communs qui varient dans le même sens.")),
                 DTOutput(ns("concordance_table"))),
       nav_panel(i18n$t("Détail des datasets"), value = "tab_detail",
@@ -89,7 +89,7 @@ mod_bulk_multi_server <- function(id, global_data) {
       global_data$language
       n <- length(eligible())
       if (n >= 2L) return(NULL)
-      div(class = "alert alert-warning", style = "font-size:0.78rem;padding:6px 10px;",
+      div(class = "alert alert-warning", style = "font-size:0.8rem;padding:6px 10px;",
           icon("triangle-exclamation"), " ",
           if (n == 0) .tr("Aucun jeu éligible : la liste se peuple avec le bouton « Enregistrer l'état courant » du panneau « Multi-jeux — Datasets enregistrés » (la sidebar Étape 2) — sauvegardez au moins deux jeux partageant un même nom de contraste.")
           else .tr("Un seul jeu éligible : sauvegardez un second état (« Enregistrer l'état courant », panneau « Multi-jeux — Datasets enregistrés ») pour lancer une comparaison."))

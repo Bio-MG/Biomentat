@@ -24,7 +24,7 @@ mod_geo_ui <- function(id) {
 
     # LOT 4A (V1.x UX): GEO feeds the Bulk analysis — mapping stays there;
     # remind + native jump to the existing Bulk "0. Mapping IDs" panel.
-    div(class = "alert alert-light", style = "font-size:0.78rem;",
+    div(class = "alert alert-light", style = "font-size:0.8rem;",
         bsicons::bs_icon("info-circle"), " ",
         i18n$t("Identifiants non-symboles (Ensembl, Entrez, sondes Affymetrix) ? Le mapping d'IDs est disponible à l'étape 0 de l'analyse.")),
     actionButton(ns("goto_mapping"), i18n$t("Aller au mapping des IDs"),

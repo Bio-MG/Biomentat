@@ -17,7 +17,7 @@
 mod_bulk_merge_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    div(class = "alert alert-light", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
+    div(class = "alert alert-light", style = "font-size:0.8rem;padding:5px;margin-bottom:5px;",
         bsicons::bs_icon("info-circle"),
         " ", i18n$t("Fusionne >= 2 jeux enregistrés (Multi-jeux — Datasets enregistrés) : gènes communs en intersection exacte, harmonisation ComBat-seq optionnelle (lot = jeu d'origine). Le produit est chargé comme jeu actif, comme un import.")),
     selectizeInput(ns("merge_datasets"), i18n$t("Datasets à fusionner (>= 2)"),
@@ -34,7 +34,7 @@ mod_bulk_merge_ui <- function(id) {
     uiOutput(ns("merge_status")),
     actionButton(ns("merge_run"), i18n$t("Fusionner et charger comme jeu actif"),
                  icon = icon("object-group"), class = "btn-primary w-100 mb-2"),
-    div(class = "alert alert-warning", style = "font-size:0.78rem;padding:5px;",
+    div(class = "alert alert-warning", style = "font-size:0.8rem;padding:5px;",
         icon("triangle-exclamation"), " ",
         i18n$t("Le jeu actif courant sera remplacé (comme un import). Enregistrez-le d'abord via « Enregistrer l'état courant » si nécessaire."))
   )

@@ -19,7 +19,7 @@
 mod_bulk_datasets_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    div(class = "alert alert-light", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
+    div(class = "alert alert-light", style = "font-size:0.8rem;padding:5px;margin-bottom:5px;",
         bsicons::bs_icon("info-circle"),
         " ", i18n$t("Enregistrez l'état courant (import + filtrage + DE + voies) sous un label, pour le comparer plus tard à d'autres jeux. Le jeu actif n'est jamais modifié.")),
     textInput(ns("ds_label"), i18n$t("Label du dataset"),

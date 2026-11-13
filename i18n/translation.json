@@ -13238,6 +13238,46 @@
       "en": "mirai pool unavailable — restart the application."
     },
     {
+      "fr": "  Visium HD détecté -- import du binning %sum.",
+      "en": "  Visium HD detected -- importing %sum binning."
+    },
+    {
+      "fr": "  ⚠ Chargeur HD dégradé utilisé (pas de package Parquet complet) : coordonnées et comptages disponibles, PAS de fond histologique natif pour cet échantillon (le fond depuis 'spatial/' racine reste tenté séparément).",
+      "en": "  ⚠ Fallback HD loader in use (no full Parquet package): coordinates and counts available, NO native histology background for this sample (background from the root 'spatial/' folder is still attempted separately)."
+    },
+    {
+      "fr": "  ✓ Objet brut chargé : %d gènes x %d %s%s",
+      "en": "  ✓ Raw object loaded: %d genes x %d %s%s"
+    },
+    {
+      "fr": "  ⚠ Aucune matrice brute (raw_feature_bc_matrix.h5) trouvée ou lecture impossible.",
+      "en": "  ⚠ No raw matrix (raw_feature_bc_matrix.h5) found, or reading failed."
+    },
+    {
+      "fr": "  Normalisation du sketch : %s",
+      "en": "  Sketch normalization: %s"
+    },
+    {
+      "fr": "  ✓ %d fond(s) histologique(s) détecté(s) (voir sélecteur de résolution, onglet Visualisation).",
+      "en": "  ✓ %d histology background(s) detected (see the resolution selector, Visualisation tab)."
+    },
+    {
+      "fr": "  ⚠ Aucun fond histologique détecté pour cet échantillon HD (vérifiez que le dossier racine contient bien 'spatial/').",
+      "en": "  ⚠ No histology background detected for this HD sample (check that the root folder contains 'spatial/')."
+    },
+    {
+      "fr": "  ⚠ Un échantillon nommé '%s' existait déjà — remplace.",
+      "en": "  ⚠ A sample named '%s' already existed — replaced."
+    },
+    {
+      "fr": "⚠️ Échantillon '%s' déjà existant — remplace.",
+      "en": "⚠️ Sample '%s' already existed — replaced."
+    },
+    {
+      "fr": "Copie du fichier uploadé impossible.",
+      "en": "Unable to copy the uploaded file."
+    },
+    {
       "fr": "Charger la sélection",
       "en": "Load selection"
     },

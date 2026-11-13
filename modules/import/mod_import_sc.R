@@ -177,7 +177,7 @@ mod_import_sc_ui <- function(id) {
         width = 400, title = i18n$t("Import Single-Cell"),
         # LOT 4A (V1.x UX): mapping stays in the analysis module (no UI move);
         # remind + native jump to the existing SC "0. Mapping IDs" panel.
-        div(class = "alert alert-light", style = "font-size:0.78rem;",
+        div(class = "alert alert-light", style = "font-size:0.8rem;",
             bsicons::bs_icon("info-circle"), " ",
             i18n$t("Identifiants non-symboles (Ensembl, Entrez, sondes Affymetrix) ? Le mapping d'IDs est disponible à l'étape 0 de l'analyse.")),
         actionButton(ns("goto_mapping"), i18n$t("Aller au mapping des IDs"),
@@ -259,7 +259,7 @@ mod_import_sc_ui <- function(id) {
             div(class = "alert alert-light", style = "font-size:0.8rem;border-left:3px solid #2C3E50;",
                 bsicons::bs_icon("collection"),
                 " ", i18n$t("Multi-échantillons : pour des expériences à plusieurs échantillons (ex: Contrôle & Traitement), importez chaque échantillon séparément. L'identité de l'échantillon est préservée pour la correction de batch et les analyses différentielles.")),
-            div(class = "alert alert-light", style = "font-size:0.78rem;",
+            div(class = "alert alert-light", style = "font-size:0.8rem;",
                 bsicons::bs_icon("hdd"),
                 " ", i18n$t("Fichiers volumineux (> quelques Go) : vérifiez l'espace disque disponible sur le disque où pointe le dossier temporaire de R (TMPDIR), pas seulement celui de l'app.")),
             fileInput(ns("file_upload"), i18n$t("Ajouter Fichier(s)"),
@@ -292,7 +292,7 @@ mod_import_sc_ui <- function(id) {
           accordion_panel(
             i18n$t("Multi-datasets SC (double jeu)"),
             value = "opt_multi",
-            div(class = "alert alert-light", style = "font-size:0.78rem;",
+            div(class = "alert alert-light", style = "font-size:0.8rem;",
                 bsicons::bs_icon("info-circle"), " ",
                 i18n$t("Renseignez un label pour enregistrer une copie du jeu importé dans le conteneur sc_datasets (le jeu actif reste l'objet importé). Relation : mode 1 = traiter avec les mêmes réglages que le jeu de référence ; mode 2 = réglages propres au jeu.")),
             textInput(ns("multi_label"), i18n$t("Label multi-datasets SC"),

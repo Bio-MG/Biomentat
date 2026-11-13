@@ -423,7 +423,7 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
                             .tr_ui("Plafond disque (Gio)"),
                             value = TS_SESSION_CHECKPOINT_DISK_CAP_BYTES / 1024^3,
                             min = 0.1, step = 1),
-        shiny::div(class = "small text-muted", style = "font-size:0.72rem;",
+        shiny::div(class = "small text-muted", style = "font-size:0.8rem;",
                    .tr_ui("R\u00e9glages valables pour cette session uniquement."))
       )
     })
@@ -434,16 +434,16 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
     # trigger, id). Traduite au rendu (.tr_ui) — re-render sur la langue.
     .sc_ckpt_write_line <- function(lw) {
       if (isTRUE(lw$skipped)) {
-        shiny::div(class = "small text-muted", style = "font-size:0.72rem;",
+        shiny::div(class = "small text-muted", style = "font-size:0.8rem;",
                    .tr_ui(lw$reason))
       } else if (isTRUE(lw$ok)) {
-        shiny::div(class = "small text-muted", style = "font-size:0.72rem;",
+        shiny::div(class = "small text-muted", style = "font-size:0.8rem;",
                    .fmt(.tr_ui("Checkpoint pos\u00e9 \u00e0 {ts}."),
                         ts = .disp_ts(lw$timestamp)),
                    sprintf(" [%s \u00b7 %s]", lw$trigger %sc_ckpt_or% "?",
                            lw$id %sc_ckpt_or% "?"))
       } else {
-        shiny::div(class = "small text-muted", style = "font-size:0.72rem;",
+        shiny::div(class = "small text-muted", style = "font-size:0.8rem;",
                    .fmt(.tr_ui("\u00c9chec de l'\u00e9criture du checkpoint : {err}"),
                         err = paste(lw$reasons %sc_ckpt_or% "raison inconnue",
                                     collapse = " | ")))
@@ -455,14 +455,14 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
       lc <- last_ckpt()
       lw <- last_write()
       if (is.null(lc) && is.null(lw)) {
-        return(shiny::div(class = "small text-muted", style = "font-size:0.72rem;",
+        return(shiny::div(class = "small text-muted", style = "font-size:0.8rem;",
                           .tr_ui("Aucun checkpoint disponible.")))
       }
       ck_bit <- if (is.null(lc)) NULL else {
         scope <- if (length(lc$dataset_ids)) paste(lc$dataset_ids, collapse = ", ")
                  else .tr_ui("(aucun dataset)")
         shiny::div(id = "asr3_status_line", class = "small text-muted",
-                   style = "font-size:0.72rem; line-height:1.3;",
+                   style = "font-size:0.8rem; line-height:1.3;",
                    .fmt(.tr_ui("Dernier checkpoint : {ts} \u2014 port\u00e9e : {scope}"),
                         ts = .disp_ts(lc$timestamp), scope = scope))
       }
@@ -482,7 +482,7 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
       losses_bit <- if (length(b$losses)) {
         shiny::tagList(
           shiny::strong(.tr_ui("Pertes :")),
-          shiny::tags$ul(style = "font-size:0.75rem; margin:2px 0 4px 0;",
+          shiny::tags$ul(style = "font-size:0.8rem; margin:2px 0 4px 0;",
                          lapply(b$losses, function(l) shiny::tags$li(l))))
       } else NULL
       shiny::div(id = "asr3_restore_banner", class = "alert alert-warning",

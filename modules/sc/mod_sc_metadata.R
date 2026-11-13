@@ -17,7 +17,7 @@
 mod_sc_metadata_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    div(class = "alert alert-light", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
+    div(class = "alert alert-light", style = "font-size:0.8rem;padding:5px;margin-bottom:5px;",
         bsicons::bs_icon("info-circle"),
         " ", i18n$t("Déclarez la condition et le réplicat de chaque échantillon. Une CONDITION est une propriété de l'échantillon (pas de la cellule). Sans elle, les analyses A-vs-B (pseudobulk, Milo/scCODA, plots par condition) restent inaccessibles.")),
     selectInput(ns("sample_col"), i18n$t("Colonne échantillon"), choices = NULL),
@@ -37,7 +37,8 @@ mod_sc_metadata_ui <- function(id) {
         i18n$t("Éditez directement les cellules condition / replicate dans le tableau. Réplicat vide = l'échantillon EST le réplicat.")),
     hr(),
     fileInput(ns("csv_file"), i18n$t("…ou joindre un CSV de design (colonnes : sample, condition[, replicate])"),
-              accept = c(".csv", ".tsv", ".txt", ".csv2")),
+              accept = c(".csv", ".tsv", ".txt", ".csv2"),
+              buttonLabel = i18n$t("Parcourir...")),
     verbatimTextOutput(ns("design_recap")),
     actionButton(ns("btn_commit"), i18n$t("✅ Appliquer le design à l'objet SC"),
                  icon = icon("table"), class = "btn-success w-100")

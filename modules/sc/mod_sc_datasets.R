@@ -15,7 +15,7 @@
 mod_sc_datasets_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    div(class = "alert alert-light", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
+    div(class = "alert alert-light", style = "font-size:0.8rem;padding:5px;margin-bottom:5px;",
         bsicons::bs_icon("info-circle"),
         " ", i18n$t("Enregistrez l'objet SC courant (brut ou traité) sous un label, avec la relation déclarée vis-à-vis du jeu de référence : mode 1 = analyses séparées à paramètres partagés, mode 2 = paramètres distincts. Le jeu actif n'est jamais modifié.")),
     textInput(ns("ds_label"), i18n$t("Label du dataset"),
@@ -37,7 +37,7 @@ mod_sc_datasets_ui <- function(id) {
     # qu'un puits sans robinet — enregistrer sans jamais relire ne sert à rien.
     hr(),
     h6(i18n$t("Activer un dataset enregistré"), style = "font-weight:bold;"),
-    div(class = "alert alert-light", style = "font-size:0.75rem;padding:4px;margin-bottom:5px;",
+    div(class = "alert alert-light", style = "font-size:0.8rem;padding:4px;margin-bottom:5px;",
         bsicons::bs_icon("info-circle"),
         " ", i18n$t("Charge le jeu sélectionné comme objet actif (les résultats calculés sur l'ancien jeu sont purgés).")),
     uiOutput(ns("ds_activate_ui"))
