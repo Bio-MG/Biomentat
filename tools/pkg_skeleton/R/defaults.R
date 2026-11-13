@@ -291,3 +291,41 @@ TS_LIANA_RESOURCE_DEFAULT    <- "Consensus"
 TS_LIANA_MIN_CELLS_DEFAULT   <- 5L
 TS_LIANA_SEED_DEFAULT        <- 1004L
 TS_LIANA_RESOURCE_MD5        <- "b807279afdb1b2f34fa83a3dd51bbcb5"
+
+# --- Registre d'egress central & mode Offline strict (P1.3c) -----------------
+ts_egress_registry <- function() {
+  data.frame(
+    egress_id = c("geo_ncbi", "celldex_hub", "enrichr_cloud", "renv_cran"),
+    module = c(
+      "modules/import/mod_geo.R",
+      "modules/sc/mod_sc_annotation.R",
+      "tools/pkg_skeleton/R/pathway_helpers.R",
+      "renv/activate.R"
+    ),
+    host = c(
+      "ftp.ncbi.nlm.nih.gov / eutils.ncbi.nlm.nih.gov",
+      "ExperimentHub / AnnotationHub (Bioconductor)",
+      "maayanlab.cloud/Enrichr",
+      "cran.r-project.org / bioconductor.org"
+    ),
+    opt_in_only = c(TRUE, TRUE, TRUE, TRUE),
+    stringsAsFactors = FALSE
+  )
+}
+
+ts_is_offline_strict <- function() {
+  opt <- getOption("biomentat.offline_strict", NULL)
+  if (!is.null(opt)) return(isTRUE(opt))
+  env <- tolower(trimws(Sys.getenv("BIOMENTAT_OFFLINE_STRICT", "")))
+  env %in% c("1", "true", "yes", "on")
+}
+
+ts_require_online <- function(egress_id, detail = NULL) {
+  if (!ts_is_offline_strict()) return(invisible(TRUE))
+  msg <- paste0(
+    "Mode Offline strict actif — appel reseau bloque (", egress_id,
+    if (!is.null(detail) && nzchar(as.character(detail)[1L])) paste0(" : ", detail) else "",
+    "). Desactivez BIOMENTAT_OFFLINE_STRICT / options(biomentat.offline_strict = FALSE) pour autoriser l'egress."
+  )
+  stop(errorCondition(msg, class = "biomentat_offline_error", egress_id = egress_id))
+}

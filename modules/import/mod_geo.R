@@ -417,6 +417,9 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
 #' .geo_fetch ne change pas. Echec du listing ou d'un fichier = erreur
 #' condition geo_import_error, survit aux 429 (retry interne).
 .geo_fetch_supp <- function(accession, destdir, timeout_s = 300, max_tries = 3L) {
+  if (exists("ts_require_online", mode = "function")) {
+    ts_require_online("geo_ncbi", accession)
+  }
   index_url <- .geo_ncbi_url(accession)
   index_resp <- httr2::req_perform(
     .geo_supp_request(index_url, timeout_s = timeout_s, max_tries = max_tries))
@@ -446,6 +449,9 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
 
 #' Fetch GEO supplementary files + series_matrix via GEOquery
 .geo_fetch <- function(accession) {
+  if (exists("ts_require_online", mode = "function")) {
+    ts_require_online("geo_ncbi", accession)
+  }
   if (!requireNamespace("GEOquery", quietly = TRUE))
     stop(errorCondition("Package 'GEOquery' requis. Installez via BiocManager::install('GEOquery').", class = "geo_import_error"))
 

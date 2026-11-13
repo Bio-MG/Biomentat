@@ -2257,6 +2257,9 @@ enrichr_cloud_submit <- function(genes, consent = FALSE,
             "non cochée. RIEN n'a été envoyé."),
       class = "pathway_error"))
   }
+  if (exists("ts_require_online", mode = "function")) {
+    ts_require_online("enrichr_cloud", base_url)
+  }
   # -- 2. validations d'arguments (encore avant le vol) ----------------------
   if (!is.character(genes) || length(genes) == 0L) {
     stop(errorCondition(
@@ -2307,6 +2310,9 @@ enrichr_cloud_submit <- function(genes, consent = FALSE,
 enrichr_cloud_enrich <- function(libraries,
                                  base_url = TS_ENRICHR_BASE_URLS[["Enrichr"]],
                                  cookie_jar = NULL) {
+  if (exists("ts_require_online", mode = "function")) {
+    ts_require_online("enrichr_cloud", base_url)
+  }
   if (!is.character(libraries) || length(libraries) == 0L ||
       all(!nzchar(trimws(libraries)))) {
     stop(errorCondition(
@@ -2383,6 +2389,9 @@ enrichr_cloud_parse_export <- function(tsv_text, library) {
 
 #' GET /datasetStatistics → noms de librairies disponibles (sélecteur cloud).
 enrichr_cloud_libraries <- function(base_url = TS_ENRICHR_BASE_URLS[["Enrichr"]]) {
+  if (exists("ts_require_online", mode = "function")) {
+    ts_require_online("enrichr_cloud", base_url)
+  }
   resp <- tryCatch(
     httr2::request(enrichr_cloud_url(base_url, "datasetStatistics")) |>
       httr2::req_perform(),

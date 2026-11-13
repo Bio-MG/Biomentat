@@ -13,6 +13,9 @@
 }
 
 .load_ref <- function(code) {
+  if (exists("ts_require_online", mode = "function")) {
+    ts_require_online("celldex_hub", code)
+  }
   switch(code,
     hpca      = celldex::HumanPrimaryCellAtlasData(),
     blueprint = celldex::BlueprintEncodeData(),
