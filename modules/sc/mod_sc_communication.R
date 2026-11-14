@@ -411,27 +411,36 @@ mod_sc_communication_output_ui <- function(id) {
                 # La hiérarchie de sévérité d'origine est conservée via la
                 # couleur des puces (warning > info > light).
                 card(
+                  id = ns("comm_attn_card"),
                   card_header(i18n$t("Points d'attention — lecture des résultats")),
+                  # §H.10f (2026-11-14) : les badges longue-libellé débordaient
+                  # du badge coloré (Bootstrap badge = white-space: nowrap par
+                  # défaut). Class scoping : retour à la ligne DANS le badge,
+                  # jamais à travers.
+                  tags$style(HTML(sprintf(
+                    "#%s .ts-attn-badge { display: inline-block; white-space: normal; text-align: left; line-height: 1.35; }",
+                    ns("comm_attn_card")
+                  ))),
                   card_body(
                     tags$ul(class = "list-unstyled m-0",
                             tags$li(class = "mb-2",
-                                    tags$span(class = "badge bg-warning text-dark me-2",
+                                    tags$span(class = "badge bg-warning text-dark me-2 ts-attn-badge",
                                               "⚠️ ", i18n$t("Validité technique vs biologique")),
                                     i18n$t("Validite technique uniquement : un import valide n'implique aucune validite biologique.")),
                             tags$li(class = "mb-2",
-                                    tags$span(class = "badge bg-info text-dark me-2",
+                                    tags$span(class = "badge bg-info text-dark me-2 ts-attn-badge",
                                               "⚖️ ", i18n$t("Comparabilité des scores")),
                                     i18n$t("Les scores ne sont pas compares entre sources differentes (CellChat vs CellPhoneDB).")),
                             tags$li(class = "mb-2",
-                                    tags$span(class = "badge bg-info text-dark me-2",
+                                    tags$span(class = "badge bg-info text-dark me-2 ts-attn-badge",
                                               "🔗 ", i18n$t("Causalité")),
                                     i18n$t("Une association ligand-receptor n'etablit aucune causalite.")),
                             tags$li(class = "mb-2",
-                                    tags$span(class = "badge bg-secondary text-white me-2",
+                                    tags$span(class = "badge bg-secondary text-white me-2 ts-attn-badge",
                                               "🏷️ ", i18n$t("Labels cellulaires")),
                                     i18n$t("Les labels sans correspondance exacte dans la colonne choisie sont conserves tels quels et listes — jamais renommes.")),
                             tags$li(class = "mb-0",
-                                    tags$span(class = "badge bg-secondary text-white me-2",
+                                    tags$span(class = "badge bg-secondary text-white me-2 ts-attn-badge",
                                               "🧬 ", i18n$t("Objets RDS CellChat")),
                                     # 3D (O28, spéc §2.16) : texte aligné sur le moteur —
                                     # appariement EXACT (jamais « non reconstitué ») :
