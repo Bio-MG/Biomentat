@@ -112,15 +112,31 @@ mod_spatial_ui <- function(id) {
         "#%s { display: none; }\n.ts-spatial-step-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.85rem; }",
         ns("results")
       ))),
-      # LOT 1 (V1.x UX): paradigm badge — async auto-pipeline (mirai).
-      div(class = "alert alert-success", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
-          icon("bolt"), " ", i18n$t("Pipeline automatique asynchrone (mirai) — le statut reste visible ci-dessous")),
+      # SPATIAL-SIDEBAR-A (proposal 2026-11-14 — option A, suite) :
+      # (a) la bande toujours-visible (badge mirai + sélecteur dataset +
+      #     statut daemons + reset) devient STICKY dans la région de scroll
+      #     indépendante (.sidebar a overflow:auto natif bslib dès que la
+      #     hauteur du layout est définie — fillable = "tab_spatial" dans
+      #     app.R) : point d'ancrage visuel permanent pendant le scroll.
+      # (b) paddings d'accordéon réduits — la pile 9 panneaux retombe
+      #     mécaniquement (l'option C, accordéon 2 niveaux, reste dispo
+      #     si ça ne suffit pas).
+      # Garde-fou : wrappers/pures classes CSS — AUCUN id renommé.
+      tags$style(HTML(sprintf(
+        "#%s .accordion-body { padding: 0.5rem 0.65rem; }\n#%1$s .accordion-button { padding: 0.45rem 0.75rem; }\n.ts-spatial-side-head { position: sticky; top: 0; z-index: 3; background: var(--bs-body-bg, #fff); padding-bottom: 0.35rem; margin-bottom: 0.35rem; }\n.ts-spatial-side-head::after { content: \"\"; display: block; position: absolute; left: -0.5rem; right: -0.5rem; bottom: 0; height: 1px; background: var(--bs-border-color, #dee2e6); }",
+        ns("steps")
+      ))),
       # Status placement (v4 status row relocated from the tab strip): dataset
-      # selector + daemon status stay ALWAYS VISIBLE in the sidebar header.
-      uiOutput(ns("active_dataset_ui")),
-      uiOutput(ns("daemon_status_ui")),
-      actionButton(ns("btn_reset_daemons"), i18n$t("Reinitialiser les daemons"),
-                   class = "btn-outline-warning btn-sm w-100 mt-1", icon = icon("rotate")),
+      # selector + daemon status stay ALWAYS VISIBLE in the sidebar header —
+      # SPATIAL-SIDEBAR-A : enrobés pour sticky (cf. tags$style ci-dessus).
+      div(class = "ts-spatial-side-head",
+          # LOT 1 (V1.x UX): paradigm badge — async auto-pipeline (mirai).
+          div(class = "alert alert-success", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
+              icon("bolt"), " ", i18n$t("Pipeline automatique asynchrone (mirai) — le statut reste visible ci-dessous")),
+          uiOutput(ns("active_dataset_ui")),
+          uiOutput(ns("daemon_status_ui")),
+          actionButton(ns("btn_reset_daemons"), i18n$t("Reinitialiser les daemons"),
+                       class = "btn-outline-warning btn-sm w-100 mt-1", icon = icon("rotate"))),
       hr(),
       accordion(
         id = ns("steps"),

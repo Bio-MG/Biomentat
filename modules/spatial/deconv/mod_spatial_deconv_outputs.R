@@ -41,8 +41,12 @@
   # ── DT table ────────────────────────────────────────────────────────────
   output$deconv_table <- DT::renderDT({
     req(shared_rv$deconv_props)
+    # §H.10b (qualification 2026-11-14) : UNE colonne PAR type cellulaire
+    # (dynamique) — la table la plus large de l'app. scroll_x = TRUE est le
+    # combo DOCUMENTÉ SÛR (le glitch 2H/O28 exige filter = "top", ici "none").
     ts_datatable(shared_rv$deconv_props, page_length = 15L,
-                 filename_base = "deconv_outputs_table", filter = "none") |>
+                 filename_base = "deconv_outputs_table", filter = "none",
+                 scroll_x = TRUE) |>
       DT::formatRound(setdiff(colnames(shared_rv$deconv_props), "id"), 3)
   })
 

@@ -807,7 +807,17 @@ new_entries <- list(
   c("Rapport HTML (auto)...", "HTML report (auto)..."),
   c("\u2713 Rapport : {f}", "\u2713 Report: {f}"),
   c("\u2713 Rapport g\u00e9n\u00e9r\u00e9 : {f}", "\u2713 Report generated: {f}"),
-  c("Rapport ignor\u00e9:", "Report skipped:")
+  c("Rapport ignor\u00e9:", "Report skipped:"),
+  # --- SPATIAL-SIDEBAR-A (2026-11-14) : summaries des 3 blocs pédagogiques
+  # du panneau 6 (niches) repliés en <details> (option A du proposal
+  # docs/proposals/PROPOSAL_SPATIAL_WORKFLOW_SIDEBAR_LENGTH_2026-11-14.md ;
+  # contenu mot-pour-mot inchangé, conteneur seul). Style non-accentué
+  # aligné sur les clés existantes du module (h6 « etiquetage aleatoire »).
+  c("Qu'est-ce qu'une niche spatiale ?", "What is a spatial niche?"),
+  c("Comment lire le z-score de co-occurrence ?",
+    "How to read the co-occurrence z-score?"),
+  c("Qu'est-ce que l'etiquetage aleatoire (Ripley's K) ?",
+    "What is label randomization (Ripley's K)?")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

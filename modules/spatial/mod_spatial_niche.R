@@ -55,10 +55,17 @@
 mod_spatial_niche_controls_ui <- function(id) {
   ns <- NS(id)
   tagList(
-      div(class = "alert alert-light", style = "font-size:0.8rem;",
-          bsicons::bs_icon("info-circle"),
-          " ",
-          i18n$t("Regroupe les spots/cellules selon la COMPOSITION de leur voisinage spatial (quels clusters ou types cellulaires sont a proximite), pas selon leur propre expression — revele des regions definies par la coexistence de plusieurs populations (ex: interface tumeur/stroma, bordure d'un centre germinatif). Equivalent de Seurat::BuildNicheAssay().")),
+      # SPATIAL-SIDEBAR-A (proposal 2026-11-14 — option A) : les 3 blocs
+      # pédagogiques longs de ce panneau (le plus haut de la sidebar) sont
+      # repliés en <details> (motif identique aux « Options avancees » du QC)
+      # — contenu MOT POUR MOT inchangé, seul le conteneur change ; aucun
+      # id de contrôle touché (garde-fou allowlist drive respecté).
+      tags$details(
+        tags$summary(style = "cursor:pointer; font-size:0.75rem; color:#666;",
+                     bsicons::bs_icon("info-circle"), " ",
+                     i18n$t("Qu'est-ce qu'une niche spatiale ?")),
+        div(class = "alert alert-light mt-1", style = "font-size:0.8rem;",
+            i18n$t("Regroupe les spots/cellules selon la COMPOSITION de leur voisinage spatial (quels clusters ou types cellulaires sont a proximite), pas selon leur propre expression — revele des regions definies par la coexistence de plusieurs populations (ex: interface tumeur/stroma, bordure d'un centre germinatif). Equivalent de Seurat::BuildNicheAssay()."))),
 
       uiOutput(ns("group_by_ui")),
 
@@ -77,10 +84,12 @@ mod_spatial_niche_controls_ui <- function(id) {
 
       hr(),
       h6(i18n$t("Enrichissement de voisinage (co-occurrence)"), style = "font-weight:bold;"),
-      div(class = "alert alert-light", style = "font-size:0.75rem;",
-          bsicons::bs_icon("hash"),
-          " ",
-          i18n$t("Pour chaque paire de labels (cluster, type cellulaire dominant ou niche), compare le nombre de voisinages observes a une enveloppe nulle obtenue en melangeant les labels au hasard -- un z-score positif signale une co-occurrence spatiale (ex: interface tumeur/stroma), negatif une exclusion mutuelle.")),
+      tags$details(
+        tags$summary(style = "cursor:pointer; font-size:0.72rem; color:#666;",
+                     bsicons::bs_icon("hash"), " ",
+                     i18n$t("Comment lire le z-score de co-occurrence ?")),
+        div(class = "alert alert-light mt-1", style = "font-size:0.75rem;",
+            i18n$t("Pour chaque paire de labels (cluster, type cellulaire dominant ou niche), compare le nombre de voisinages observes a une enveloppe nulle obtenue en melangeant les labels au hasard -- un z-score positif signale une co-occurrence spatiale (ex: interface tumeur/stroma), negatif une exclusion mutuelle."))),
       uiOutput(ns("group_by_enrich_ui")),
       numericInput(ns("k_neighbors_enrich"), i18n$t("Voisins spatiaux (k)"), 30, min = 5, max = 200, step = 5),
       numericInput(ns("n_perm_enrich"), i18n$t("Permutations (enveloppe nulle)"), 200, min = 50, max = 1000, step = 50),
@@ -90,10 +99,12 @@ mod_spatial_niche_controls_ui <- function(id) {
 
       hr(),
       h6(i18n$t("Ripley's K (etiquetage aleatoire)"), style = "font-weight:bold;"),
-      div(class = "alert alert-light", style = "font-size:0.75rem;",
-          bsicons::bs_icon("bullseye"),
-          " ",
-          i18n$t("Pour UN label cible, compare son agregation spatiale observee a une enveloppe nulle obtenue en reshufflant QUI porte ce label parmi les memes positions (etiquetage aleatoire) -- adaptation usuelle en transcriptomique spatiale (le tissu entier est la fenetre, pas un processus de Poisson) plutot qu'un vrai test CSR/spatstat.")),
+      tags$details(
+        tags$summary(style = "cursor:pointer; font-size:0.72rem; color:#666;",
+                     bsicons::bs_icon("bullseye"), " ",
+                     i18n$t("Qu'est-ce que l'etiquetage aleatoire (Ripley's K) ?")),
+        div(class = "alert alert-light mt-1", style = "font-size:0.75rem;",
+            i18n$t("Pour UN label cible, compare son agregation spatiale observee a une enveloppe nulle obtenue en reshufflant QUI porte ce label parmi les memes positions (etiquetage aleatoire) -- adaptation usuelle en transcriptomique spatiale (le tissu entier est la fenetre, pas un processus de Poisson) plutot qu'un vrai test CSR/spatstat."))),
       uiOutput(ns("group_by_ripley_ui")),
       uiOutput(ns("ripley_target_ui")),
       tags$details(
@@ -263,8 +274,13 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
 
     output$niche_composition_table <- DT::renderDT({
       req(shared_rv$niche_composition)
+      # §H.10b (qualification 2026-11-14) : UNE colonne PAR cluster/type
+      # cellulaire (dynamique) — 2e table la plus large. scroll_x = TRUE est
+      # le combo DOCUMENTÉ SÛR (le glitch 2H/O28 exige filter = "top", ici
+      # "none").
       ts_datatable(shared_rv$niche_composition, page_length = 15L,
-                   filename_base = "spatial_niche_composition", filter = "none") |>
+                   filename_base = "spatial_niche_composition", filter = "none",
+                   scroll_x = TRUE) |>
         DT::formatRound(setdiff(colnames(shared_rv$niche_composition), "niche"), 3)
     })
 

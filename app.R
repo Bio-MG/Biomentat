@@ -407,6 +407,21 @@ ui_static <- page_navbar(
   # (nav_select) to the analysis tabs that host the ID-mapping panels.
   id = "main_nav",
 
+  # SPATIAL-SIDEBAR-A (proposal 2026-11-14, docs/proposals/ — option A
+  # « quick win CSS ») : SEUL le pane Spatial devient fillable (fillable
+  # accepte un vecteur de values — vérifié empiriquement : le pane
+  # tab_spatial reçoit html-fill-item/html-fill-container, les autres
+  # panes restent des tab-pane ordinaires). Le layout_sidebar du module
+  # hérite d'une hauteur DÉFINIE → l'overflow:auto natif de bslib
+  # (components/scss/sidebar.scss:104-106, `.bslib-sidebar-layout >
+  # .sidebar { overflow: auto }`) s'engage et la sidebar devient une
+  # région de scroll INDÉPENDANTE : plus de « sensation de scroll
+  # infini » (double scroll sidebar DANS page) remontée par l'opérateur.
+  # Garde-fou proposal : AUCUN id de contrôle renommé → allowlist drive
+  # + pins intacts (l'option B, split V1.x, reste la cure structurelle
+  # longue et TOUCHE les ids).
+  fillable = "tab_spatial",
+
   title = "Biomentat v1.0 - Multi-Omics Platform",
   
   theme = my_theme,
