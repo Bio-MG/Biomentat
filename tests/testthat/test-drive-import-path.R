@@ -222,9 +222,15 @@ test_that("UN ROUTE PAR MODULE : import_file refuse import_velocity, import_path
 # ── (d) le module velocity publie l'importeur (contrat source) ──────────────
 test_that("mod_sc_velocity publie l'importeur import_velocity sur la seam G3", {
   src <- .read_src("modules/sc/mod_sc_velocity.R")
-  expect_match(src, "ts_drive_publish_importer(global_data, TS_DRIVE_SC_VELOCITY_IMPORT_MODULE",
+  # garde défensive mesurée : la couche drive peut être absente des
+  # environnements de test minimalistes — l'importeur n'est publié que si
+  # ts_drive_publish_importer existe (motif ExtendedTask)
+  expect_match(src, "if (.vel_drive_ok) ts_drive_publish_importer(global_data,",
                fixed = TRUE,
-               info = "l'importeur doit etre publie sur la seam standard")
+               info = "l'importeur doit etre publie sur la seam standard (garde défensive)")
+  expect_match(src, '.vel_drive_ok <- exists("ts_drive_publish_importer"',
+               fixed = TRUE,
+               info = "la publication doit être gardée sur la présence de la couche drive")
   # le chemin arrive VALIDE du seam (motif import_sc) : l'importeur consomme,
   # il ne re-dérive pas — la validation confinement/exts vit dans
   # ts_drive_validate_velocity_path (testée ci-dessus)

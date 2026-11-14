@@ -1211,6 +1211,17 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     # Le moteur est worker-safe par construction (INVARIANT
     # sc_communication_engine.R : « future forcé sequential à l'INTÉRIEUR du
     # job, mirai reste le seul orchestrateur »).
+    # Triage suite de fond 2026-11-14 : `.sc_project_root()` (session_checkpoint.R)
+    # n'est PAS sourcé par tous les fichiers qui montent ce module (testServer
+    # optin-handoff mesuré sur le même motif dans mod_sc_velocity.R). Défensive,
+    # PAS une re-dérivation : en app, .sc_project_root existe et le fallback
+    # getwd() est la racine du projet (l'app y est lancée).
+    .ts_sc_daemon_root <- function() {
+      if (exists(".sc_project_root", where = globalenv(), inherits = FALSE)) {
+        return(get(".sc_project_root", envir = globalenv())())
+      }
+      getwd()
+    }
     ext_task_cls_cellchat <- if (exists("ExtendedTask", where = asNamespace("shiny"), inherits = FALSE)) {
       get("ExtendedTask", envir = asNamespace("shiny"))
     } else if (exists("ExtendedTask", where = asNamespace("bslib"), inherits = FALSE)) {
@@ -1219,10 +1230,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       get0("ExtendedTask", envir = globalenv())
     }
     cellchat_core_deps <- c(
-      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "error_state.R"),
-      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "sc_communication.R"),
-      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "sc_communication_input.R"),
-      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "sc_communication_engine.R")
+      file.path(.ts_sc_daemon_root(), "tools", "pkg_skeleton", "R", "error_state.R"),
+      file.path(.ts_sc_daemon_root(), "tools", "pkg_skeleton", "R", "sc_communication.R"),
+      file.path(.ts_sc_daemon_root(), "tools", "pkg_skeleton", "R", "sc_communication_input.R"),
+      file.path(.ts_sc_daemon_root(), "tools", "pkg_skeleton", "R", "sc_communication_engine.R")
     )
     cellchat_task <- if (!is.null(ext_task_cls_cellchat) && requireNamespace("mirai", quietly = TRUE)) {
       t <- ext_task_cls_cellchat$new(function(cc_input, args, deps = cellchat_core_deps) {
@@ -1409,8 +1420,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       get0("ExtendedTask", envir = globalenv())
     }
     liana_core_deps <- c(
-      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "sc_communication_engine.R"),
-      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "error_state.R")
+      file.path(.ts_sc_daemon_root(), "tools", "pkg_skeleton", "R", "sc_communication_engine.R"),
+      file.path(.ts_sc_daemon_root(), "tools", "pkg_skeleton", "R", "error_state.R")
     )
     liana_task <- if (!is.null(ext_task_cls_liana) && requireNamespace("mirai", quietly = TRUE)) {
       t <- ext_task_cls_liana$new(function(obj, args, deps = liana_core_deps) {

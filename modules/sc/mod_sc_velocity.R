@@ -636,6 +636,18 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     # Le moteur scVelo (sc_velocity_scvelo_optin_infer) tourne sous reticulate ;
     # les daemons héritent de l'env du process principal (RETICULATE_PYTHON est
     # posé par le launcher lane 2) et chargent sc_velocity.R idempotemment.
+    # Triage suite de fond 2026-11-14 : `.sc_project_root()` (session_checkpoint.R)
+    # n'est PAS sourcé par tous les fichiers qui montent ce module (testServer
+    # optin-handoff mesuré : « could not find function » à l'INIT du module).
+    # Défensive, PAS une re-dérivation : en app, .sc_project_root existe
+    # (session_checkpoint.R sourcé avant les modules) et le fallback getwd()
+    # est la racine du projet (l'app y est lancée).
+    .ts_sc_daemon_root <- function() {
+      if (exists(".sc_project_root", where = globalenv(), inherits = FALSE)) {
+        return(get(".sc_project_root", envir = globalenv())())
+      }
+      getwd()
+    }
     ext_task_cls_vel <- if (exists("ExtendedTask", where = asNamespace("shiny"), inherits = FALSE)) {
       get("ExtendedTask", envir = asNamespace("shiny"))
     } else if (exists("ExtendedTask", where = asNamespace("bslib"), inherits = FALSE)) {
@@ -644,8 +656,8 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       get0("ExtendedTask", envir = globalenv())
     }
     scvelo_core_deps <- c(
-      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "sc_velocity.R"),
-      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "error_state.R")
+      file.path(.ts_sc_daemon_root(), "tools", "pkg_skeleton", "R", "sc_velocity.R"),
+      file.path(.ts_sc_daemon_root(), "tools", "pkg_skeleton", "R", "error_state.R")
     )
     scvelo_task <- if (!is.null(ext_task_cls_vel) && requireNamespace("mirai", quietly = TRUE)) {
       t <- ext_task_cls_vel$new(function(canon, emb, params, deps = scvelo_core_deps) {
@@ -1007,7 +1019,18 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
            n_cells_matched = if (is.null(res)) NULL else res$n_cells_matched,
            has_seurat = !is.null(obj))
     }
-    ts_drive_publish_importer(global_data, TS_DRIVE_SC_VELOCITY_IMPORT_MODULE,
+    # Garde défensive (motif ExtendedTask ci-dessus) : la couche drive
+    # (drive_allowlist.R) est sourcée par global.R avant les modules — mais
+    # des environnements de test minimalistes montent ce module SANS elle
+    # (test-sc-velocity-optin-handoff mesuré : « could not find function
+    # ts_drive_publish_importer » à l'INIT). Sans drive, pas d'importeur :
+    # le panneau humain est inchangé.
+    .vel_drive_ok <- exists("ts_drive_publish_importer", where = globalenv(),
+                            inherits = FALSE) &&
+      exists("TS_DRIVE_SC_VELOCITY_IMPORT_MODULE", where = globalenv(),
+             inherits = FALSE)
+    if (.vel_drive_ok) ts_drive_publish_importer(global_data,
+                              TS_DRIVE_SC_VELOCITY_IMPORT_MODULE,
                               function(request) {
       warnings <- character(0)
       path <- request$path

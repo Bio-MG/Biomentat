@@ -184,10 +184,16 @@ test_that("the compute path orchestrates without ever computing here", {
   expect_true(grepl("build_cellchat_input(obj, group_by = identity_col",
                     .cc_ui_src, fixed = TRUE))
   # le calcul est delegue au moteur, avec la graine et le nombre de permutations
+  # Lane async (8989de4, re-basé 2026-11-14) : la graine/nboot sont lues des
+  # widgets UNE FOIS dans `args <- list(seed = …, nboot = …)` puis consommées
+  # par LES DEUX voies (daemon mirai : args$seed ; repli synchrone : args$seed)
+  # — zéro divergence de paramètre entre les deux chemins.
   expect_true(grepl("run_cellchat(", .cc_ui_src, fixed = TRUE))
-  expect_true(grepl("seed  = as.integer(input$comm_engine_seed)",
+  expect_true(grepl("args <- list(seed = as.integer(input$comm_engine_seed),",
                     .cc_ui_src, fixed = TRUE))
-  expect_true(grepl("nboot = as.integer(input$comm_engine_nboot)",
+  expect_true(grepl("nboot = as.integer(input$comm_engine_nboot),",
+                    .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("seed = args$seed, nboot = args$nboot,",
                     .cc_ui_src, fixed = TRUE))
   # dependance paresseuse : l'absence est un etat annonce avec son remede
   expect_true(grepl("cellchat_engine_available()", .cc_ui_src, fixed = TRUE))
@@ -209,7 +215,7 @@ test_that("both paths store their result in the SAME place (règle des deux voie
   expect_true(grepl(".store_result(first_result, obj", .cc_ui_src, fixed = TRUE))
   expect_true(grepl("append_provenance = FALSE", .cc_ui_src, fixed = TRUE))
   expect_identical(.count(.cc_ui_src, "comm_state$result <- canonical"), 1L)
-  expect_identical(.count(.cc_ui_src, ".clear_result_state()"), 6L)  # re-basé 2026-11-09 (CC-2) : 6 sites d'appel mesurés (le pin 4L était déjà rouge sur HEAD — dette bulk/merge era)
+  expect_identical(.count(.cc_ui_src, ".clear_result_state()"), 8L)  # re-basé 2026-11-14 : 8 sites mesurés — lane async (8989de4) : +2 sites (re-entrée du compute observer + échec de la voie daemon dans .apply_cellchat_result), le pin 6L datait de CC-2 2026-11-09
   # Lane 3 (2026-11-14) : 3e dépôt = le hook de réhydratation snapshot pose le
   # MÊME miroir partagé au chargement de session (ni ré-inféré ni recalculé —
   # le résultat voyage tel quel) ; le consommé (rapport consolidé, contextes)

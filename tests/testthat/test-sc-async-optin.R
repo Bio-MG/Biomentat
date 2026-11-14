@@ -181,7 +181,11 @@ test_that("lane async : miroir R-3bis du drawer consommé par les renders", {
   expect_match(src, 'state_get(shared_rv, "comm_tabs_current")', fixed = TRUE,
                info = "comm_status ne consomme pas le miroir R-3bis")
   # les 4 modules de contexte consomment le miroir avec LEUR feuille
-  for (f in c(.VEL_FILE, "modules/sc/mod_sc_communication_trajectory.R",
+  # (correctif 2026-11-14 : le panneau PRINCIPAL mod_sc_velocity.R n'a PAS de
+  # garde R-3bis — c'est le module de CONTEXTE vélocité, ci-dessous, qui la
+  # porte ; l'ancienne variable indéfinie .VEL_FILE masquait cette erreur)
+  for (f in c("modules/sc/mod_sc_communication_velocity.R",
+              "modules/sc/mod_sc_communication_trajectory.R",
               "modules/sc/mod_sc_communication_spatial.R",
               "modules/sc/mod_sc_communication_perturbation.R")) {
     s <- .read_src(f)
@@ -191,7 +195,8 @@ test_that("lane async : miroir R-3bis du drawer consommé par les renders", {
                  info = paste("le miroir R-3bis n'est pas consommé dans", f))
   }
   # chaque garde verrouille SA feuille
-  expect_match(.read_src(.VEL_FILE), '"ccc_tab_velocite"', fixed = TRUE)
+  expect_match(.read_src("modules/sc/mod_sc_communication_velocity.R"),
+               '"ccc_tab_velocite"', fixed = TRUE)
   expect_match(.read_src("modules/sc/mod_sc_communication_trajectory.R"),
                '"ccc_tab_trajectoire"', fixed = TRUE)
   expect_match(.read_src("modules/sc/mod_sc_communication_spatial.R"),
