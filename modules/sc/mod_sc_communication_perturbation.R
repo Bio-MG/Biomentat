@@ -75,6 +75,14 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
     }
     pert_ctx <- reactiveVal(NULL)
 
+    # R-3bis (idiome repo, cf. mod_bulk.R fix 2026-11-06) : une sortie
+    # invalidée pendant que son panneau est caché ne livre JAMAIS son payload.
+    # Les renders consomment le miroir de feuille active du drawer (publié par
+    # le parent) — re-exécution à l'ouverture du sous-onglet.
+    .ctx_tab_guard <- function() {
+      req(state_get(shared_rv, "comm_tabs_current") %||% "" == "ccc_tab_perturbation")
+    }
+
     .guard_stale <- function() {
       req(global_data$sc_obj, comm_state$result, comm_state$object_fingerprint)
       if (!identical(velocity_object_fingerprint(global_data$sc_obj),
@@ -169,6 +177,7 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
     })
 
     output$pert_status <- renderText({
+      .ctx_tab_guard()
       ctx <- pert_ctx()
       req(ctx)
       sprintf(.tr("IN SILICO — interactions : %d → %d ; paires affectées : %d ; senders affectés : %s."),
@@ -192,6 +201,7 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
     })
 
     output$pert_table <- DT::renderDataTable({
+      .ctx_tab_guard()
       ctx <- pert_ctx()
       req(ctx)
       ts_datatable(ctx$delta_table, page_length = 15L,
@@ -199,12 +209,14 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
     })
 
     output$pert_delta <- renderPlot({
+      .ctx_tab_guard()
       ctx <- pert_ctx()
       req(ctx)
       tryCatch(plot_communication_perturbation_delta(ctx), error = function(e) .error_plot(e))
     })
 
     output$pert_nodes <- renderPlot({
+      .ctx_tab_guard()
       ctx <- pert_ctx()
       req(ctx)
       tryCatch(plot_communication_perturbation_nodes(ctx), error = function(e) .error_plot(e))

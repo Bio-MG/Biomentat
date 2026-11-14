@@ -77,6 +77,14 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
         ggplot2::theme_void()
     }
     spc_ctx <- reactiveVal(NULL)
+
+    # R-3bis (idiome repo, cf. mod_bulk.R fix 2026-11-06) : une sortie
+    # invalidée pendant que son panneau est caché ne livre JAMAIS son payload.
+    # Les renders consomment le miroir de feuille active du drawer (publié par
+    # le parent) — re-exécution à l'ouverture du sous-onglet.
+    .ctx_tab_guard <- function() {
+      req(state_get(shared_rv, "comm_tabs_current") %||% "" == "ccc_tab_spatial")
+    }
     # Lane 3c (2026-11-14, retour live « white card ») : résultat source du
     # contexte courant — permet au reset de n'invalider que les contextes
     # PÉRIMÉS (voir l'observateur reset ci-dessous).
@@ -229,6 +237,7 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
     }, ignoreInit = FALSE)
 
     output$spc_status <- renderText({
+      .ctx_tab_guard()
       ctx <- spc_ctx()
       req(ctx)
       sprintf(.tr("Statut : %s — %d cellule(s) cartographiée(s) ; %d paire(s) non cartographiée(s) (listées dans les avertissements)."),
@@ -236,6 +245,7 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
     })
 
     output$spc_table <- DT::renderDataTable({
+      .ctx_tab_guard()
       ctx <- spc_ctx()
       req(ctx)
       # CQF-1 (fiche SC_COMM_QUICKFIXES_PROPOSAL_2026-11-02 §3) : scrollY
@@ -256,6 +266,7 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
     }
 
     output$spc_edges <- renderPlot({
+      .ctx_tab_guard()
       ctx <- spc_ctx()
       req(ctx)
       pr <- .selected_pair()
@@ -270,6 +281,7 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
     })
 
     output$spc_distances <- renderPlot({
+      .ctx_tab_guard()
       ctx <- spc_ctx()
       req(ctx)
       tryCatch(plot_communication_spatial_distance_summary(ctx), error = function(e) .error_plot(e))

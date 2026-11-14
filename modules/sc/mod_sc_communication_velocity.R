@@ -56,6 +56,16 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
     # PÉRIMÉS (voir l'observateur reset ci-dessous).
     vel_src <- reactiveVal(NULL)
 
+    # R-3bis (idiome repo, cf. mod_bulk.R fix 2026-11-06 ; mesuré aussi ici
+    # sur l'achèvement async CellChat) : une sortie invalidée pendant que son
+    # panneau est caché ne livre JAMAIS son payload ensuite. Les renders de ce
+    # panneau consomment le miroir de feuille active publié par le parent
+    # (shared_rv$comm_tabs_current) — re-exécution à l'ouverture du sous-onglet,
+    # livraison garantie. req() silencieux tant que la feuille n'est pas la nôtre.
+    .ctx_tab_guard <- function() {
+      req(state_get(shared_rv, "comm_tabs_current") %||% "" == "ccc_tab_velocite")
+    }
+
     .guard_stale <- function() {
       req(global_data$sc_obj, comm_state$result, comm_state$object_fingerprint)
       if (!identical(velocity_object_fingerprint(global_data$sc_obj),
@@ -195,6 +205,7 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
     }, ignoreInit = FALSE)
 
     output$vel_status <- renderText({
+      .ctx_tab_guard()
       ctx <- vel_ctx()
       req(ctx)
       if (identical(ctx$status, "valid")) {
@@ -206,6 +217,7 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
     })
 
     output$vel_table <- DT::renderDataTable({
+      .ctx_tab_guard()
       ctx <- vel_ctx()
       req(ctx)
       ts_datatable(ctx$pair_table, page_length = 15L,
@@ -213,6 +225,7 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
     })
 
     output$vel_plot <- renderPlot({
+      .ctx_tab_guard()
       ctx <- vel_ctx()
       req(ctx)
       tryCatch(plot_communication_velocity_context(ctx), error = function(e) {

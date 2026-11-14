@@ -626,6 +626,109 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       if (is.null(lab)) return(NULL)
       tags$div(class = "alert alert-warning", style = "font-size:0.82rem; margin-top:6px;", lab)
     })
+
+    # ── Lane async opt-in (2026-11-14, §M priorité 3) : l'inférence scVelo ───
+    # part en daemon — MÊME pattern que LIANA P1-6b (mod_sc_communication.R,
+    # validé en production) : ExtendedTask + pool unique (ensure_app_daemons,
+    # spatial_async.R) + mirai (moteur sourcé idempotent, chemins absolus) +
+    # timeout + garde de ré-entrée + repli synchrone TRACÉ + observateur
+    # d'achèvement. Avant : 10-90 s bloquants dans le process Shiny.
+    # Le moteur scVelo (sc_velocity_scvelo_optin_infer) tourne sous reticulate ;
+    # les daemons héritent de l'env du process principal (RETICULATE_PYTHON est
+    # posé par le launcher lane 2) et chargent sc_velocity.R idempotemment.
+    ext_task_cls_vel <- if (exists("ExtendedTask", where = asNamespace("shiny"), inherits = FALSE)) {
+      get("ExtendedTask", envir = asNamespace("shiny"))
+    } else if (exists("ExtendedTask", where = asNamespace("bslib"), inherits = FALSE)) {
+      get("ExtendedTask", envir = asNamespace("bslib"))
+    } else {
+      get0("ExtendedTask", envir = globalenv())
+    }
+    scvelo_core_deps <- c(
+      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "sc_velocity.R"),
+      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "error_state.R")
+    )
+    scvelo_task <- if (!is.null(ext_task_cls_vel) && requireNamespace("mirai", quietly = TRUE)) {
+      t <- ext_task_cls_vel$new(function(canon, emb, params, deps = scvelo_core_deps) {
+        ensure_app_daemons()
+        mirai::mirai(
+          {
+            for (f in deps) if (file.exists(f)) source(f, local = FALSE)
+            sc_velocity_scvelo_optin_infer(canon, embedding = emb, params = params)
+          },
+          canon = canon, emb = emb, params = params, deps = scvelo_core_deps,
+          .timeout = TS_SC_AUTO_PIPELINE_TIMEOUT_S * 1000L
+        )
+      })
+      tryCatch(bslib::bind_task_button(t, "velocity_scvelo_run"), error = function(e) NULL)
+      t
+    } else {
+      NULL
+    }
+    # Contexte d'invocation (réduction/canonique AU MOMENT du clic) —
+    # l'achèvement async applique le résultat avec les MÊMES entrées, même si
+    # l'opérateur a changé le dropdown entre-temps.
+    scvelo_ctx <- reactiveValues(canon = NULL, sel_red = NULL)
+
+    .vel_scvelo_fail <- function(e) {
+      # P0.4 lane 1 (2026-11-13) : l'échec opt-in laisse un état PERSISTANT
+      # (velocity_state$optin_error + statut) — même surface pour le repli
+      # synchrone et l'achèvement async.
+      velocity_state$optin_error <- list(
+        class = class(e)[[1L]],
+        message = conditionMessage(e),
+        when = format(Sys.time(), "%H:%M:%S")
+      )
+      message(sprintf("[velocity] inférence scVelo opt-in refusée [%s] : %s",
+                      velocity_state$optin_error$class,
+                      velocity_state$optin_error$message))
+      velocity_status_rv(paste0(.tr("Inférence scVelo (opt-in) refusée :"),
+                                " ", conditionMessage(e)))
+      showNotification(paste(.tr("Inférence scVelo (opt-in) refusée :"), conditionMessage(e)),
+                       type = "error", duration = 12)
+    }
+
+    .apply_scvelo_result <- function(inferred, sel_red, canon) {
+      uv <- validate_precomputed_velocity_vectors(
+        vectors = inferred$embedding_vectors,
+        cell_names = velocity_state$validated$cell_names,
+        selected_reduction = sel_red,
+        stored_reduction = sel_red
+      )
+      velocity_state$umap_vectors <- uv
+      velocity_state$vector_validation <- list(field = "scvelo_optin", ok = TRUE)
+      # FIX 2026-11-11 (démo velocity, chemin loom+opt-in) : un loom n'a pas de
+      # réduction stockée (embedding_reduction = NA_character_) et le garde de
+      # finalize_velocity_result() refusait 'NA' != sel_red — alors que les
+      # vecteurs viennent d'être calculés dans CETTE session POUR sel_red
+      # (embedding passé au moteur = Embeddings(sc_obj, sel_red)). Taguer le
+      # canonique en conséquence est la sémantique correcte des vecteurs
+      # opt-in (jamais précalculés, toujours pour la réduction courante).
+      velocity_state$validated$embedding_reduction <- sel_red
+      canonical2 <- finalize_velocity_result(
+        validated = velocity_state$validated,
+        input_mode = canon$input_summary$input_mode %||% "rds",
+        input_files = canon$input_summary$files,
+        seurat_obj = global_data$sc_obj,
+        assay_used = NULL,
+        requested_reduction = sel_red,
+        embedding_alignment = velocity_state$embedding_alignment,
+        velocity_vectors = uv,
+        vector_validation = velocity_state$vector_validation,
+        extra_warnings = c("O13 opt-in : vecteurs inférés dans l'app (scVelo) — jamais l'autopipeline."),
+        analysis_id = "sc-velocity"
+      )
+      velocity_state$result <- canonical2
+      shared_rv$velocity_result <- canonical2
+      provenance_append(shared_rv, inferred$provenance)
+      .velocity_publish_state()
+      velocity_optin_banner_rv(.tr(inferred$banner))
+      velocity_status_rv(.tr("Vecteurs inférés (scVelo opt-in) — affichage mis à jour."))
+      # P0.4 lane 1 (2026-11-13) : succès => on efface toute trace d'un
+      # échec opt-in antérieur (l'état honnête reflète la DERNIÈRE tentative).
+      velocity_state$optin_error <- NULL
+      showNotification(.tr("Vecteurs calculés via scVelo (opt-in)."), type = "message", duration = 6)
+    }
+
     observeEvent(input$velocity_scvelo_run, {
       canon <- velocity_state$result
       if (is.null(canon)) {
@@ -634,82 +737,57 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
           type = "warning", duration = 8)
         return()
       }
+      # garde de ré-entrée (P1-6b) : un calcul déjà en vol ne relance pas
+      if (!is.null(scvelo_task) && identical(scvelo_task$status(), "running")) return(invisible())
       sel_red <- input$velocity_reduction %||% "umap"
-      # P0.4 lane 1 (2026-11-13, demande opérateur) : l'inférence opt-in prend
-      # 10-90 s SANS aucun retour avant la fin/échec. Notification persistante
-      # (duration = NULL, sans bouton de fermeture) retirée par on.exit —
-      # succès COMME échec (elle ne doit jamais rester collée à l'écran).
-      nid_optin <- showNotification(
-        .tr("Inférence scVelo en cours (opt-in) — calcul Python en tâche de fond du moteur, comptez quelques dizaines de secondes…"),
-        type = "message", duration = NULL, closeButton = FALSE)
-      on.exit(removeNotification(nid_optin), add = TRUE)
-      tryCatch({
-        emb_all <- Seurat::Embeddings(global_data$sc_obj, reduction = sel_red)
-        emb <- emb_all[canon$cell_names, seq_len(min(2L, ncol(emb_all))), drop = FALSE]
-        inferred <- sc_velocity_scvelo_optin_infer(
-          canon,
-          embedding = emb,
-          params = list(seed = 1L, n_pcs = 30L, n_neighbors = 30L, mode = "stochastic")
-        )
-        uv <- validate_precomputed_velocity_vectors(
-          vectors = inferred$embedding_vectors,
-          cell_names = velocity_state$validated$cell_names,
-          selected_reduction = sel_red,
-          stored_reduction = sel_red
-        )
-        velocity_state$umap_vectors <- uv
-        velocity_state$vector_validation <- list(field = "scvelo_optin", ok = TRUE)
-        # FIX 2026-11-11 (démo velocity, chemin loom+opt-in) : un loom n'a pas de
-        # réduction stockée (embedding_reduction = NA_character_) et le garde de
-        # finalize_velocity_result() refusait 'NA' != sel_red — alors que les
-        # vecteurs viennent d'être calculés dans CETTE session POUR sel_red
-        # (embedding passé au moteur = Embeddings(sc_obj, sel_red)). Taguer le
-        # canonique en conséquence est la sémantique correcte des vecteurs
-        # opt-in (jamais précalculés, toujours pour la réduction courante).
-        velocity_state$validated$embedding_reduction <- sel_red
-        canonical2 <- finalize_velocity_result(
-          validated = velocity_state$validated,
-          input_mode = canon$input_summary$input_mode %||% "rds",
-          input_files = canon$input_summary$files,
-          seurat_obj = global_data$sc_obj,
-          assay_used = NULL,
-          requested_reduction = sel_red,
-          embedding_alignment = velocity_state$embedding_alignment,
-          velocity_vectors = uv,
-          vector_validation = velocity_state$vector_validation,
-          extra_warnings = c("O13 opt-in : vecteurs inférés dans l'app (scVelo) — jamais l'autopipeline."),
-          analysis_id = "sc-velocity"
-        )
-        velocity_state$result <- canonical2
-        shared_rv$velocity_result <- canonical2
-        provenance_append(shared_rv, inferred$provenance)
-        .velocity_publish_state()
-        velocity_optin_banner_rv(.tr(inferred$banner))
-        velocity_status_rv(.tr("Vecteurs inférés (scVelo opt-in) — affichage mis à jour."))
-        # P0.4 lane 1 (2026-11-13) : succès => on efface toute trace d'un
-        # échec opt-in antérieur (l'état honnête reflète la DERNIÈRE tentative).
-        velocity_state$optin_error <- NULL
-        showNotification(.tr("Vecteurs calculés via scVelo (opt-in)."), type = "message", duration = 6)
-      }, error = function(e) {
-        # P0.4 lane 1 (2026-11-13) : l'échec opt-in laissait l'état à
-        # « valid_no_vectors » sans AUCUNE trace de la raison (la notification
-        # de 12 s partait, l'opérateur voyait « aucun vecteur fourni » et les
-        # sessions headless n'avaient rien au console — mesuré P0.4). La raison
-        # est désormais PERSISTANTE : velocity_state$optin_error + statut.
-        velocity_state$optin_error <- list(
-          class = class(e)[[1L]],
-          message = conditionMessage(e),
-          when = format(Sys.time(), "%H:%M:%S")
-        )
-        message(sprintf("[velocity] inférence scVelo opt-in refusée [%s] : %s",
-                        velocity_state$optin_error$class,
-                        velocity_state$optin_error$message))
-        velocity_status_rv(paste0(.tr("Inférence scVelo (opt-in) refusée :"),
-                                  " ", conditionMessage(e)))
-        showNotification(paste(.tr("Inférence scVelo (opt-in) refusée :"), conditionMessage(e)),
-                         type = "error", duration = 12)
-      })
+      emb_all <- Seurat::Embeddings(global_data$sc_obj, reduction = sel_red)
+      emb <- emb_all[canon$cell_names, seq_len(min(2L, ncol(emb_all))), drop = FALSE]
+      params <- list(seed = 1L, n_pcs = 30L, n_neighbors = 30L, mode = "stochastic")
+      pool_ok <- isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE))
+      if (!is.null(scvelo_task) && pool_ok) {
+        # ASYNC : le calcul Python part en daemon — la session reste réactive.
+        scvelo_ctx$canon <- canon
+        scvelo_ctx$sel_red <- sel_red
+        showNotification(
+          .tr("Inférence scVelo (opt-in) en daemon — la session reste réactive, comptez quelques dizaines de secondes…"),
+          type = "message", duration = 6)
+        scvelo_task$invoke(canon, emb, params)
+      } else {
+        # Repli synchrone TRACÉ (jamais muet — convention run_job) ; la
+        # notification persistante lane 1 reste retirée par on.exit.
+        showNotification(.tr("Worker mirai indisponible — exécution synchrone : l'interface restera bloquée pendant le calcul."),
+                         type = "warning", duration = 8)
+        nid_optin <- showNotification(
+          .tr("Inférence scVelo en cours (opt-in) — calcul Python en tâche de fond du moteur, comptez quelques dizaines de secondes…"),
+          type = "message", duration = NULL, closeButton = FALSE)
+        on.exit(removeNotification(nid_optin), add = TRUE)
+        tryCatch({
+          inferred <- sc_velocity_scvelo_optin_infer(canon, embedding = emb, params = params)
+          .apply_scvelo_result(inferred, sel_red, canon)
+        }, error = function(e) {
+          .vel_scvelo_fail(e)
+        })
+      }
     })
+
+    # Achèvement async : application du résultat / échec persistant — mêmes
+    # surfaces que le repli synchrone (statut, notification classée, optin_error).
+    if (!is.null(scvelo_task)) {
+      observeEvent(scvelo_task$status(), {
+        st <- scvelo_task$status()
+        if (identical(st, "success")) {
+          tryCatch({
+            .apply_scvelo_result(scvelo_task$result(), scvelo_ctx$sel_red, scvelo_ctx$canon)
+          }, error = function(e) {
+            .vel_scvelo_fail(e)
+          })
+        } else if (identical(st, "error")) {
+          err <- tryCatch(scvelo_task$result(), error = function(e) e)
+          .vel_scvelo_fail(if (inherits(err, "error")) err else
+            errorCondition(as.character(err), class = c("error", "condition")))
+        }
+      })
+    }
 
     # Validation button (BUG 1-8, 10)
     observeEvent(input$velocity_validate, {

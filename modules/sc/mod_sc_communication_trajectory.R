@@ -79,6 +79,14 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
     # PÉRIMÉS (voir l'observateur reset ci-dessous).
     trj_src <- reactiveVal(NULL)
 
+    # R-3bis (idiome repo, cf. mod_bulk.R fix 2026-11-06) : une sortie
+    # invalidée pendant que son panneau est caché ne livre JAMAIS son payload.
+    # Les renders consomment le miroir de feuille active du drawer (publié par
+    # le parent) — re-exécution à l'ouverture du sous-onglet.
+    .ctx_tab_guard <- function() {
+      req(state_get(shared_rv, "comm_tabs_current") %||% "" == "ccc_tab_trajectoire")
+    }
+
     .guard_stale <- function() {
       req(global_data$sc_obj, comm_state$result, comm_state$object_fingerprint)
       if (!identical(velocity_object_fingerprint(global_data$sc_obj),
@@ -296,6 +304,7 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
     }, ignoreInit = FALSE)
 
     output$trj_status <- renderText({
+      .ctx_tab_guard()
       ctx <- trj_ctx()
       req(ctx)
       sprintf(.tr("Statut : %s — %d cellule(s) appariée(s) ; %d bins (effectif) ; %d combinaison(s) non calculable(s)."),
@@ -316,6 +325,7 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
     }
 
     output$trj_curves <- renderPlot({
+      .ctx_tab_guard()
       ctx <- trj_ctx()
       req(ctx)
       pr <- .selected_pair_lineage()
@@ -328,12 +338,14 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
     })
 
     output$trj_heatmap <- renderPlot({
+      .ctx_tab_guard()
       ctx <- trj_ctx()
       req(ctx)
       tryCatch(plot_communication_trajectory_heatmap(ctx), error = function(e) .error_plot(e))
     })
 
     output$trj_pair_summary <- DT::renderDataTable({
+      .ctx_tab_guard()
       ctx <- trj_ctx()
       req(ctx)
       ts_datatable(ctx$pair_summary, page_length = 15L,

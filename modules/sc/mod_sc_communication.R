@@ -573,7 +573,23 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     )
     comm_status_rv <- reactiveVal(.tr("En attente d'import de resultats de communication..."))
 
-    output$comm_status <- renderText({ comm_status_rv() })
+    output$comm_status <- renderText({
+      # R-3bis (idiome repo, cf. mod_bulk.R fix 2026-11-06) : une sortie
+      # invalidée pendant que son panneau est caché ne livre JAMAIS son
+      # payload ensuite — mesuré aussi ici (achèvement async CellChat :
+      # comm_table livrée, comm_status perdue). La lecture du miroir de
+      # feuille active fait RE-EXÉCUTER le render quand l'opérateur navigue
+      # dans le drawer — livraison garantie à l'ouverture.
+      state_get(shared_rv, "comm_tabs_current")
+      comm_status_rv()
+    })
+
+    # R-3bis : publier la feuille active du drawer comm_tabs — consommée par
+    # les renders des contextes (zéro voie parallèle : une seule source de
+    # visibilité pour tout le drawer).
+    observeEvent(input$comm_tabs, {
+      shared_rv$comm_tabs_current <- input$comm_tabs
+    }, ignoreNULL = TRUE)
 
     output$comm_collection_status <- renderText({
       collection <- comm_state$collection
@@ -1186,12 +1202,77 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
        })
     })
 
+    # ── Lane async opt-in (2026-11-14, §M priorité 3) : le calcul CellChat ──
+    # part en daemon — MÊME pattern que LIANA P1-6b ci-dessous (validé en
+    # production) : ExtendedTask + pool unique + mirai (moteur sourcé
+    # idempotent, chemins absolus) + timeout + garde de ré-entrée + repli
+    # synchrone TRACÉ + observateur d'achèvement. Avant : TOUT le calcul
+    # tournait dans le process Shiny (gel de session mesuré chez l'opérateur).
+    # Le moteur est worker-safe par construction (INVARIANT
+    # sc_communication_engine.R : « future forcé sequential à l'INTÉRIEUR du
+    # job, mirai reste le seul orchestrateur »).
+    ext_task_cls_cellchat <- if (exists("ExtendedTask", where = asNamespace("shiny"), inherits = FALSE)) {
+      get("ExtendedTask", envir = asNamespace("shiny"))
+    } else if (exists("ExtendedTask", where = asNamespace("bslib"), inherits = FALSE)) {
+      get("ExtendedTask", envir = asNamespace("bslib"))
+    } else {
+      get0("ExtendedTask", envir = globalenv())
+    }
+    cellchat_core_deps <- c(
+      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "error_state.R"),
+      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "sc_communication.R"),
+      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "sc_communication_input.R"),
+      file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "sc_communication_engine.R")
+    )
+    cellchat_task <- if (!is.null(ext_task_cls_cellchat) && requireNamespace("mirai", quietly = TRUE)) {
+      t <- ext_task_cls_cellchat$new(function(cc_input, args, deps = cellchat_core_deps) {
+        ensure_app_daemons()
+        mirai::mirai(
+          {
+            # ORDRE DES DEPS MESURÉ (E2E daemon 2026-11-14) : input.R AVANT
+            # engine.R — run_cellchat vérifie exists(assert_cellchat_input) et
+            # le check tirait quand l'ordre était (engine, error_state).
+            # sc_communication.R fournira finalize_communication_result().
+            for (f in deps) if (file.exists(f)) source(f, local = FALSE)
+            run_cellchat(cc_input,
+                         seed = args$seed, nboot = args$nboot,
+                         seurat_obj = args$seurat_obj,
+                         on_progress = function(msg) NULL)
+          },
+          cc_input = cc_input, args = args, deps = cellchat_core_deps,
+          .timeout = TS_SC_AUTO_PIPELINE_TIMEOUT_S * 1000L
+        )
+      })
+      tryCatch(bslib::bind_task_button(t, "comm_compute"), error = function(e) NULL)
+      t
+    } else {
+      NULL
+    }
+
+    .apply_cellchat_result <- function(result, obj) {
+      # MÊMES surfaces que le chemin synchrone (CC-5) : depot + statut + notif.
+      .store_result(result, obj)
+      eng <- result$engine
+      msg <- sprintf(
+        paste0("Calcul OK : %s interactions, %s populations, %s voies ",
+               "significatives. Moteur %s %s — base %s (%s) — graine %s, ",
+               "%s permutations."),
+        format(eng$n_interactions), format(eng$n_populations),
+        format(eng$n_pathways_significant), eng$engine, eng$engine_version,
+        eng$database, eng$database_version, format(eng$seed), format(eng$nboot)
+      )
+      comm_status_rv(paste0("[", .status_label(result$status), "]\n", msg))
+      showNotification(.tr("Calcul CellChat termine."), type = "message", duration = 4)
+    }
+
     # ── CC-5 : calcul CellChat DANS l'application (Path B) ──────────────────
     # Meme depot, memes vues, memes exports que l'import : le resultat du
     # moteur EST un resultat canonique (regle des deux voies). Aucune vue ni
     # aucun export n'a eu a changer — c'est la preuve que la forme est bonne.
     observeEvent(input$comm_compute, {
       req(global_data$sc_obj)
+      # garde de ré-entrée (P1-6b) : un calcul déjà en vol ne relance pas
+      if (!is.null(cellchat_task) && identical(cellchat_task$status(), "running")) return(invisible())
       tryCatch({
         obj <- assert_seurat(global_data$sc_obj, context = "communication engine")
 
@@ -1239,29 +1320,33 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
 
         cc_input <- build_cellchat_input(obj, group_by = identity_col,
                                          species = species)
+        args <- list(seed = as.integer(input$comm_engine_seed),
+                     nboot = as.integer(input$comm_engine_nboot),
+                     seurat_obj = obj)
 
-        result <- withProgress(message = .tr("Calcul CellChat en cours..."),
-                               value = 0, {
-          run_cellchat(cc_input,
-                       seed  = as.integer(input$comm_engine_seed),
-                       nboot = as.integer(input$comm_engine_nboot),
-                       seurat_obj = obj,
-                       on_progress = function(msg) incProgress(0, detail = msg))
-        })
-
-        .store_result(result, obj)
-
-        eng <- result$engine
-        msg <- sprintf(
-          paste0("Calcul OK : %s interactions, %s populations, %s voies ",
-                 "significatives. Moteur %s %s — base %s (%s) — graine %s, ",
-                 "%s permutations."),
-          format(eng$n_interactions), format(eng$n_populations),
-          format(eng$n_pathways_significant), eng$engine, eng$engine_version,
-          eng$database, eng$database_version, format(eng$seed), format(eng$nboot)
-        )
-        comm_status_rv(paste0("[", .status_label(result$status), "]\n", msg))
-        showNotification(.tr("Calcul CellChat termine."), type = "message", duration = 4)
+        pool_ok <- isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE))
+        if (!is.null(cellchat_task) && pool_ok) {
+          # ASYNC : le calcul part en daemon — la session reste réactive ;
+          # l'application du résultat a lieu à l'achèvement (observateur
+          # cellchat_task$status() ci-dessous, mêmes surfaces que le synchrone).
+          showNotification(
+            .tr("Calcul CellChat en daemon — la session reste réactive pendant le calcul…"),
+            type = "message", duration = 6)
+          cellchat_task$invoke(cc_input, args)
+        } else {
+          # Repli synchrone TRACÉ (jamais muet — convention run_job).
+          showNotification(.tr("Worker mirai indisponible — exécution synchrone : l'interface restera bloquée pendant le calcul."),
+                           type = "warning", duration = 8)
+          result <- withProgress(message = .tr("Calcul CellChat en cours..."),
+                                 value = 0, {
+            run_cellchat(cc_input,
+                         seed  = args$seed,
+                         nboot = args$nboot,
+                         seurat_obj = obj,
+                         on_progress = function(msg) incProgress(0, detail = msg))
+          })
+          .apply_cellchat_result(result, obj)
+        }
 
       }, error = function(e) {
         .clear_result_state()
@@ -1276,6 +1361,37 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                          type = "error", duration = 10)
       })
     })
+
+    # Achèvement async CellChat : application du résultat / erreur classée —
+    # mêmes surfaces que le chemin synchrone (statut, notification, purge).
+    if (!is.null(cellchat_task)) {
+      observeEvent(cellchat_task$status(), {
+        st <- cellchat_task$status()
+        if (identical(st, "success")) {
+          tryCatch({
+            .apply_cellchat_result(cellchat_task$result(), global_data$sc_obj)
+          }, error = function(e) {
+            .clear_result_state()
+            stt <- cellchat_engine_error_state(e)
+            detail <- if (is.na(stt)) conditionMessage(e) else
+              paste0(conditionMessage(e), " [etat : ", stt, "]")
+            comm_status_rv(paste(.tr("Erreur calcul communication :"), detail))
+            showNotification(paste(.tr("Erreur calcul communication :"), detail),
+                             type = "error", duration = 10)
+          })
+        } else if (identical(st, "error")) {
+          .clear_result_state()
+          err <- tryCatch(cellchat_task$result(), error = function(e) e)
+          detail <- if (inherits(err, "error")) conditionMessage(err) else as.character(err)
+          stt <- if (inherits(err, "error")) cellchat_engine_error_state(err) else NA_character_
+          detail <- if (is.na(stt)) detail else
+            paste0(detail, " [etat : ", stt, "]")
+          comm_status_rv(paste(.tr("Erreur calcul communication :"), detail))
+          showNotification(paste(.tr("Erreur calcul communication :"), detail),
+                           type = "error", duration = 10)
+        }
+      })
+    }
 
     # ── P1-6b (2026-11-07, plan post-E2E #6) : LIANA par échantillon → ──────
     # worker mirai (mesuré E2E : >2h15min SYNCHRONE sur 16 échantillons ×
