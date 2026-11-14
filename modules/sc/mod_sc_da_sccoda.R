@@ -258,9 +258,9 @@ mod_sc_da_sccoda_server <- function(id, global_data, shared_rv = NULL) {
       des <- .design_result()
       if (is.null(des) || is.null(des$condition_summary) ||
           nrow(des$condition_summary) == 0L) {
-        updateSelectInput(session, "sccoda_target", choices = character(0))
-        updateSelectInput(session, "sccoda_reference", choices = character(0))
-        updateSelectInput(session, "sccoda_ref_identity", choices = character(0))
+        updateSelectInput(session, "sccoda_target", choices = character(0), selected = character(0))
+        updateSelectInput(session, "sccoda_reference", choices = character(0), selected = character(0))
+        updateSelectInput(session, "sccoda_ref_identity", choices = character(0), selected = character(0))
         sccoda_status_rv(.tr("En attente : validez d'abord le design (panel 8c), puis lancez scCODA."))
         return()
       }

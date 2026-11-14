@@ -1368,3 +1368,23 @@ strip_composite_gene_ids <- function(ids) {
   out[ens] <- sub("[_.].*$", "", out[ens])
   out
 }
+
+# ── Lane 2 (2026-11-14, QC P0.4 §H.0) : défense encodage NUL ─────────────────
+# Crash mesuré 19:06:57 : UNE chaîne i18n mojibakée + NUL embarqué qui entre
+# dans une mise à jour réactive (log sidebar) tue TOUT le process app
+# (execCallbacks « embedded nul in string »). Le R pur ne peut pas construire
+# de chaîne à NUL (littéraux refusés au parse ; readChar tronque au premier
+# NUL) — les NULs arrivent des conversions C (locale fausse au boot). Le
+# démaillage passe donc PAR LES OCTETS : charToRaw -> filtre 0x00 ->
+# rawToChar, sûr quelle que soit l'origine, + ré-encodage UTF-8.
+.ts_nul_free_text <- function(x) {
+  if (!is.character(x) || length(x) == 0L) return(x)
+  vapply(x, function(s) {
+    if (is.null(s) || !length(s)) return("")
+    out <- tryCatch({
+      r <- charToRaw(s)
+      if (any(r == as.raw(0L))) rawToChar(r[r != as.raw(0L)]) else s
+    }, error = function(e) "")
+    enc2utf8(out)
+  }, character(1L), USE.NAMES = FALSE)
+}

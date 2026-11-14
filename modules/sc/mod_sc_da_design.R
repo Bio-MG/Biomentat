@@ -117,7 +117,7 @@ mod_sc_da_design_server <- function(id, global_data, shared_rv = NULL) {
       obj <- global_data$sc_obj
       if (is.null(obj)) {
         for (s in c("da_sample_col", "da_condition_col"))
-          updateSelectInput(session, s, choices = character(0))
+          updateSelectInput(session, s, choices = character(0), selected = character(0))
         updateSelectInput(session, "da_replicate_col",
                           choices = setNames("", .tr("L'échantillon EST le réplicat")))
         updateSelectInput(session, "da_batch_col", choices = setNames("", .tr("(aucun)")))

@@ -258,7 +258,7 @@ mod_sc_da_milo_server <- function(id, global_data, shared_rv = NULL) {
       obj <- global_data$sc_obj
       des <- .design_result()
       if (is.null(obj)) {
-        updateSelectInput(session, "milo_reduction", choices = character(0))
+        updateSelectInput(session, "milo_reduction", choices = character(0), selected = character(0))
       } else {
         reds <- names(obj@reductions)
         updateSelectInput(session, "milo_reduction", choices = reds,
@@ -266,8 +266,8 @@ mod_sc_da_milo_server <- function(id, global_data, shared_rv = NULL) {
       }
       if (is.null(des) || is.null(des$condition_summary) ||
           nrow(des$condition_summary) == 0L) {
-        updateSelectInput(session, "milo_target", choices = character(0))
-        updateSelectInput(session, "milo_reference", choices = character(0))
+        updateSelectInput(session, "milo_target", choices = character(0), selected = character(0))
+        updateSelectInput(session, "milo_reference", choices = character(0), selected = character(0))
         milo_status_rv(.tr("En attente : validez d'abord le design (panel 8c), puis lancez Milo."))
         return()
       }

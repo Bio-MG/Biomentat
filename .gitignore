@@ -98,6 +98,7 @@ repomix-core-output.xml
 # DRIVE LIVE CONTROL (IPC transient, local only)
 # -------------------------------------------------
 tools/_drive/*.json
+tools/_drive/*.jsonl
 tools/_drive/*.tmp
 # N3 biomentat-dock : etat runtime des satellites (pid+log), local only
 tools/_drive/satellites/

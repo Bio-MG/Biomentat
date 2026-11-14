@@ -67,6 +67,12 @@ mod_sc_metadata_server <- function(id, global_data) {
     observeEvent(global_data$language, {
       updateSelectInput(session, "sample_col", label = .tr("Colonne échantillon"))
       updateSelectInput(session, "cond_position", label = .tr("Position de la condition dans le nom"))
+      updateSelectInput(session, "cond_position",
+                        choices = setNames(
+                          c("first", "last"),
+                          c(.tr("Condition en préfixe — A_1 → condition A, réplicat 1"),
+                            .tr("Condition en suffixe — 1a → condition a, réplicat 1"))),
+                        selected = input$cond_position %||% "first")
       updateActionButton(session, "btn_parse", label = .tr("Déduire depuis les noms"))
       updateActionButton(session, "btn_commit", label = .tr("✅ Appliquer le design à l'objet SC"))
     }, ignoreInit = TRUE)
@@ -76,7 +82,7 @@ mod_sc_metadata_server <- function(id, global_data) {
     observeEvent(global_data$sc_obj, {
       obj <- global_data$sc_obj
       if (is.null(obj)) {
-        updateSelectInput(session, "sample_col", choices = character(0))
+        updateSelectInput(session, "sample_col", choices = character(0), selected = character(0))
         map_rv(data.frame(sample = character(0), condition = character(0),
                           replicate = character(0), stringsAsFactors = FALSE))
         return()

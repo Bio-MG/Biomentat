@@ -87,8 +87,8 @@ mod_sc_rarity_server <- function(id, global_data, shared_rv) {
       if (!is.null(shared_rv)) shared_rv$population_rarity_result <- NULL  # purge champ partagé (audit §1.5 : résultat périmé exporté sinon)
       obj <- global_data$sc_obj
       if (is.null(obj)) {
-        updateSelectInput(session, "rarity_identity", choices = character(0))
-        updateSelectInput(session, "rarity_sample", choices = character(0))
+        updateSelectInput(session, "rarity_identity", choices = character(0), selected = character(0))
+        updateSelectInput(session, "rarity_sample", choices = character(0), selected = character(0))
         return()
       }
       meta_cols <- colnames(obj@meta.data)

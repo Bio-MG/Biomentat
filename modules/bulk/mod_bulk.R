@@ -241,7 +241,11 @@ mod_bulk_server <- function(id, global_data) {
     }, ignoreInit = TRUE)
 
     auto_log_rv <- reactiveVal("")
-    output$auto_pipeline_log <- renderText({ auto_log_rv() })
+    # Lane 2 (2026-11-14, §H.0) : le log sidebar est le VECTEUR EXACT du crash
+    # NUL (19:06:57, « embedded nul in string ») — démaillage au rendu, après
+    # la défense .tr() (global.R .strip_i18n_html), au cas où un message non-
+    # i18n (sprintf/conditionMessage) porterait aussi des NULs.
+    output$auto_pipeline_log <- renderText({ .ts_nul_free_text(auto_log_rv()) })
 
     observeEvent(shared_rv$active_tab, {
       req(shared_rv$active_tab)

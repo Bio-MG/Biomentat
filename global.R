@@ -403,12 +403,64 @@ if (I18N_AVAILABLE) .ts_dt_set_language(i18n)
 # Strip shiny.i18n's <span class="i18n" data-key="...">...</span> wrapping
 # (emitted whenever $t() runs OUTSIDE an active session) back to a plain
 # length-1 string. Safe to call on already-plain strings too.
+# Lane 2 (2026-11-14, QC P0.4 §H.0) : ce point de choix est AUSSI la défense
+# encodage systémique — tout texte des proxys .tr()/.tr_plain() de tous les
+# modules passe ici : NULs démaillés (.ts_nul_free_text, io_helpers.R — un
+# seul NUL embarqué dans une mise à jour réactive tue tout le process, crash
+# mesuré 19:06:57) + ré-encodage UTF-8. .ts_nul_free_text vit dans
+# io_helpers.R (sourcé après global.R — résolution lexicale à l'appel, la
+# fonction n'est jamais appelée pendant le sourcing).
 .strip_i18n_html <- function(res) {
   if (inherits(res, c("shiny.tag", "shiny.tag.list")) || length(res) > 1L) {
     flat <- paste(as.character(res), collapse = "")
-    return(gsub("^<span[^>]*>|</span\\s*>$", "", flat))
+    flat <- gsub("^<span[^>]*>|</span\\s*>$", "", flat)
+    return(.ts_nul_free_text(flat))
   }
+  if (is.character(res)) return(.ts_nul_free_text(res))
   res
+}
+
+# Lane 3c (2026-11-14, retour live « white card ») — SENTINELLE du crash
+# client shiny 1.14. Mesuré (collecteur window.onerror + trace XHR, snapshot
+# POST-roitest) : un updateSelect* dont les choices sont VIDES à l'exécution
+# et sans `selected` fait planter le client — shiny.min.js:10:22085,
+# s.setValue(u[0].value) sur liste d'options vide ; pour server=TRUE le
+# payload perd même sa clé `value` (dropNulls retire le NULL côté R) et
+# l'échec survient dans le success handler du chargement d'options.
+# L'exception non interceptée ABORTE le lot de messages client : toutes les
+# sorties du lot (contextes auto-calculés au reload, statuts, tables) ne
+# sont jamais rendues — d'où le panneau blanc jusqu'au recalcul manuel.
+#
+# Ces wrappers interceptent les appels NON qualifiés des modules (résolution
+# lexicale : globalenv avant namespace shiny) et :
+#   - choices ATOMIQUES + selected NULL -> selected = première valeur
+#     (comportement du client actuel conservé : 1re option sélectionnée),
+#     ou character(0) si choices vides (payload porte value: [] — le client
+#     prend la branche sûre w(t,"value") au lieu de u[0].value) ;
+#   - choices NULL (updates label-only) et choices non atomiques (groupes)
+#     -> traversés tels quel (aucun changement de comportement).
+# 13 sites à choices = character(0) littéral sont en plus patchés
+# explicitement (selected = character(0)) — les wrappers couvrent les
+# choices calculés, vides seulement à l'exécution (ex. bulk sans données).
+.ts_update_safe_select_value <- function(choices) {
+  if (is.null(choices)) return(NULL)
+  if (!is.atomic(choices)) return(NULL) # groupes/labels : on ne touche pas
+  vals <- unname(as.vector(choices))
+  if (length(vals)) vals[1] else character(0)
+}
+updateSelectInput <- function(session, inputId, label = NULL,
+                              choices = NULL, selected = NULL, ...) {
+  sel <- if (is.null(selected)) .ts_update_safe_select_value(choices) else selected
+  shiny::updateSelectInput(session, inputId, label = label,
+                           choices = choices, selected = sel, ...)
+}
+updateSelectizeInput <- function(session, inputId, label = NULL,
+                                 choices = NULL, selected = NULL,
+                                 options = list(), server = FALSE, ...) {
+  sel <- if (is.null(selected)) .ts_update_safe_select_value(choices) else selected
+  shiny::updateSelectizeInput(session, inputId, label = label,
+                              choices = choices, selected = sel,
+                              options = options, server = server, ...)
 }
 
 #' Plain-scalar translation for UI BUILD TIME, non-HTML contexts ONLY:

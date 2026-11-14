@@ -69,8 +69,27 @@
 #   fallback when neither applies.
 # =============================================================================
 
-Sys.unsetenv("LC_ALL")
-Sys.setlocale("LC_CTYPE", "fr_FR.UTF-8")
+# Lane 2 (2026-11-14, QC P0.4 §H.0) : recette locale IMPOSÉE — l'ancien bloc
+# (unsetenv LC_ALL + setlocale LC_CTYPE "fr_FR.UTF-8") désarmait
+# la recette documentée ET échouait silencieusement sur Windows (nom UNIX) ;
+# boot sans la recette = chaînes i18n mojibakées + NUL embarqués = UN SEUL
+# log tue tout le process app (crash mesuré 19:06:57). Auto-soin mesuré :
+# Sys.setlocale("LC_ALL", "French_France.65001") réussit EN SESSION Windows —
+# sinon REFUS de boot (override conscient : options(ts.drive.allow_bad_locale)).
+if (!grepl("French_France", Sys.getlocale("LC_CTYPE"), fixed = TRUE)) {
+  Sys.setlocale("LC_ALL", "French_France.65001")
+  if (!grepl("French_France", Sys.getlocale("LC_CTYPE"), fixed = TRUE) &&
+      !isTRUE(getOption("ts.drive.allow_bad_locale", FALSE))) {
+    stop(paste0(
+      "Lane 2 : recette locale ineffective (LC_CTYPE = ",
+      Sys.getlocale("LC_CTYPE"),
+      "). Un boot sans elle produit des chaines i18n mojibakees + NUL embarques ",
+      "qui tuent le process app entier (embedded nul in string — cf. ",
+      "QC/p04_live_check_2026-11-13 §H.0). Recette : LC_ALL=French_France.65001 ",
+      "avant le demarrage R. Override conscient : ",
+      "options(ts.drive.allow_bad_locale = TRUE)."))
+  }
+}
 
 # Liveness knobs, published in ready.json for the agent to read rather than
 # hardcode (see ts_drive_hb_interval / ts_drive_hb_timeout).
