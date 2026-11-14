@@ -414,8 +414,11 @@ test_that("an import_sc with NO session token is refused (it replaces sc_obj)", 
   # verdict in result.json — it consumes the export verdict — so a stale
   # replayed read would double-consume another session's artefact. Same
   # measured failure class as the first two, disclosed here.
+  # §H.6 (2026-11-14) adds `import_path`: it REPLACES the session's analysis
+  # input for its target (`velocity_state` via import_velocity) — same class
+  # as `import_file`, one session later.
   expect_setequal(TS_DRIVE_TOKEN_PINNED_ACTIONS,
-                  c("import_file", "export_result", "read_export"))
+                  c("import_file", "import_path", "export_result", "read_export"))
   expect_true(all(TS_DRIVE_TOKEN_PINNED_ACTIONS %in% TS_DRIVE_ACTIONS))
   # And an action that mutates nothing is still addressable without a token.
   expect_true(vs(list(protocol = "ts-drive/1", seq = 5, module = "import_sc",

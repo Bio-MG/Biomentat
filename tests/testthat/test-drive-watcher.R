@@ -2475,9 +2475,12 @@ test_that("the import payload has a FROZEN, PER-MODULE key set", {
   # counts FILE, so a global vector would accept `dir_path` for Bulk and hand a
   # directory to `smart_read()`. The set is now per module, and BOTH halves are
   # pinned — dropping the per-module split is a regression, not a simplification.
+  # §H.6 (2026-11-14) : the union grows by `path`/`name` — the PATH-driven
+  # velocity importer (module `import_velocity`, action `import_path`).
   expect_setequal(TS_DRIVE_IMPORT_KEYS,
                   c("counts_path", "metadata_path", "mode",
-                    "dir_path", "sample_name", "technology"))
+                    "dir_path", "sample_name", "technology",
+                    "path", "name"))
   expect_identical(TS_DRIVE_IMPORT_SCHEMA$import_bulk$required, "counts_path")
   expect_setequal(TS_DRIVE_IMPORT_SCHEMA$import_bulk$optional,
                   c("metadata_path", "mode"))
@@ -2559,7 +2562,10 @@ test_that("`import_file` names the MODULE's required key, not a hard-coded count
   expect_false(grepl("req\\$counts_path", watcher, perl = TRUE))
   expect_false(grepl("is\\.null\\(req\\$counts_path\\)", watcher, perl = TRUE))
   # And the refusal message carries the module name, so a refusal names its target.
-  expect_match(watcher, "`import_file` for '%s' needs an `import` block carrying `%s`",
+  # §H.6 (2026-11-14) : the action is INTERPOLATED (`%s` from `act`) — an
+  # `import_path` caller must be told "`import_path` needs…", never
+  # "`import_file` needs…", or it would retry the wrong action forever.
+  expect_match(watcher, sprintf("`%%s` for '%%s' needs an `import` block carrying `%%s`"),
                fixed = TRUE)
   # The schema is what supplies the names, for both importers.
   expect_identical(TS_DRIVE_IMPORT_SCHEMA$import_bulk$required, "counts_path")

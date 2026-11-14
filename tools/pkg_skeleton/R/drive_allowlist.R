@@ -903,6 +903,26 @@ TS_DRIVE_BUTTONS <- c(
 #' guaranteed to `req()`-fail for an agent, i.e. a bound button that lies.
 TS_DRIVE_SC_IMPORT_MODULE <- "import_sc"
 
+#' §H.6 (2026-11-14) : the PATH-driven importer module — the velocity
+#' fileInput pathway (loom/h5ad/rds), drivable through the `import_path`
+#' action. The module is mounted INSIDE the velocity panel (mod_sc.R:
+#' `mod_sc_velocity_server("velocity", ...)`) and publishes its importer
+#' through the SAME seam as the three 10x importers
+#' (`ts_drive_publish_importer()`), so there is exactly ONE ingestion route
+#' per module: `import_file` refuses it, `import_path` refuses every other
+#' importer (see `TS_DRIVE_PATH_MODULES` and the watcher's action/module
+#' guards).
+TS_DRIVE_SC_VELOCITY_IMPORT_MODULE <- "import_velocity"
+
+#' The modules the `import_path` action drives — the fileInput pathways that
+#' `import_file` does not cover (§H.6). Declared as DATA: the watcher's two
+#' guards (`import_file` refuses these; `import_path` refuses everything
+#' else) read this vector, so the fourth importer needs no new boolean
+#' anywhere. Future targets named by §H.6 (metadata CSV de design, packs)
+#' join this vector WITH their `TS_DRIVE_IMPORT_SCHEMA` entry — the schema
+#' is the single source of truth for the payload shape.
+TS_DRIVE_PATH_MODULES <- c(TS_DRIVE_SC_VELOCITY_IMPORT_MODULE)
+
 #' The three files that make a 10x **v3** CellRanger output, measured on the
 #' three single-cell fixtures in the local corpus — all three are the same
 #' flat layout: `matrix.mtx.gz`, `features.tsv.gz`, `barcodes.tsv.gz`.
@@ -938,6 +958,7 @@ TS_DRIVE_SC_10X_V3_FILES <- list(
 #' `import_sc` is the THIRD, and the first whose payload carries a name the
 #' importer cannot do without.
 TS_DRIVE_MODULES <- c("import_bulk", "import_spatial", TS_DRIVE_SC_IMPORT_MODULE,
+                      TS_DRIVE_SC_VELOCITY_IMPORT_MODULE,
                       "bulk_filter", "bulk_de", "bulk_pathways",
                       TS_DRIVE_BULK_SIGNATURES_MODULE, TS_DRIVE_BULK_PATTERN_MODULE,
                       TS_DRIVE_BULK_NETWORK_MODULE, TS_DRIVE_BULK_WGCNA_MODULE,
@@ -1017,23 +1038,41 @@ TS_DRIVE_IMPORT_SCHEMA <- list(
                         optional = c("sample_name", "technology")),
   import_sc      = list(required = c("dir_path", "sample_name"),
                         optional = character(0),
-                        check = "ts_drive_validate_sc_import")
+                        check = "ts_drive_validate_sc_import"),
+  # §H.6 (2026-11-14) : the PATH-driven importer. `path` points at a CONFINED
+  # file (allowlisted roots, never an upload); `name` is the OPTIONAL display
+  # name — when absent, the importer falls back to the file's basename, the
+  # SAME rule the widget's reader applies. `check` is MANDATORY here: without
+  # one the shared validator falls through to the Bulk branch and demands a
+  # `counts_path` the velocity payload will never carry (MEASURED: the fall-
+  # through answered "`counts_path`: the path must be one non-empty string"
+  # to a perfectly shaped velocity scenario). The validator runs through
+  # `ts_resolve_data_path()` — confinement + the per-target extension
+  # allowlist `exts`, the same engine as the V-FI resolver.
+  import_velocity = list(required = c("path"),
+                         optional = c("name"),
+                         exts = c("loom", "h5ad", "rds"),
+                         check = "ts_drive_validate_velocity_path")
 )
 
 #' Actions that must be PINNED to a session (frozen).
 #'
-#' Three of the eight change what the session holds, and each was MEASURED on a
+#' Four of the nine change what the session holds, and each was MEASURED on a
 #' live session accepting a scenario that carried no token at all, because the
 #' comparison was guarded by `nzchar()` and an absent token skipped it:
 #'
 #'   * `export_result` writes a file (S2, 2026-09-26);
 #'   * `import_file` REPLACES the session's primary object — `global_data$sc_obj`
 #'     for `import_sc`, `spatial_obj` for `import_spatial` (S3, 2026-09-26);
+#'   * `import_path` REPLACES the session's analysis input for its target —
+#'     `velocity_state$validated`/`$result` for `import_velocity` (§H.6,
+#'     2026-11-14): the SAME class of damage as `import_file`, one session
+#'     later;
 #'   * `read_export` REPLACES the verdict in result.json (R1, 2026-10-04): the
 #'     read consumes the export verdict, so a stale replayed read would
 #'     double-consume another session's artefact.
 #'
-#' The realistic failure for all three is a STALE scenario, not a hostile one:
+#' The realistic failure for all four is a STALE scenario, not a hostile one:
 #' written for a previous session, replayed after the user has loaded something
 #' else.
 #'
@@ -1042,7 +1081,8 @@ TS_DRIVE_IMPORT_SCHEMA <- list(
 #' widening this to every action is precisely the change that would break them.
 #' It is DATA, and not a literal in the comparison, so the S2 and S3 test files
 #' assert against the same set instead of each keeping a private copy.
-TS_DRIVE_TOKEN_PINNED_ACTIONS <- c("import_file", "export_result", "read_export")
+TS_DRIVE_TOKEN_PINNED_ACTIONS <- c("import_file", "import_path",
+                                   "export_result", "read_export")
 
 #' Modules allowed to publish an IMPORTER (frozen).
 #'
@@ -1599,6 +1639,143 @@ ts_drive_validate_import_dir <- function(path, roots = ts_drive_import_roots()) 
                 reason = "the path is a file; pass the data FOLDER that contains it"))
   }
   list(ok = TRUE, path = res$path, reason = NULL)
+}
+
+# =============================================================================
+# import_path — résolution de fichier CONFINÉ pour les voies fileInput (§H.6)
+# =============================================================================
+# P0.4 §H.6 (2026-11-14, continuation P2.3 / FLAW V-FI `b6f703e`) : un agent
+# ne peut pas remplir un `fileInput` — le file-chooser est refusé par le
+# navigateur agent (IAB). Les voies velocity (loom/h5ad/rds) restèrent donc
+# inaccessibles au drive : `import_file` ne couvre que les importeurs 10x/Spatial
+# (TS_DRIVE_IMPORT_SCHEMA), et `ts_velocity_resolve_loom_path()` — ajouté dans
+# sc_velocity.R par P2.3 — n'avait AUCUN consommateur production (grep mesuré :
+# le test V-FI seul). Ce bloc est la GÉNÉRALISATION demandée par §H.6 :
+#
+#   * `ts_resolve_data_path()` — moteur PUR : repli env, confinement
+#     `ts_drive_import_roots()` (mêmes primitives `.ts_drive_resolve_import_path`
+#     + `ts_drive_validate_import_path` que les importeurs — ZÉRO règle de
+#     sécurité dupliquée), allowlist d'extensions PAR CIBLE, erreur classée ;
+#   * `ts_velocity_resolve_loom_path()` — DÉMÉNAGÉ ici depuis sc_velocity.R :
+#     c'est un wrapper de repli (env `TS_VELOCITY_LOOM_PATH`, extensions
+#     loom/h5ad/rds, classe `velocity_validation_error`). Le déménagement
+#     réconcilie le pin « public API surface of sc_velocity.R is frozen »
+#     (test-velocity-contract-freeze.R) : le nom était public au top-level du
+#     fichier moteur sans être déclaré dans `velocity_public_api()` — la
+#     fonction est une AFFAIRE DE DRIVE (confinement, racines allowlistées),
+#     pas du moteur velocity ; elle vit maintenant à côté des primitives
+#     qu'elle consomme. Aucune copie : l'ancienne définition est supprimée.
+#
+#' Resolve and confine ONE data file for a fileInput pathway (§H.6), with a
+#' per-target extension allowlist.
+#'
+#' The pure engine behind `import_path`. Order of refusals is deliberate: a
+#' wrong EXTENSION is refused on the RAW string (before any filesystem probe),
+#' then confinement/existence go through the SAME validator the `import_file`
+#' importers use — one security rule, one file.
+#'
+#' @param path Candidate path (one string), or NULL to fall back to `env_var`.
+#' @param env_var Optional environment variable holding the fallback path.
+#' @param roots Allowlisted roots. Defaults to `ts_drive_import_roots()`.
+#' @param allowed_exts Extensions allowed, without the dot (case-insensitive).
+#' @param error_class S3 class of the raised error, so callers and tests can
+#'   branch on the DOMAIN (`velocity_validation_error` for the velocity wrapper)
+#'   and not on message matching.
+#' @return The normalised, confined path (invisible string).
+#' @raise An error of class `error_class` carrying an actionable message —
+#'   a refusal an agent can correct, never a bare `FALSE`.
+ts_resolve_data_path <- function(path = NULL,
+                                 env_var = NULL,
+                                 roots = ts_drive_import_roots(),
+                                 allowed_exts = c("loom", "h5ad", "rds"),
+                                 error_class = "data_path_validation_error") {
+  .stop_path <- function(msg) stop(errorCondition(msg, class = error_class))
+  candidate <- path
+  if (is.null(candidate) || !is.character(candidate) || length(candidate) != 1L ||
+      is.na(candidate) || !nzchar(trimws(candidate))) {
+    candidate <- if (is.character(env_var) && nzchar(env_var))
+      Sys.getenv(env_var, unset = "") else ""
+  }
+  candidate <- trimws(as.character(candidate)[1L])
+  if (!nzchar(candidate)) {
+    .stop_path(paste0(
+      "Chemin de donnees absent (argument 'path' et variable '",
+      env_var %||% "<aucune>", "' vides)."))
+  }
+  ext <- tolower(tools::file_ext(candidate))
+  if (!ext %in% tolower(allowed_exts)) {
+    .stop_path(paste0(
+      "Extension de donnees non autorisee ('", ext, "') — attendues : ",
+      paste(allowed_exts, collapse = ", "), "."))
+  }
+  v <- ts_drive_validate_import_path(candidate, roots = roots)
+  if (!isTRUE(v$ok)) {
+    .stop_path(paste0("Chemin de donnees refuse (",
+                      v$reason %||% "hors racine", ") : ", candidate))
+  }
+  v$path
+}
+
+#' Velocity variant of `ts_resolve_data_path()` — the P2.3 (V-FI) contract,
+#' now a DELEGATING wrapper over the general engine (§H.6).
+#'
+#' Same behaviour, same error class, same env fallback as the function that
+#' lived in sc_velocity.R: the contract test (test-flaw-vfi-drive.R) pins all
+#' three. Only the home changed — see the `import_path` block above for why.
+#'
+#' @param path Chemin explicite (sinon lu depuis `env_var`).
+#' @param env_var Nom de la variable d'environnement de repli.
+#' @param roots Racines autorisees (via `ts_drive_import_roots()`).
+#' @param allowed_exts Extensions autorisees (sans point).
+#' @return Chemin normalise valide dans `roots`.
+ts_velocity_resolve_loom_path <- function(path = NULL,
+                                          env_var = "TS_VELOCITY_LOOM_PATH",
+                                          roots = ts_drive_import_roots(),
+                                          allowed_exts = c("loom", "h5ad", "rds")) {
+  ts_resolve_data_path(path = path, env_var = env_var, roots = roots,
+                       allowed_exts = allowed_exts,
+                       error_class = "velocity_validation_error")
+}
+
+#' The `check` validator of the `import_velocity` importer (§H.6).
+#'
+#' The import_file/import_path seam shape: `function(block, roots)` ->
+#' `list(ok, errors, import)`. The path is resolved and confined HERE — one
+#' security rule, one file, the same engine (`ts_resolve_data_path()`) and
+#' the same extension allowlist (`exts`) the importer would apply — so the
+#' module receives a normalised, in-root path and NEVER re-derives it (the
+#' `import_sc` rule: the importer consumes validated DATA, it does not
+#' re-check it).
+#'
+#' @param block The parsed `import` object (schema required keys already present).
+#' @param roots Allowlisted roots.
+#' @return list(ok, errors, import) — `import` carries the normalised `path`
+#'   and the optional trimmed `name`.
+ts_drive_validate_velocity_path <- function(block, roots = ts_drive_import_roots()) {
+  errors <- character(0)
+  out <- list()
+  vp <- tryCatch(
+    ts_resolve_data_path(block$path, roots = roots,
+                         allowed_exts = TS_DRIVE_IMPORT_SCHEMA$import_velocity$exts),
+    error = function(e) e)
+  if (inherits(vp, "condition")) {
+    errors <- c(errors, sprintf("`path`: %s", conditionMessage(vp)))
+  } else {
+    out$path <- vp
+  }
+  if (!is.null(block$name)) {
+    nm <- trimws(as.character(block$name)[1L])
+    if (is.na(nm) || !nzchar(nm)) {
+      errors <- c(errors, "`name` must be one non-empty string when present")
+    } else if (grepl("[/\\\\]", nm)) {
+      # It becomes the provenance display label. A separator is an attempt to
+      # smuggle a path through a label field — refused, not coerced.
+      errors <- c(errors, "`name` must be a display label, not a path")
+    } else {
+      out$name <- nm
+    }
+  }
+  list(ok = !length(errors), errors = errors, import = out)
 }
 
 #' The sample name a Spatial import uses when the scenario does not name one.

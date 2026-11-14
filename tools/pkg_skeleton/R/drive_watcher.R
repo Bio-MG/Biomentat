@@ -1067,7 +1067,13 @@ ts_drive_write_arm <- function(token, armed, interactive = ts_drive_interactive(
 #' R1: `read_export` joins the enum — the bounded read (option i, D1 approuvé).
 #' The handler lands in R2; until then a dispatched read_export receives an
 #' honest `invalid` verdict from the unhandled-action branch, never silence.
+#' §H.6 (2026-11-14): `import_path` joins the enum — it POINTS at a confined
+#' file for a fileInput pathway (velocity loom/h5ad/rds) instead of faking the
+#' widget the browser agent cannot drive. Same seam, same importer registry as
+#' `import_file`; the module set differs (TS_DRIVE_PATH_MODULES) and the token
+#' pin applies (TS_DRIVE_TOKEN_PINNED_ACTIONS).
 TS_DRIVE_ACTIONS <- c("noop", "set_inputs", "run_pipeline", "import_file",
+                      "import_path",
                       "snapshot", "reset_module", "export_result",
                       "read_export")
 
@@ -1208,20 +1214,40 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
   }
   warnings <- c(warnings, skipped)
 
-  # `import_file` carries a PATH, not a widget value (spec G3/S5), so it has its
-  # own validated block. Validated HERE rather than in the injector for the same
-  # reason `inputs` is: the refusal must reach `result.errors[]` before anything
-  # is attempted, and a path is exactly the kind of value that must never be
-  # handed downstream unexamined (spec S11).
+  # `import_file` / `import_path` (§H.6) carry a PATH, not a widget value (spec
+  # G3/S5), so they have their own validated block. Validated HERE rather than
+  # in the injector for the same reason `inputs` is: the refusal must reach
+  # `result.errors[]` before anything is attempted, and a path is exactly the
+  # kind of value that must never be handed downstream unexamined (spec S11).
   imp <- NULL
-  if (identical(action, "import_file")) {
-    # The MODULE routes the payload, because one flat key vector cannot describe
-    # two importers with different shapes: `import_bulk` needs a counts FILE,
-    # `import_spatial` needs a data FOLDER. Handing either the other's key would
-    # be accepted by a global whitelist and then fail inside the loader.
-    iv <- ts_drive_validate_import(scn$import, module = module)
-    errors <- c(errors, iv$errors)
-    if (length(iv$import)) imp <- iv$import
+  if (identical(action, "import_file") || identical(action, "import_path")) {
+    # ONE ROUTE PER MODULE (§H.6): `import_file` keeps the three 10x/Spatial
+    # importers it has always had, `import_path` serves the fileInput pathways
+    # (TS_DRIVE_PATH_MODULES — velocity loom/h5ad/rds). A scenario pairing
+    # either action with a module from the other set is refused with the
+    # actionable spelling, never silently mis-routed: the payload shape is the
+    # same registry (TS_DRIVE_IMPORT_SCHEMA), but the reader that consumes
+    # `path` is not published for `import_file` and a 10x `dir_path` would be
+    # meaningless under `import_path`.
+    if (identical(action, "import_file") && module %in% TS_DRIVE_PATH_MODULES) {
+      errors <- c(errors, sprintf(
+        "module '%s' is driven by `import_path`, not `import_file` (path-driven importers: %s)",
+        module, paste(TS_DRIVE_PATH_MODULES, collapse = ", ")))
+    } else if (identical(action, "import_path") &&
+               !module %in% TS_DRIVE_PATH_MODULES) {
+      errors <- c(errors, sprintf(
+        "module '%s' does not accept `import_path` (path-driven importers: %s)",
+        module,
+        if (length(TS_DRIVE_PATH_MODULES)) paste(TS_DRIVE_PATH_MODULES, collapse = ", ") else "<none>"))
+    } else {
+      # The MODULE routes the payload, because one flat key vector cannot describe
+      # two importers with different shapes: `import_bulk` needs a counts FILE,
+      # `import_spatial` needs a data FOLDER. Handing either the other's key would
+      # be accepted by a global whitelist and then fail inside the loader.
+      iv <- ts_drive_validate_import(scn$import, module = module)
+      errors <- c(errors, iv$errors)
+      if (length(iv$import)) imp <- iv$import
+    }
   } else if (identical(action, "export_result")) {
     # S2: `export_result` takes NO request field, and the refusal has to happen
     # HERE, on the seam the poller actually calls.
@@ -3380,13 +3406,18 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
                 active_module = module, nav = nav))
   }
 
-  if (identical(action, "import_file")) {
+  if (identical(action, "import_file") || identical(action, "import_path")) {
     # G3. The MODULE owns the load: `smart_read()`, the numeric coercion, the
     # `min_counts` filter and the write to `global_data$bulk_obj` all live in
     # modules/import/mod_import_bulk.R, and `R/` may touch none of them (C2, and
     # spec S6 "the watcher must not run DESeq2/Seurat"). So the request travels
     # as DATA through the same `effects` callback that fires buttons — never as
     # a string handed to `update*()` (spec S5).
+    # §H.6 (2026-11-14): `import_path` rides the EXACT same seam — the
+    # module-scoped importer published by `ts_drive_publish_importer()` — for
+    # the velocity fileInput pathway. Zero parallel ingestion route: the
+    # importer resolves the confined path through `ts_resolve_data_path()` and
+    # then runs the SAME readers/validators the widget observer runs.
     req <- scn$import
     # 🔴 THIS GUARD WAS BULK-ONLY AND SAID SO. It asked for `counts_path` by name,
     # so an `import_file` aimed at `import_spatial` — which carries a `dir_path` —
@@ -3406,16 +3437,20 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
     # silent, total miss that would have let a half-populated payload reach the
     # importer. The schema is not the gate this function uses; it is a second one.
     need <- TS_DRIVE_IMPORT_SCHEMA[[module]]$required
+    # §H.6: the refusal spells the ACTION the agent actually used — an
+    # `import_path` caller told "`import_file` needs..." would retry with the
+    # wrong action forever.
+    act <- action
     if (is.null(need)) {
       errors <- c(errors, sprintf(
-        "`import_file` for '%s' needs an `import` block carrying `%s`", module,
+        "`%s` for '%s' needs an `import` block carrying `%s`", act, module,
         "<the module's required key>"))
       return(list(status = "invalid", errors = errors, warnings = warnings,
                   active_module = module, nav = nav))
     }
     if (is.null(req) || !is.list(req)) {
       errors <- c(errors, sprintf(
-        "`import_file` for '%s' needs an `import` block carrying %s", module,
+        "`%s` for '%s' needs an `import` block carrying %s", act, module,
         paste0("`", need, "`", collapse = " and ")))
       return(list(status = "invalid", errors = errors, warnings = warnings,
                   active_module = module, nav = nav))
@@ -3423,8 +3458,8 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
     lack <- need[vapply(need, function(k) is.null(req[[k]]), logical(1))]
     if (length(lack)) {
       errors <- c(errors, sprintf(
-        "`import_file` for '%s' needs an `import` block carrying %s; absent: %s",
-        module, paste0("`", need, "`", collapse = " and "),
+        "`%s` for '%s' needs an `import` block carrying %s; absent: %s",
+        act, module, paste0("`", need, "`", collapse = " and "),
         paste0("`", lack, "`", collapse = ", ")))
       return(list(status = "invalid", errors = errors, warnings = warnings,
                   active_module = module, nav = nav))
@@ -3600,6 +3635,22 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
       panel = TS_DRIVE_SC_PANELS,
       tab_id = NULL,
       accordion_id = TS_DRIVE_SC_ACCORDION_IDS
+    ))
+  }
+  # §H.6 (2026-11-14) : the velocity import lives in the CONTROLS accordion,
+  # like `sc_pipeline` — its fileInputs are panels of `acc_dynamique` nested in
+  # `acc_workflow` (mod_sc.R:867-874, panel value "8_velocity", both ids
+  # measured with the ns prefix "sc-"). `tab`/`tab_id` stay NULL: the results
+  # navset (`tab_velocity`) is where the READERS live, and an import needs the
+  # widgets, not the readers — the importer publishes a state probe instead
+  # (same reasoning as `import_sc`).
+  if (identical(module, TS_DRIVE_SC_VELOCITY_IMPORT_MODULE)) {
+    return(list(
+      top = TS_DRIVE_SC_TOP_TAB,
+      tab = NULL,
+      panel = "8_velocity",
+      tab_id = NULL,
+      accordion_id = c("sc-acc_workflow", "sc-acc_dynamique")
     ))
   }
   panel <- switch(module,

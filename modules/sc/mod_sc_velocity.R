@@ -789,6 +789,264 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       })
     }
 
+    # ── §H.6 (2026-11-14) : pipeline d'ingestion PARTAGÉ — zéro voie parallèle ──
+    # Le corps complet du validate (lecture → validation → alignement →
+    # canonique → publication) est factorisé ici ; le bouton humain et
+    # l'importeur drive (import_path, module `import_velocity`) l'appellent
+    # tous les deux, chacun avec SON read_fn : le bouton lit les datapaths du
+    # fileInput, l'importeur lit le chemin CONFINÉ résolu par
+    # `ts_resolve_data_path()` (mêmes lecteurs `read_velocity_*`, même chaîne
+    # `validate_velocity_matrices()` — on contourne le widget, on ne le
+    # falsifie pas, spec S5). Lève en cas d'échec ; l'appelant dispose du
+    # tryCatch qui fixe le statut et notifie.
+    .velocity_ingest <- function(mode, read_fn, source_files = NULL) {
+      seurat_cells <- colnames(global_data$sc_obj)
+      seurat_genes <- rownames(global_data$sc_obj)
+
+      read <- read_fn()
+      spliced <- read$spliced
+      unspliced <- read$unspliced
+      ambiguous <- read$ambiguous %||% NULL
+      rds_meta <- read$meta %||% list()
+      vector_field <- read$vector_field
+      vector_matrix <- read$vector_matrix
+
+      # 3. Read orientation, 4. suffix/version, 5. low overlap confirmation (BUG 5/6)
+      orientation <- input$velocity_orientation %||% "auto_strict"
+      strip_cell_suffix <- isTRUE(input$velocity_strip_cell_suffix)
+      strip_gene_version <- isTRUE(input$velocity_strip_gene_version)
+      allow_low_overlap <- isTRUE(input$velocity_allow_low_overlap)
+
+      # 6. Validate matrices, 7. Align by barcode and gene ID.
+      # Normalization applies to BOTH sides (velocity + Seurat barcodes).
+      validated <- validate_velocity_matrices(
+        spliced = spliced,
+        unspliced = unspliced,
+        ambiguous = ambiguous,
+        seurat_cells = seurat_cells,
+        seurat_genes = seurat_genes,
+        orientation = orientation,
+        strip_cell_suffix = strip_cell_suffix,
+        strip_gene_version = strip_gene_version,
+        allow_low_overlap = allow_low_overlap
+      )
+
+      # Zero aligned cells makes every downstream view (phase portrait,
+      # embedding, export) empty without any visible explanation.
+      if (validated$n_cells_matched == 0L) {
+        stop(errorCondition(
+          paste0(
+            "Aucune cellule alignee entre les matrices velocity et ",
+            "l'objet Seurat courant. Verifiez que l'objet charge ",
+            "correspond au meme run Cell Ranger et activez le retrait ",
+            "des suffixes (-1) si necessaire."
+          ),
+          class = "sc_velocity_error"
+        ))
+      }
+
+      # BUG 10: preserve RDS metadata on the validated result (never in
+      # Seurat meta.data — this stays module-local).
+      validated$velocity_source <- rds_meta$velocity_source %||% "unknown"
+      validated$velocity_method <- rds_meta$velocity_method %||% "precomputed"
+      validated$input_orientation <- rds_meta$orientation %||% NA_character_
+      validated$embedding_reduction <- rds_meta$embedding_reduction %||%
+        rds_meta$stored_reduction %||%
+        rds_meta$reduction %||% NA_character_
+      validated$clusters <- rds_meta$clusters %||% NULL
+      validated$umap_embedding <- rds_meta$umap_embedding %||% NULL
+
+      # 8. Store validated result (structure plate, compatibilite)
+      velocity_state$validated <- validated
+      velocity_state$alignment <- list(cells = validated$cell_names, genes = validated$gene_names)
+
+      # Reset per-import derived state before repopulating
+      velocity_state$partial_embedding <- NULL
+      velocity_state$embedding_alignment <- NULL
+      velocity_state$vector_validation <- NULL
+      velocity_state$umap_vectors <- NULL
+
+      sel_red <- input$velocity_reduction %||% "umap"
+      orchestration_warnings <- character(0)
+
+      # BUG 3/BUG 4: partial coordinate display via align_velocity_embedding()
+      if (!is.null(validated$umap_embedding)) {
+        ali <- tryCatch(
+          align_velocity_embedding(
+            embedding = validated$umap_embedding,
+            cell_names = validated$cell_names,
+            selected_reduction = sel_red,
+            stored_reduction = validated$embedding_reduction
+          ),
+          error = function(e) {
+            orchestration_warnings <<- c(orchestration_warnings,
+              paste0("Embedding UMAP ignore : ", conditionMessage(e)))
+            showNotification(paste("Embedding UMAP ignore :", conditionMessage(e)),
+                             type = "warning", duration = 8)
+            NULL
+          }
+        )
+        if (!is.null(ali)) {
+          velocity_state$partial_embedding <- ali$embedding
+          velocity_state$embedding_alignment <- ali
+          validated$embedding_alignment <- ali
+        }
+      }
+
+      # BUG 8: strict vector validation — no arrows on any failure
+      if (!is.null(vector_matrix)) {
+        vec_stored_red <- validated$embedding_reduction
+        if (!identical(vector_field, "umap_velocity") &&
+            !identical(vector_field, "embedding_velocity") &&
+            !identical(vector_field, "umap_vectors") &&
+            !identical(vector_field, "vectors")) {
+          vector_matrix <- NULL
+        }
+        if (!is.null(vector_matrix)) {
+          tryCatch({
+            velocity_state$umap_vectors <- validate_precomputed_velocity_vectors(
+              vectors = vector_matrix,
+              cell_names = validated$cell_names,
+              selected_reduction = sel_red,
+              stored_reduction = vec_stored_red
+            )
+            velocity_state$vector_validation <- list(field = vector_field, ok = TRUE)
+          }, error = function(e) {
+            velocity_state$umap_vectors <- NULL
+            velocity_state$vector_validation <- list(field = vector_field, ok = FALSE,
+                                                     reason = conditionMessage(e))
+            orchestration_warnings <<- c(orchestration_warnings,
+              paste0("Vecteurs velocity rejetes : ", conditionMessage(e)))
+            showNotification(paste("Vecteurs velocity refuses :", conditionMessage(e)),
+                             type = "error", duration = 8)
+          })
+        }
+      }
+
+      # 9. Store current object fingerprint
+      velocity_state$object_fingerprint <- velocity_object_fingerprint(global_data$sc_obj)
+
+      # Stage 8 (3B-1) : resultat canonique — contrat documente dans
+      # R/sc/sc_velocity.R. La provenance est PRODUITE dans l'objet (regle 7
+      # AGENTS.md) puis appendee a l'etat partage ; consolidation reservee au
+      # rapport (macro-step 4F).
+      canonical <- finalize_velocity_result(
+        validated           = validated,
+        input_mode          = mode,
+        input_files         = source_files %||% .collect_input_files(mode),
+        seurat_obj          = global_data$sc_obj,
+        assay_used          = NULL,
+        requested_reduction = sel_red,
+        embedding_alignment = velocity_state$embedding_alignment,
+        velocity_vectors    = velocity_state$umap_vectors,
+        vector_validation   = velocity_state$vector_validation,
+        extra_warnings      = orchestration_warnings,
+        analysis_id         = "sc-velocity"
+      )
+      velocity_state$result <- canonical
+
+      # Stage 17 (4F) : exposition ADDITIVE du resultat canonique au rapport
+      # consolide (lecture seule ; velocity_state reste la reference du
+      # panel 8 — aucun changement de comportement du panneau).
+      shared_rv$velocity_result <- canonical
+
+      provenance_append(shared_rv, canonical$provenance)
+
+      # Lane 3b : publication panneau (validate succès).
+      .velocity_publish_state()
+
+      # 10. Populate gene selector — 2D (O28) — helper partagé avec la
+      # réhydratation lane 3b (zéro voie parallèle).
+      .velocity_refresh_gene_selector()
+
+      # 11. French status summary : statut canonique explicite (+ BUG 3
+      # message when only coordinates exist). Validite technique uniquement —
+      # aucune validite biologique n'est impliquee.
+      msg <- sprintf(
+        paste0(
+          "Validation OK : %d cellules, %d genes. ",
+          "Orientation : %s. Alignement cellules : %s. ",
+          "Alignement genes : %s."
+        ),
+        validated$n_cells_matched,
+        validated$n_genes_matched,
+        validated$orientation,
+        validated$cell_match_mode,
+        validated$gene_match_mode
+      )
+      if (is.null(vector_matrix) && !is.null(velocity_state$partial_embedding)) {
+        msg <- paste(
+          msg,
+          "Coordonnees UMAP disponibles, mais aucun vecteur velocity pre-calcule n'est fourni.",
+          sep = "\n"
+        )
+      }
+      msg <- paste0("[", .status_label(canonical$status), "]\n", msg)
+      velocity_status_rv(msg)
+      showNotification(.tr("Validation velocity reussie."), type = "message", duration = 4)
+      invisible(NULL)
+    }
+
+    # ── §H.6 (2026-11-14) : importeur drive `import_path` (module
+    # `import_velocity`) — la voie fileInput loom/h5ad/rds devient drivable
+    # sans navigateur. Le chemin arrive CONFINÉ et NORMALISÉ — la validation
+    # (confinement + allowlist d'extensions `exts`) est faite au SEAM par
+    # `ts_drive_validate_velocity_path()` (motif import_sc : l'importeur
+    # consomme des données validées, il ne les re-dérive pas). L'ingestion
+    # passe par `.velocity_ingest()` — le pipeline EXACT du bouton humain
+    # ci-dessous ; les options d'alignement (orientation, suffixes,
+    # recouvrement) sont lues sur les widgets par `isolate()` : elles se
+    # règlent par un `set_inputs` ANTÉRIEUR, seul ordre correct (motif
+    # import_bulk, G3). Sonde d'état bornée (motif import_sc `drive_state`).
+    drive_velocity_state <- function() {
+      res <- tryCatch(shiny::isolate(velocity_state$result), error = function(e) NULL)
+      obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+      list(module = TS_DRIVE_SC_VELOCITY_IMPORT_MODULE,
+           has_result = !is.null(res),
+           status = if (is.null(res)) NULL else res$status,
+           n_cells_matched = if (is.null(res)) NULL else res$n_cells_matched,
+           has_seurat = !is.null(obj))
+    }
+    ts_drive_publish_importer(global_data, TS_DRIVE_SC_VELOCITY_IMPORT_MODULE,
+                              function(request) {
+      warnings <- character(0)
+      path <- request$path
+      ext <- tolower(tools::file_ext(path))
+      mode <- if (identical(ext, "rds")) "rds" else "loom"
+      # Le nom AFFICHÉ — jamais le chemin local complet (règle
+      # .collect_input_files : noms originaux uniquement) ; `name` du
+      # scénario est honoré (déjà trimmé par le validator), sinon basename —
+      # la MÊME règle que le widget.
+      display_name <- request$name %||% basename(path)
+      source_files <- setNames(list(display_name), mode)
+      read_fn <- function() {
+        velocity_input <- if (identical(ext, "h5ad")) {
+          read_velocity_h5ad(path)
+        } else if (identical(ext, "loom")) {
+          read_velocity_loom(path)
+        } else {
+          read_velocity_rds(path)
+        }
+        vf <- NULL; vm <- NULL
+        for (f in c("umap_velocity", "embedding_velocity", "umap_vectors", "vectors")) {
+          if (!is.null(velocity_input[[f]])) { vf <- f; vm <- velocity_input[[f]]; break }
+        }
+        list(spliced = velocity_input$spliced,
+             unspliced = velocity_input$unspliced,
+             ambiguous = velocity_input$ambiguous,
+             meta = velocity_input,
+             vector_field = vf, vector_matrix = vm)
+      }
+      tryCatch({
+        .velocity_ingest(mode, read_fn, source_files = source_files)
+        list(ok = TRUE, status = "applied", errors = character(0),
+             warnings = warnings)
+      }, error = function(e) {
+        list(ok = FALSE, status = "error",
+             errors = conditionMessage(e), warnings = warnings)
+      })
+    }, state = drive_velocity_state)
+
     # Validation button (BUG 1-8, 10)
     observeEvent(input$velocity_validate, {
       req(global_data$sc_obj)
@@ -808,264 +1066,88 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         # produit desormais un message FR clair dans le canal d'erreur.
         assert_seurat(global_data$sc_obj, context = "velocity")
 
-        # 1. Require Seurat object already ensured by req
-        seurat_cells <- colnames(global_data$sc_obj)
-        seurat_genes <- rownames(global_data$sc_obj)
-
-        # 2. Read selected RDS/MTX inputs
-        spliced <- NULL
-        unspliced <- NULL
-        ambiguous <- NULL
-        rds_meta <- list()
-        vector_field <- NULL
-        vector_matrix <- NULL
-
+        # §H.6 (2026-11-14) : le pipeline complet est PARTAGÉ
+        # (.velocity_ingest ci-dessus, aussi consommé par l'importeur drive) ;
+        # ce dispatch ne décide que COMMENT LIRE — depuis les datapaths du
+        # fileInput. L'upload anonymise l'extension : loom/h5ad se dispatche
+        # sur le nom original.
         mode <- input$velocity_import_mode %||% "rds"
-
         if (identical(mode, "rds")) {
-          req(input$velocity_rds_file)
-          rds_path <- input$velocity_rds_file$datapath
-          # read_velocity_rds() enforces the whitelist AND validates metadata
-          velocity_input <- read_velocity_rds(rds_path)
-          spliced <- velocity_input$spliced
-          unspliced <- velocity_input$unspliced
-          ambiguous <- velocity_input$ambiguous %||% NULL
-          rds_meta <- velocity_input
-          # BUG 3/BUG 8: ONLY these fields are dx/dy vectors in embedding
-          # space. umap_embedding is coordinates and is NEVER routed here.
-          for (f in c("umap_velocity", "embedding_velocity", "umap_vectors", "vectors")) {
-            if (!is.null(velocity_input[[f]])) {
-              vector_field <- f
-              vector_matrix <- velocity_input[[f]]
-              break
+          read_fn <- function() {
+            req(input$velocity_rds_file)
+            # read_velocity_rds() enforces the whitelist AND validates metadata
+            velocity_input <- read_velocity_rds(input$velocity_rds_file$datapath)
+            vf <- NULL; vm <- NULL
+            # BUG 3/BUG 8: ONLY these fields are dx/dy vectors in embedding
+            # space. umap_embedding is coordinates and is NEVER routed here.
+            for (f in c("umap_velocity", "embedding_velocity", "umap_vectors", "vectors")) {
+              if (!is.null(velocity_input[[f]])) { vf <- f; vm <- velocity_input[[f]]; break }
             }
+            list(spliced = velocity_input$spliced,
+                 unspliced = velocity_input$unspliced,
+                 ambiguous = velocity_input$ambiguous,
+                 meta = velocity_input,
+                 vector_field = vf, vector_matrix = vm)
           }
         } else if (identical(mode, "loom")) {
           # Roadmap SC FUNCTION_TEST M0 : lecture .loom (velocyto) / .h5ad
           # (scVelo, layout old-anndata). Meme chaine de validation que RDS :
-          # validate_velocity_matrices() s'applique tel quel plus bas.
-          req(input$velocity_loom_file)
-          # l'upload anonymise l'extension -> dispatcher sur le nom original
-          lname <- input$velocity_loom_file$name %||% ""
-          velocity_input <- if (grepl("\\.h5ad$", lname, ignore.case = TRUE)) {
-            read_velocity_h5ad(input$velocity_loom_file$datapath)
-          } else {
-            read_velocity_loom(input$velocity_loom_file$datapath)
-          }
-          spliced <- velocity_input$spliced
-          unspliced <- velocity_input$unspliced
-          ambiguous <- velocity_input$ambiguous %||% NULL
-          rds_meta <- velocity_input
-          for (f in c("umap_velocity", "embedding_velocity", "umap_vectors", "vectors")) {
-            if (!is.null(velocity_input[[f]])) {
-              vector_field <- f
-              vector_matrix <- velocity_input[[f]]
-              break
+          # validate_velocity_matrices() s'applique tel quel dans
+          # .velocity_ingest.
+          read_fn <- function() {
+            req(input$velocity_loom_file)
+            lname <- input$velocity_loom_file$name %||% ""
+            velocity_input <- if (grepl("\\.h5ad$", lname, ignore.case = TRUE)) {
+              read_velocity_h5ad(input$velocity_loom_file$datapath)
+            } else {
+              read_velocity_loom(input$velocity_loom_file$datapath)
             }
+            vf <- NULL; vm <- NULL
+            for (f in c("umap_velocity", "embedding_velocity", "umap_vectors", "vectors")) {
+              if (!is.null(velocity_input[[f]])) { vf <- f; vm <- velocity_input[[f]]; break }
+            }
+            list(spliced = velocity_input$spliced,
+                 unspliced = velocity_input$unspliced,
+                 ambiguous = velocity_input$ambiguous,
+                 meta = velocity_input,
+                 vector_field = vf, vector_matrix = vm)
           }
         } else {
           # MTX mode: require both spliced and unspliced triplets
-          req(input$velocity_mtx_spliced, input$velocity_mtx_spliced_barcodes, input$velocity_mtx_spliced_features,
-              input$velocity_mtx_unspliced, input$velocity_mtx_unspliced_barcodes, input$velocity_mtx_unspliced_features)
-          fc <- input$velocity_feature_column %||% 1L
-          spliced <- read_velocity_mtx(
-            matrix_path = input$velocity_mtx_spliced$datapath,
-            barcode_path = input$velocity_mtx_spliced_barcodes$datapath,
-            feature_path = input$velocity_mtx_spliced_features$datapath,
-            feature_column = fc
-          )
-          unspliced <- read_velocity_mtx(
-            matrix_path = input$velocity_mtx_unspliced$datapath,
-            barcode_path = input$velocity_mtx_unspliced_barcodes$datapath,
-            feature_path = input$velocity_mtx_unspliced_features$datapath,
-            feature_column = fc
-          )
-          # optional ambiguous triplet (only when all three files provided)
-          if (!is.null(input$velocity_mtx_ambiguous) &&
-              !is.null(input$velocity_mtx_ambiguous_barcodes) &&
-              !is.null(input$velocity_mtx_ambiguous_features)) {
-            ambiguous <- read_velocity_mtx(
-              matrix_path = input$velocity_mtx_ambiguous$datapath,
-              barcode_path = input$velocity_mtx_ambiguous_barcodes$datapath,
-              feature_path = input$velocity_mtx_ambiguous_features$datapath,
+          read_fn <- function() {
+            req(input$velocity_mtx_spliced, input$velocity_mtx_spliced_barcodes, input$velocity_mtx_spliced_features,
+                input$velocity_mtx_unspliced, input$velocity_mtx_unspliced_barcodes, input$velocity_mtx_unspliced_features)
+            fc <- input$velocity_feature_column %||% 1L
+            sp <- read_velocity_mtx(
+              matrix_path = input$velocity_mtx_spliced$datapath,
+              barcode_path = input$velocity_mtx_spliced_barcodes$datapath,
+              feature_path = input$velocity_mtx_spliced_features$datapath,
               feature_column = fc
             )
-          }
-        }
-
-        # 3. Read orientation, 4. suffix/version, 5. low overlap confirmation (BUG 5/6)
-        orientation <- input$velocity_orientation %||% "auto_strict"
-        strip_cell_suffix <- isTRUE(input$velocity_strip_cell_suffix)
-        strip_gene_version <- isTRUE(input$velocity_strip_gene_version)
-        allow_low_overlap <- isTRUE(input$velocity_allow_low_overlap)
-
-        # 6. Validate matrices, 7. Align by barcode and gene ID.
-        # Normalization applies to BOTH sides (velocity + Seurat barcodes).
-        validated <- validate_velocity_matrices(
-          spliced = spliced,
-          unspliced = unspliced,
-          ambiguous = ambiguous,
-          seurat_cells = seurat_cells,
-          seurat_genes = seurat_genes,
-          orientation = orientation,
-          strip_cell_suffix = strip_cell_suffix,
-          strip_gene_version = strip_gene_version,
-          allow_low_overlap = allow_low_overlap
-        )
-
-        # Zero aligned cells makes every downstream view (phase portrait,
-        # embedding, export) empty without any visible explanation.
-        if (validated$n_cells_matched == 0L) {
-          stop(errorCondition(
-            paste0(
-              "Aucune cellule alignee entre les matrices velocity et ",
-              "l'objet Seurat courant. Verifiez que l'objet charge ",
-              "correspond au meme run Cell Ranger et activez le retrait ",
-              "des suffixes (-1) si necessaire."
-            ),
-            class = "sc_velocity_error"
-          ))
-        }
-
-        # BUG 10: preserve RDS metadata on the validated result (never in
-        # Seurat meta.data — this stays module-local).
-        validated$velocity_source <- rds_meta$velocity_source %||% "unknown"
-        validated$velocity_method <- rds_meta$velocity_method %||% "precomputed"
-        validated$input_orientation <- rds_meta$orientation %||% NA_character_
-        validated$embedding_reduction <- rds_meta$embedding_reduction %||%
-          rds_meta$stored_reduction %||%
-          rds_meta$reduction %||% NA_character_
-        validated$clusters <- rds_meta$clusters %||% NULL
-        validated$umap_embedding <- rds_meta$umap_embedding %||% NULL
-
-        # 8. Store validated result (structure plate, compatibilite)
-        velocity_state$validated <- validated
-        velocity_state$alignment <- list(cells = validated$cell_names, genes = validated$gene_names)
-
-        # Reset per-import derived state before repopulating
-        velocity_state$partial_embedding <- NULL
-        velocity_state$embedding_alignment <- NULL
-        velocity_state$vector_validation <- NULL
-        velocity_state$umap_vectors <- NULL
-
-        sel_red <- input$velocity_reduction %||% "umap"
-        orchestration_warnings <- character(0)
-
-        # BUG 3/BUG 4: partial coordinate display via align_velocity_embedding()
-        if (!is.null(validated$umap_embedding)) {
-          ali <- tryCatch(
-            align_velocity_embedding(
-              embedding = validated$umap_embedding,
-              cell_names = validated$cell_names,
-              selected_reduction = sel_red,
-              stored_reduction = validated$embedding_reduction
-            ),
-            error = function(e) {
-              orchestration_warnings <<- c(orchestration_warnings,
-                paste0("Embedding UMAP ignore : ", conditionMessage(e)))
-              showNotification(paste("Embedding UMAP ignore :", conditionMessage(e)),
-                               type = "warning", duration = 8)
-              NULL
-            }
-          )
-          if (!is.null(ali)) {
-            velocity_state$partial_embedding <- ali$embedding
-            velocity_state$embedding_alignment <- ali
-            validated$embedding_alignment <- ali
-          }
-        }
-
-        # BUG 8: strict vector validation — no arrows on any failure
-        if (!is.null(vector_matrix)) {
-          vec_stored_red <- validated$embedding_reduction
-          if (!identical(vector_field, "umap_velocity") &&
-              !identical(vector_field, "embedding_velocity") &&
-              !identical(vector_field, "umap_vectors") &&
-              !identical(vector_field, "vectors")) {
-            vector_matrix <- NULL
-          }
-          if (!is.null(vector_matrix)) {
-            tryCatch({
-              velocity_state$umap_vectors <- validate_precomputed_velocity_vectors(
-                vectors = vector_matrix,
-                cell_names = validated$cell_names,
-                selected_reduction = sel_red,
-                stored_reduction = vec_stored_red
+            uns <- read_velocity_mtx(
+              matrix_path = input$velocity_mtx_unspliced$datapath,
+              barcode_path = input$velocity_mtx_unspliced_barcodes$datapath,
+              feature_path = input$velocity_mtx_unspliced_features$datapath,
+              feature_column = fc
+            )
+            # optional ambiguous triplet (only when all three files provided)
+            amb <- NULL
+            if (!is.null(input$velocity_mtx_ambiguous) &&
+                !is.null(input$velocity_mtx_ambiguous_barcodes) &&
+                !is.null(input$velocity_mtx_ambiguous_features)) {
+              amb <- read_velocity_mtx(
+                matrix_path = input$velocity_mtx_ambiguous$datapath,
+                barcode_path = input$velocity_mtx_ambiguous_barcodes$datapath,
+                feature_path = input$velocity_mtx_ambiguous_features$datapath,
+                feature_column = fc
               )
-              velocity_state$vector_validation <- list(field = vector_field, ok = TRUE)
-            }, error = function(e) {
-              velocity_state$umap_vectors <- NULL
-              velocity_state$vector_validation <- list(field = vector_field, ok = FALSE,
-                                                       reason = conditionMessage(e))
-              orchestration_warnings <<- c(orchestration_warnings,
-                paste0("Vecteurs velocity rejetes : ", conditionMessage(e)))
-              showNotification(paste("Vecteurs velocity refuses :", conditionMessage(e)),
-                               type = "error", duration = 8)
-            })
+            }
+            list(spliced = sp, unspliced = uns, ambiguous = amb,
+                 meta = list(), vector_field = NULL, vector_matrix = NULL)
           }
         }
+        .velocity_ingest(mode, read_fn)
 
-        # 9. Store current object fingerprint
-        velocity_state$object_fingerprint <- velocity_object_fingerprint(global_data$sc_obj)
-
-        # Stage 8 (3B-1) : resultat canonique — contrat documente dans
-        # R/sc/sc_velocity.R. La provenance est PRODUITE dans l'objet (regle 7
-        # AGENTS.md) puis appendee a l'etat partage ; consolidation reservee au
-        # rapport (macro-step 4F).
-        canonical <- finalize_velocity_result(
-          validated           = validated,
-          input_mode          = mode,
-          input_files         = .collect_input_files(mode),
-          seurat_obj          = global_data$sc_obj,
-          assay_used          = NULL,
-          requested_reduction = sel_red,
-          embedding_alignment = velocity_state$embedding_alignment,
-          velocity_vectors    = velocity_state$umap_vectors,
-          vector_validation   = velocity_state$vector_validation,
-          extra_warnings      = orchestration_warnings,
-          analysis_id         = "sc-velocity"
-        )
-        velocity_state$result <- canonical
-
-        # Stage 17 (4F) : exposition ADDITIVE du resultat canonique au rapport
-        # consolide (lecture seule ; velocity_state reste la reference du
-        # panel 8 — aucun changement de comportement du panneau).
-        shared_rv$velocity_result <- canonical
-
-        provenance_append(shared_rv, canonical$provenance)
-
-        # Lane 3b : publication panneau (validate succès).
-        .velocity_publish_state()
-
-        # 10. Populate gene selector — 2D (O28) — helper partagé avec la
-        # réhydratation lane 3b (zéro voie parallèle).
-        .velocity_refresh_gene_selector()
-
-        # 11. French status summary : statut canonique explicite (+ BUG 3
-        # message when only coordinates exist). Validite technique uniquement —
-        # aucune validite biologique n'est impliquee.
-        msg <- sprintf(
-          paste0(
-            "Validation OK : %d cellules, %d genes. ",
-            "Orientation : %s. Alignement cellules : %s. ",
-            "Alignement genes : %s."
-          ),
-          validated$n_cells_matched,
-          validated$n_genes_matched,
-          validated$orientation,
-          validated$cell_match_mode,
-          validated$gene_match_mode
-        )
-        if (is.null(vector_matrix) && !is.null(velocity_state$partial_embedding)) {
-          msg <- paste(
-            msg,
-            "Coordonnees UMAP disponibles, mais aucun vecteur velocity pre-calcule n'est fourni.",
-            sep = "\n"
-          )
-        }
-        msg <- paste0("[", .status_label(canonical$status), "]\n", msg)
-        velocity_status_rv(msg)
-        showNotification(.tr("Validation velocity reussie."), type = "message", duration = 4)
 
       }, error = function(e) {
         velocity_status_rv(

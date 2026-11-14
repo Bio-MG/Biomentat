@@ -105,7 +105,7 @@ if ("--check" %in% .args) {
   .ts_stderr("                 transcripto_drive_state (M2: passive, read-only)")
   .ts_stderr("                 transcripto_drive_datasets (P2 PoC datasets: passive, read-only, session-free)")
   .ts_stderr("                 transcripto_drive_snapshot (M3a: passive, read-only)")
-  .ts_stderr("                 transcripto_drive_import (S3: controlled import, scenario.json only)")
+  .ts_stderr("                 transcripto_drive_import (S3/§H.6: controlled import, scenario.json only; import_file + import_path)")
   .ts_stderr("                 transcripto_drive_set_inputs (M3b: controlled write, scenario.json only)")
   .ts_stderr("                 transcripto_drive_run (M3c: controlled run, run_pipeline only)")
   .ts_stderr("                 transcripto_drive_wait (M4: bounded observation; <=1 snapshot, post-terminal)")
@@ -2426,8 +2426,24 @@ TS_MCP_IMPORT_SCHEMA <- list(
   import_sc = list(
     dir_path    = list(type = "path", required = TRUE),
     sample_name = list(type = "text", max_chars = 120L, required = TRUE)
+  ),
+  # §H.6 (2026-11-14) : the PATH-driven importer. Its scenario action is
+  # `import_path` (NOT import_file) — TS_MCP_PATH_MODULES below decides, and
+  # the cross-check pins the mirror against the app's TS_DRIVE_PATH_MODULES.
+  # Extension allowlist (loom/h5ad/rds), root confinement and existence stay
+  # the APP's verdict (ts_drive_validate_velocity_path at the seam).
+  import_velocity = list(
+    path = list(type = "path", required = TRUE),
+    name = list(type = "text", max_chars = 120L, required = FALSE)
   )
 )
+
+#' §H.6 : the importers whose scenario action is `import_path` — the MIRROR of
+#' the app's `TS_DRIVE_PATH_MODULES`, cross-checked by `.ts_mcp_import_problems()`
+#' (surfaced by `--check`) so the tool cannot route a module with the wrong
+#' action: the app refuses the pair with an actionable `invalid` verdict, but
+#' a refusal the tool could have prevented is a wasted round-trip.
+TS_MCP_PATH_MODULES <- c("import_velocity")
 
 #' Cross-check the import schema against the APP's own importer table.
 #' Returns `character(0)` when consistent. Surfaced by `--check`.
@@ -2464,6 +2480,25 @@ TS_MCP_IMPORT_SCHEMA <- list(
         problems <- c(problems, sprintf(
           "%s: app-required key '%s' is not exposed by S3", m, f))
       }
+    }
+    # §H.6 : the action MIRROR. A path-driven importer routed as import_file
+    # (or the reverse) is refused by the app, but the tool must never write a
+    # scenario it can know is wrong — the same reasoning as the key check
+    # above.
+    mcp_is_path <- m %in% TS_MCP_PATH_MODULES
+    app_is_path <- m %in% TS_DRIVE_PATH_MODULES
+    if (!identical(mcp_is_path, app_is_path)) {
+      problems <- c(problems, sprintf(
+        "%s: action mirror mismatch (server path-driven = %s, app path-driven = %s)",
+        m, mcp_is_path, app_is_path))
+    }
+  }
+  # and the reverse direction: every app path-driven module must exist HERE,
+  # or the tool's module enum would silently omit it.
+  for (m in TS_DRIVE_PATH_MODULES) {
+    if (!m %in% TS_MCP_PATH_MODULES) {
+      problems <- c(problems, sprintf(
+        "%s: app path-driven importer missing from TS_MCP_PATH_MODULES", m))
     }
   }
   problems
@@ -2588,7 +2623,10 @@ TS_MCP_IMPORT_SCHEMA <- list(
     seq           = seq,
     session_token = token,
     module        = module,
-    action        = "import_file",
+    # §H.6 : the action is a PROPERTY OF THE MODULE, not of this tool — the
+    # path-driven importers are routed as `import_path` (the app refuses the
+    # other pairing), the 10x/Spatial importers keep `import_file`.
+    action        = if (module %in% TS_MCP_PATH_MODULES) "import_path" else "import_file",
     import        = blk$value
   )
   payload_bytes <- nchar(.ts_json(payload), type = "bytes")
@@ -2640,7 +2678,7 @@ TS_MCP_IMPORT_SCHEMA <- list(
     scenario_file = "scenario.json",     # basename only — never an absolute path
     seq           = seq,
     module        = module,
-    action        = "import_file",
+    action        = if (module %in% TS_MCP_PATH_MODULES) "import_path" else "import_file",
     import_keys   = names(blk$value),    # KEYS only — a value (a path) is NEVER echoed
     wildcard_used = FALSE,
     session = list(
@@ -3475,21 +3513,25 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
     list(name = "transcripto_drive_import",
          description = paste0(
            "CONTROLLED WRITE. Import data for ONE importer module by writing ONE ",
-           "tools/_drive/scenario.json with action=import_file, then stop. The ",
-           "importers are import_bulk (counts_path required; optional ",
-           "metadata_path, mode merged_matrix|per_sample), import_spatial ",
-           "(dir_path required; optional sample_name, technology ",
-           "visium|xenium|cosmx|slideseq) and import_sc (dir_path + sample_name ",
+           "tools/_drive/scenario.json, then stop. The action follows the module: ",
+           "import_path for the path-driven importers (import_velocity: path ",
+           "required, optional name — points at a CONFINED file, loom/h5ad/rds, ",
+           "feeding a fileInput pathway the browser agent cannot drive), ",
+           "import_file for the others (import_bulk: counts_path required; ",
+           "optional metadata_path, mode merged_matrix|per_sample; import_spatial: ",
+           "dir_path required; optional sample_name, technology ",
+           "visium|xenium|cosmx|slideseq; import_sc: dir_path + sample_name ",
            "required). Values are validated HERE (key set, required keys, enums, ",
            "text bounds, no `..` component) BEFORE the write. Root confinement, ",
-           "existence and loader kind are the APP's verdict: its refusal arrives ",
-           "as an `invalid` verdict in result.json, not as a tool error. Requires ",
-           "a live, ARMED session and a non-wildcard `expect.session_id`. Never ",
-           "reads a file, never loads data, never waits, never echoes a path back. ",
-           "Refusals: NO_SESSION, STALE_SESSION, INVALID_PROTOCOL, READ_FAILED, ",
-           "AMBIGUOUS_SESSION, SESSION_MISMATCH, SESSION_ASSERTION_REQUIRED, ",
-           "SESSION_NOT_ARMED, MODULE_NOT_ALLOWED, PAYLOAD_REFUSED, ",
-           "PAYLOAD_TOO_LARGE, SEQ_STALE, SCENARIO_WRITE_FAILED."),
+           "existence, extension allowlist and loader kind are the APP's verdict: ",
+           "its refusal arrives as an `invalid` verdict in result.json, not as a ",
+           "tool error. Requires a live, ARMED session and a non-wildcard ",
+           "`expect.session_id`. Never reads a file, never loads data, never ",
+           "waits, never echoes a path back. Refusals: NO_SESSION, ",
+           "STALE_SESSION, INVALID_PROTOCOL, READ_FAILED, AMBIGUOUS_SESSION, ",
+           "SESSION_MISMATCH, SESSION_ASSERTION_REQUIRED, SESSION_NOT_ARMED, ",
+           "MODULE_NOT_ALLOWED, PAYLOAD_REFUSED, PAYLOAD_TOO_LARGE, SEQ_STALE, ",
+           "SCENARIO_WRITE_FAILED."),
          inputSchema = list(
            type = "object",
            properties = list(

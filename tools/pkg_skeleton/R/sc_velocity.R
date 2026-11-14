@@ -3143,56 +3143,16 @@ sc_velocity_scvelo_optin_infer <- function(result, embedding, params = list()) {
 
     list(
         embedding_vectors = embedding_vectors,
-        gene_vectors = gene_vectors,
         params = p,
         banner = sc_velocity_optin_banner_label(),
         provenance = provenance
     )
 }
 
-#' P2.3 (FLAW V-FI) : resolution et confinement d'un fichier velocity sans fileInput
-#'
-#' @param path Chemin explicite (sinon lu depuis `env_var`).
-#' @param env_var Nom de la variable d'environnement de repli.
-#' @param roots Racines autorisees (via `ts_drive_import_roots()`).
-#' @param allowed_exts Extensions autorisees (sans point).
-#' @return Chemin normalise valide dans `roots`.
-ts_velocity_resolve_loom_path <- function(path = NULL,
-                                          env_var = "TS_VELOCITY_LOOM_PATH",
-                                          roots = ts_drive_import_roots(),
-                                          allowed_exts = c("loom", "h5ad", "rds")) {
-    candidate <- path
-    if (is.null(candidate) || !is.character(candidate) || length(candidate) != 1L ||
-        is.na(candidate) || !nzchar(trimws(candidate))) {
-        candidate <- Sys.getenv(env_var, unset = "")
-    }
-    candidate <- trimws(as.character(candidate)[1L])
-    if (!nzchar(candidate)) {
-        stop(errorCondition(
-            paste0("Chemin velocity absent (argument 'path' et variable '", env_var, "' vides)."),
-            class = "velocity_validation_error"
-        ))
-    }
-    if (grepl("(^|[\\\\/])\\.\\.([\\\\/]|$)", candidate)) {
-        stop(errorCondition(
-            paste0("Traversee '..' refusee pour le chemin velocity : ", candidate),
-            class = "velocity_validation_error"
-        ))
-    }
-    ext <- tolower(tools::file_ext(candidate))
-    if (!ext %in% tolower(allowed_exts)) {
-        stop(errorCondition(
-            paste0("Extension velocity non autorisee ('", ext, "') — attendues : ",
-                   paste(allowed_exts, collapse = ", "), "."),
-            class = "velocity_validation_error"
-        ))
-    }
-    v <- ts_drive_validate_import_path(candidate, roots = roots)
-    if (!isTRUE(v$ok)) {
-        stop(errorCondition(
-            paste0("Chemin velocity refuse (", v$reason %||% "hors racine", ") : ", candidate),
-            class = "velocity_validation_error"
-        ))
-    }
-    v$path
-}
+# P0.4 §H.6 (2026-11-14) : `ts_velocity_resolve_loom_path()` DÉMÉNAGÉ dans
+# R/core drive (tools/pkg_skeleton/R/drive_allowlist.R) comme wrapper de
+# `ts_resolve_data_path()` — c'est une affaire de DRIVE (confinement,
+# racines allowlistées), pas du moteur velocity ; le déménagement réconcilie
+# le pin « public API surface of sc_velocity.R is frozen » (le nom était
+# public ici sans être déclaré dans `velocity_public_api()`). Aucune copie :
+# une seule définition, dans la couche drive.
