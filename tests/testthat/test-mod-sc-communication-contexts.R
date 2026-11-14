@@ -20,6 +20,7 @@
 
 .VEL_FILE  <- "modules/sc/mod_sc_communication_velocity.R"
 .TRJ_FILE  <- "modules/sc/mod_sc_communication_trajectory.R"
+.SPATIAL_FILE <- "modules/sc/mod_sc_communication_spatial.R"
 .PERT_FILE <- "modules/sc/mod_sc_communication_perturbation.R"
 .PAR_FILE  <- "modules/sc/mod_sc_communication.R"
 
@@ -114,4 +115,134 @@ test_that("3F filtres : intitulés et bornes suivent la source (un rang n'est pa
   # Aucune borne fabriquée : les max viennent de la table canonique :
   expect_match(src, 'max(t$score, na.rm = TRUE)', fixed = TRUE)
   expect_match(src, 'max(t$rank, na.rm = TRUE)', fixed = TRUE)
+})
+
+# ── Lane 3b (2026-11-14, retour opérateur) : AUTO-CALCUL des contextes ──────
+# Demande opérateur : « do we need button suppression in Contextes
+# multi-modaux, and active data instead? » — les 3 contextes sans paramètre
+# utilisateur obligatoire (spatial, vélocité, trajectoire) se calculent
+# SEULS dès que leurs entrées sont réunies et qu'aucun contexte n'est établi
+# (plus de clic requis après un reload). Le bouton RESTE (recalcul explicite
+# après changement de paramètre). La perturbation garde son bouton SANS auto :
+# c'est une simulation pilotée par l'opérateur (cible/mode à choisir).
+# Gardes 3F IDENTIQUES (ready/disabled) — l'auto ne court-circuite aucune
+# garde, et un échec d'auto reste classé (notification, jamais muet).
+test_that("lane3b vélocité : calcul factorisé + auto-calcul sans clic", {
+  src <- .read(.VEL_FILE)
+  expect_match(src, ".vel_compute_ctx <- function", fixed = TRUE,
+               info = "calcul vélocité non factorisé")
+  expect_match(src, "observeEvent(input$vel_compute, { .vel_compute_ctx() })",
+               fixed = TRUE, info = "le bouton vel_compute ne délègue pas")
+  expect_match(src,
+               "observeEvent(c(comm_state$result, .vel_vr(), global_data$sc_obj), {",
+               fixed = TRUE, info = "auto-calcul vélocité absent")
+  expect_match(src, "if (!is.null(vel_ctx())) return()", fixed = TRUE,
+               info = "garde anti-recalcul absente (vélocité)")
+  # garde 3F consommée PAR l'auto (jamais court-circuitée) :
+  expect_match(src, "if (!.vel_ready(.vel_vr())) return()", fixed = TRUE,
+               info = "l'auto vélocité ne respecte pas la garde 3F")
+})
+
+test_that("lane3b spatial : calcul factorisé + auto-calcul quand la réduction est prête", {
+  src <- .read(.SPATIAL_FILE)
+  expect_match(src, ".spc_compute_ctx <- function", fixed = TRUE,
+               info = "calcul spatial non factorisé")
+  expect_match(src, "observeEvent(input$spc_compute, { .spc_compute_ctx() })",
+               fixed = TRUE, info = "le bouton spc_compute ne délègue pas")
+  expect_match(src,
+               "observeEvent(c(comm_state$result, global_data$sc_obj, input$spc_reduction), {",
+               fixed = TRUE, info = "auto-calcul spatial absent")
+  expect_match(src, "if (!is.null(spc_ctx())) return()", fixed = TRUE,
+               info = "garde anti-recalcul absente (spatial)")
+})
+
+test_that("lane3b trajectoire : calcul factorisé + auto-calcul garde pseudo-temps", {
+  src <- .read(.TRJ_FILE)
+  expect_match(src, ".trj_compute_ctx <- function", fixed = TRUE,
+               info = "calcul trajectoire non factorisé")
+  expect_match(src, "observeEvent(input$trj_compute, { .trj_compute_ctx() })",
+               fixed = TRUE, info = "le bouton trj_compute ne délègue pas")
+  # Fix live 2026-11-14 : input$trj_pt_col DOIT être un déclencheur — après un
+  # reload, sa valeur n'arrive qu'au round-trip client du updateSelectInput
+  # (sélection « pseudotime » posée par l'observer d'objet), APRÈS le dernier
+  # changement des autres déclencheurs ; sans cet abonnement l'auto rendait la
+  # main sur l'input NULL et ne se ré-exécutait jamais (mesuré : repro
+  # testServer snapshot réel POST-roitest, scratch_repro_contexts.R).
+  expect_match(src,
+               paste0("observeEvent(c(comm_state$result, .trj_meta_cols(), ",
+                      "global_data$sc_obj,\n                   input$trj_pt_col), {"),
+               fixed = TRUE,
+               info = paste("auto-calcul trajectoire sans abonnement input$trj_pt_col",
+                            "(l'auto ne se ré-exécute jamais au round-trip client)"))
+  expect_match(src, "if (!.trj_has_pseudotime(.trj_meta_cols())) return()", fixed = TRUE,
+               info = "l'auto trajectoire ne respecte pas la garde pseudo-temps")
+})
+
+test_that("lane3b perturbation : PAS d'auto-calcul (simulation pilotée opérateur)", {
+  src <- .read(.PERT_FILE)
+  expect_match(src, "observeEvent(input$pert_compute, {", fixed = TRUE,
+               info = "le bouton perturbation a disparu")
+  expect_identical(.n_hits(src, "pert_compute_ctx"), 0L,
+                   info = "la perturbation ne doit PAS s'auto-calculer")
+})
+
+# ── Lane 3c (2026-11-14, retour live « white card ») : reset conditionnel par identité ──
+# Mesuré en live (snapshot POST-roitest, parcours opérateur propre, log DIAG
+# /tmp/app_boot8.log) : au reload, le parent fait clear (result <- NULL) PUIS
+# le hook restaure le résultat ; l'auto-calcul s'exécute ENTRE les deux (il
+# voit la valeur COURANTE) et calcule le contexte ; le reset — dont le 1er
+# run est sauté par ignoreInit — arrive ensuite sur l'assignation restaurée
+# et efface un contexte calculé SUR le résultat courant ; le garde
+# anti-recalcul de l'auto (vel_ctx n'est pas son propre déclencheur) ne
+# re-déclenche pas → panneau blanc jusqu'au recalcul manuel. Ordre mesuré :
+# AUTO FIRE, AUTO FIRE, RESET(result non-null), RENDER ctx NULL.
+# Fix : le reset n'invalide que si le résultat courant diffère (identical)
+# du résultat source du contexte. Contrat : les 3 modules portent le garde.
+test_that("lane3c white card : reset des contextes conditionné par l'identité du résultat", {
+  for (f in c(.VEL_FILE, .TRJ_FILE, .SPATIAL_FILE)) {
+    src <- .read(f)
+    expect_match(src, "if (identical(comm_state$result, ", fixed = TRUE,
+                 info = paste("garde d'identité absente du reset dans", f))
+    expect_match(src, "_src(comm_state$result)", fixed = TRUE,
+                 info = paste("résultat source non enregistré au calcul dans", f))
+    expect_match(src, "_src(NULL)", fixed = TRUE,
+                 info = paste("résultat source non purgé à l'erreur dans", f))
+  }
+})
+
+test_that("lane3c perturbation : switch de cible gardé contre l'input non round-trippé", {
+  # Mesuré au repro testServer (cascade clear->restore, scratch_repro_contexts.R
+  # phase 3) : observeEvent(comm_state$result) -> .update_value_choices() ->
+  # .target_col() -> switch(input$pert_target) plantait (« EXPR must be a
+  # length 1 vector ») quand la cible n'a pas encore de valeur client.
+  src <- .read(.PERT_FILE)
+  expect_match(src, 'switch(input$pert_target %||% "ligand",', fixed = TRUE,
+               info = "switch pert_target sans garde NULL")
+})
+
+# ── Lane 3c : sentinelle du crash client shiny 1.14 (white card, cause racine) ──
+# Mesuré en live (collecteur window.onerror + trace XHR + log websocket) :
+# un updateSelect* à choices vides sans `selected` fait planter le CLIENT
+# (shiny.min.js s.setValue(u[0].value) sur liste d'options vide ; pour
+# server=TRUE le payload perd sa clé value — dropNulls retire le NULL).
+# L'exception ABORTE le traitement du lot : le websocket ne délivre plus
+# aucune valeur du module (vélocité/trajectoire/spatial calculées mais
+# jamais rendues). Le serveur était innocent (repro testServer : sorties OK).
+# Défense dans global.R : wrappers interceptant les appels non qualifiés —
+# selected = première valeur (comportement conservé) ou character(0) si
+# choices vides (payload value: [] -> branche sûre du client).
+test_that("lane3c sentinelle client : wrappers updateSelect* dans global.R", {
+  src <- .read("global.R")
+  expect_match(src, ".ts_update_safe_select_value <- function", fixed = TRUE,
+               info = "helper de valeur sûre absent de global.R")
+  expect_match(src, "updateSelectInput <- function(session, inputId", fixed = TRUE,
+               info = "wrapper updateSelectInput absent (résolution lexicale)")
+  expect_match(src, "updateSelectizeInput <- function(session, inputId", fixed = TRUE,
+               info = "wrapper updateSelectizeInput absent (résolution lexicale)")
+  # comportement : première valeur conservée, vide -> value vide (branche sûre)
+  expect_match(src, "if (length(vals)) vals[1] else character(0)", fixed = TRUE,
+               info = "la sémantique première-valeur / value-vide n'est pas verrouillée")
+  # label-only (choices NULL) et groupes (non atomique) traversés sans toucher
+  expect_match(src, "if (!is.atomic(choices)) return(NULL)", fixed = TRUE,
+               info = "les choices non atomiques ne sont pas protégés du changement de comportement")
 })

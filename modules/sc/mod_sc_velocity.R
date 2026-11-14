@@ -465,7 +465,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     observeEvent(global_data$sc_obj, {
       obj <- global_data$sc_obj
       if (is.null(obj)) {
-        updateSelectInput(session, "velocity_reduction", choices = character(0))
+        updateSelectInput(session, "velocity_reduction", choices = character(0), selected = character(0))
         return()
       }
       reds <- names(obj@reductions)
@@ -489,6 +489,8 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       velocity_state$plot_cache <- list()
       velocity_state$export_cache <- list()
       velocity_state$object_fingerprint <- NULL
+      # Lane 3b : l'état publié pour le snapshot est périmé avec l'objet.
+      shared_rv$velocity_panel_state <- NULL
 
       velocity_status_rv(
         .tr("Objet Seurat modifie : reimportez et validez les donnees velocity.")
@@ -527,6 +529,40 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       )
     }, ignoreInit = TRUE)
 
+    # Lane 3b (2026-11-14) : réhydratation du panneau Vélocité depuis le
+    # snapshot — app.R pose shared_rv$velocity_restore (one-shot) APRÈS les
+    # purges du cycle de chargement (epoch mod_sc + sc_obj ci-dessus, cf.
+    # session_results_pending). Les datapath des fileInput (inputs) ne
+    # voyagent JAMAIS (temporaires) ; les caches sont dérivés, recréés.
+    observeEvent(shared_rv$velocity_restore, {
+      pay <- shared_rv$velocity_restore
+      shared_rv$velocity_restore <- NULL  # one-shot
+      if (!is.list(pay)) return()
+      # Le résultat consommé (Communication/viz/rapport) est restauré même
+      # sans état de panneau (snapshots lane 3 v1).
+      shared_rv$velocity_result <- pay$velocity_result
+      st <- pay$panel_state
+      if (is.null(st) || !is.list(st)) return()
+      velocity_state$validated           <- st$validated
+      velocity_state$result              <- st$result
+      velocity_state$alignment           <- st$alignment
+      velocity_state$umap_vectors        <- st$umap_vectors
+      velocity_state$partial_embedding   <- st$partial_embedding
+      velocity_state$embedding_alignment <- st$embedding_alignment
+      velocity_state$vector_validation   <- st$vector_validation
+      # garde d'obsolescence : fingerprint recalculé SUR l'objet restauré.
+      velocity_state$object_fingerprint <-
+        if (!is.null(global_data$sc_obj)) velocity_object_fingerprint(global_data$sc_obj) else NULL
+      velocity_state$inputs <- NULL
+      velocity_state$plot_cache <- list()
+      velocity_state$export_cache <- list()
+      # Retour opérateur « phase portrait isn't » : le sélecteur de gène doit
+      # être peuplé SINON req(input$velocity_gene) laisse le phase portrait
+      # vide après reload — même helper que la validation.
+      .velocity_refresh_gene_selector()
+      velocity_status_rv(.tr("État velocity restauré depuis la session sauvegardée — ni ré-inféré ni recalculé."))
+    }, ignoreNULL = TRUE)
+
     # Helper to check fingerprint before plot/export — etat derive
     # stale_against_current_seurat_object (contrat Stage 8).
     .check_fingerprint <- function() {
@@ -539,6 +575,46 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         shiny::validate(shiny::need(FALSE, stale_msg))
       }
       invisible(TRUE)
+    }
+
+    # Lane 3b (2026-11-14) : publication de l'état du PANNEAU Vélocité vers
+    # l'état partagé — le snapshot de session l'embarque (le panneau retrouve
+    # ses matrices validées au reload, pas seulement le résultat consommé).
+    .velocity_publish_state <- function() {
+      if (is.null(shared_rv)) return(invisible(NULL))
+      shared_rv$velocity_panel_state <- list(
+        result              = velocity_state$result,
+        validated           = velocity_state$validated,
+        alignment           = velocity_state$alignment,
+        umap_vectors        = velocity_state$umap_vectors,
+        partial_embedding   = velocity_state$partial_embedding,
+        embedding_alignment = velocity_state$embedding_alignment,
+        vector_validation   = velocity_state$vector_validation,
+        object_fingerprint  = velocity_state$object_fingerprint
+      )
+      invisible(NULL)
+    }
+
+    # Lane 3b (retour opérateur « phase portrait isn't ») : alimentation du
+    # sélecteur de gène du phase portrait — UN SEUL helper partagé par la
+    # validation et la réhydratation (sans lui, req(input$velocity_gene)
+    # laisse le phase portrait vide après un reload : le sélecteur n'était
+    # peuplé que par la validation). 2D (O28) : heuristique marqueurs → HVG →
+    # variance unspliced → fallback.
+    .velocity_refresh_gene_selector <- function() {
+      validated <- velocity_state$validated
+      if (is.null(validated) || is.null(validated$spliced)) return(invisible(NULL))
+      gene_choices <- rownames(validated$spliced)
+      default_gene <- .velocity_phase_default_gene(
+        gene_choices,
+        markers_df   = shared_rv$markers_data,
+        var_features = tryCatch(VariableFeatures(global_data$sc_obj),
+                                error = function(e) character(0)),
+        unspliced    = validated$unspliced
+      )
+      updateSelectizeInput(session, "velocity_gene", choices = gene_choices,
+                        selected = default_gene %||% gene_choices[1], server = TRUE)
+      invisible(NULL)
     }
 
     # ── O13 (2026-10-27) : inférence scVelo OPT-IN — voie unique, explicite ──
@@ -559,6 +635,14 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         return()
       }
       sel_red <- input$velocity_reduction %||% "umap"
+      # P0.4 lane 1 (2026-11-13, demande opérateur) : l'inférence opt-in prend
+      # 10-90 s SANS aucun retour avant la fin/échec. Notification persistante
+      # (duration = NULL, sans bouton de fermeture) retirée par on.exit —
+      # succès COMME échec (elle ne doit jamais rester collée à l'écran).
+      nid_optin <- showNotification(
+        .tr("Inférence scVelo en cours (opt-in) — calcul Python en tâche de fond du moteur, comptez quelques dizaines de secondes…"),
+        type = "message", duration = NULL, closeButton = FALSE)
+      on.exit(removeNotification(nid_optin), add = TRUE)
       tryCatch({
         emb_all <- Seurat::Embeddings(global_data$sc_obj, reduction = sel_red)
         emb <- emb_all[canon$cell_names, seq_len(min(2L, ncol(emb_all))), drop = FALSE]
@@ -599,10 +683,29 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         velocity_state$result <- canonical2
         shared_rv$velocity_result <- canonical2
         provenance_append(shared_rv, inferred$provenance)
+        .velocity_publish_state()
         velocity_optin_banner_rv(.tr(inferred$banner))
         velocity_status_rv(.tr("Vecteurs inférés (scVelo opt-in) — affichage mis à jour."))
+        # P0.4 lane 1 (2026-11-13) : succès => on efface toute trace d'un
+        # échec opt-in antérieur (l'état honnête reflète la DERNIÈRE tentative).
+        velocity_state$optin_error <- NULL
         showNotification(.tr("Vecteurs calculés via scVelo (opt-in)."), type = "message", duration = 6)
       }, error = function(e) {
+        # P0.4 lane 1 (2026-11-13) : l'échec opt-in laissait l'état à
+        # « valid_no_vectors » sans AUCUNE trace de la raison (la notification
+        # de 12 s partait, l'opérateur voyait « aucun vecteur fourni » et les
+        # sessions headless n'avaient rien au console — mesuré P0.4). La raison
+        # est désormais PERSISTANTE : velocity_state$optin_error + statut.
+        velocity_state$optin_error <- list(
+          class = class(e)[[1L]],
+          message = conditionMessage(e),
+          when = format(Sys.time(), "%H:%M:%S")
+        )
+        message(sprintf("[velocity] inférence scVelo opt-in refusée [%s] : %s",
+                        velocity_state$optin_error$class,
+                        velocity_state$optin_error$message))
+        velocity_status_rv(paste0(.tr("Inférence scVelo (opt-in) refusée :"),
+                                  " ", conditionMessage(e)))
         showNotification(paste(.tr("Inférence scVelo (opt-in) refusée :"), conditionMessage(e)),
                          type = "error", duration = 12)
       })
@@ -611,6 +714,15 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     # Validation button (BUG 1-8, 10)
     observeEvent(input$velocity_validate, {
       req(global_data$sc_obj)
+
+      # P0.4 lane 1 (2026-11-13, demande opérateur) : même traitement que
+      # l'opt-in — la validation lit les couches sur de grosses matrices
+      # (quelques secondes sans aucun retour). Notification persistante
+      # retirée par on.exit (succès COMME échec).
+      nid_validate <- showNotification(
+        .tr("Validation des matrices velocity en cours — lecture spliced/unspliced et alignement…"),
+        type = "message", duration = NULL, closeButton = FALSE)
+      on.exit(removeNotification(nid_validate), add = TRUE)
 
       tryCatch({
         # CHRYSALIS 2E : garde d'entree explicite — le req() ci-dessus laisse
@@ -844,19 +956,12 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
 
         provenance_append(shared_rv, canonical$provenance)
 
-        # 10. Populate gene selector — 2D (O28) : heuristique marqueurs → HVG →
-        # variance unspliced → fallback (spéc §2.9 ; plus jamais le premier
-        # gène alphabétique brut).
-        gene_choices <- rownames(validated$spliced)
-        default_gene <- .velocity_phase_default_gene(
-          gene_choices,
-          markers_df   = shared_rv$markers_data,
-          var_features = tryCatch(VariableFeatures(global_data$sc_obj),
-                                  error = function(e) character(0)),
-          unspliced    = validated$unspliced
-        )
-        updateSelectizeInput(session, "velocity_gene", choices = gene_choices,
-                          selected = default_gene %||% gene_choices[1], server = TRUE)
+        # Lane 3b : publication panneau (validate succès).
+        .velocity_publish_state()
+
+        # 10. Populate gene selector — 2D (O28) — helper partagé avec la
+        # réhydratation lane 3b (zéro voie parallèle).
+        .velocity_refresh_gene_selector()
 
         # 11. French status summary : statut canonique explicite (+ BUG 3
         # message when only coordinates exist). Validite technique uniquement —

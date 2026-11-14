@@ -1041,6 +1041,12 @@ mod_sc_server <- function(id, global_data) {
 
     shared_rv <- create_sc_shared_state()
 
+    # Lane 3 (2026-11-14) : référence partagée exposée au niveau app — le
+    # snapshot de session (app.R, save_session_btn / load_session_file) porte
+    # les résultats d'analyse (velocity + communication + registre CC-2 +
+    # provenance) qui vivent dans ce reactiveValues.
+    global_data$sc_shared <- shared_rv
+
     # ── Invalidation des résultats quand le JEU DE DONNÉES est remplacé ──────
     # (audit 2026-09-27 §1.5 : sans purge, le rapport mélangeait le jeu B avec
     # les résultats du jeu A). L'epoch n'est incrémentée QUE par les

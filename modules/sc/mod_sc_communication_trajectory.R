@@ -56,7 +56,7 @@ mod_sc_communication_trajectory_ui <- function(id) {
                column(6, downloadButton(ns("dl_trj_heat_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
                column(6, downloadButton(ns("dl_trj_heat_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary"))))),
     fluidRow(
-      column(6, DT::dataTableOutput(ns("trj_pair_summary"), height = "260px")),
+      column(6, DT::dataTableOutput(ns("trj_pair_summary"), height = "auto", fill = FALSE)),
       column(6, downloadButton(ns("dl_trj_csv"), i18n$t("Exporter bins (CSV)"), class = "btn-sm btn-info w-100 mt-4")))
   )
 }
@@ -74,6 +74,10 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
         ggplot2::theme_void()
     }
     trj_ctx <- reactiveVal(NULL)
+    # Lane 3c (2026-11-14, retour live « white card ») : résultat source du
+    # contexte courant — permet au reset de n'invalider que les contextes
+    # PÉRIMÉS (voir l'observateur reset ci-dessous).
+    trj_src <- reactiveVal(NULL)
 
     .guard_stale <- function() {
       req(global_data$sc_obj, comm_state$result, comm_state$object_fingerprint)
@@ -83,13 +87,25 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
       }
     }
 
-    observeEvent(comm_state$result, { trj_ctx(NULL) }, ignoreInit = TRUE)
+    # Lane 3c (retour live « white card », mesuré au log DIAG 2026-11-14) :
+    # au reload, le parent fait clear (result <- NULL) PUIS restaure le
+    # résultat — l'auto-calcul s'exécute entre les deux (il voit la valeur
+    # COURANTE, déjà restaurée), et ce reset — dont le 1er run est sauté par
+    # ignoreInit — arrivait APRÈS et effaçait un contexte calculé SUR le
+    # résultat courant ; le garde anti-recalcul de l'auto ne re-déclenchant
+    # pas sur trj_ctx, le panneau restait vide jusqu'au clic. Invalider
+    # UNIQUEMENT si le résultat courant diffère de celui du contexte.
+    observeEvent(comm_state$result, {
+      if (identical(comm_state$result, trj_src())) return()
+      trj_ctx(NULL)
+      trj_src(NULL)
+    }, ignoreInit = TRUE)
 
     # Colonnes de pseudo-temps + assays disponibles sur l'objet courant.
     observeEvent(global_data$sc_obj, {
       obj <- global_data$sc_obj
       if (is.null(obj)) {
-        updateSelectInput(session, "trj_pt_col", choices = character(0))
+        updateSelectInput(session, "trj_pt_col", choices = character(0), selected = character(0))
         updateSelectInput(session, "trj_assay", choices = "RNA")
         return()
       }
@@ -184,7 +200,7 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
       setNames(as.character(meta[[col]]), rownames(meta))
     }
 
-    observeEvent(input$trj_compute, {
+    .trj_compute_ctx <- function() {
       .guard_stale()
       tryCatch({
         col <- input$trj_pt_col
@@ -230,6 +246,7 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
           )
         })
         trj_ctx(ctx)
+        trj_src(comm_state$result)
         if (!is.null(shared_rv)) provenance_append(shared_rv, ctx$provenance)
         pairs <- paste(ctx$pair_bin_table$sender_node, ctx$pair_bin_table$receiver_node, sep = "\r")
         pair_labels <- ifelse(is.na(ctx$pair_bin_table$lineage), pairs,
@@ -248,10 +265,35 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
         )
       }, error = function(e) {
         trj_ctx(NULL)
+        trj_src(NULL)
         showNotification(paste(.tr("Erreur contexte trajectoire :"), conditionMessage(e)),
                          type = "error", duration = 10)
       })
-    })
+    }
+
+    observeEvent(input$trj_compute, { .trj_compute_ctx() })
+
+    # Lane 3b (retour opérateur, 2026-11-14) : AUTO-CALCUL du contexte
+    # trajectoire — garde 3F identique (colonne de pseudo-temps présente et
+    # sélectionnée ; sinon le bouton est désactivé et l'auto attend).
+    # Fix retour live (2026-11-14, cycle opérateur post-reboot) : input
+    # $trj_pt_col DOIT être un déclencheur — après un reload, la valeur
+    # sélectionnée (« pseudotime ») n'arrive qu'au round-trip client du
+    # updateSelectInput, APRÈS le dernier changement des autres déclencheurs ;
+    # sans elle l'auto observait un input NULL, rendait la main, et ne se
+    # ré-exécutait JAMAIS (mesuré : repro testServer snapshot réel, statut
+    # trajectoire absent même après round-trip). Même motif que l'auto
+    # spatial, qui abonne correctement input$spc_reduction.
+    observeEvent(c(comm_state$result, .trj_meta_cols(), global_data$sc_obj,
+                   input$trj_pt_col), {
+      if (is.null(comm_state$result)) return()
+      if (!is.null(trj_ctx())) return()
+      if (!.trj_has_pseudotime(.trj_meta_cols())) return()
+      col <- input$trj_pt_col
+      if (is.null(col) || !nzchar(col)) return()
+      if (is.null(.identities())) return()
+      .trj_compute_ctx()
+    }, ignoreInit = FALSE)
 
     output$trj_status <- renderText({
       ctx <- trj_ctx()

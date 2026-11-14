@@ -42,7 +42,10 @@ mod_sc_communication_spatial_ui <- function(id) {
                  class = "btn-primary w-100", icon = icon("ruler")),
     div(class = "small text-muted mt-1", textOutput(ns("spc_status"))),
     hr(),
-    DT::dataTableOutput(ns("spc_table"), height = "320px"),
+    # P0.4 harmonisation (2026-11-14, demande opérateur) : plots AU-DESSUS de
+    # la table — le sélecteur de paire pilote les plots, il les précède.
+    # spc_table garde son scrollY CQF-1 (défile DANS son conteneur — épinglé
+    # par test-sc-communication-spatial.R), NON converti au contrat non-fill.
     fluidRow(
       column(6, selectizeInput(ns("spc_pair"), i18n$t("Paire sender → receiver"),
                                choices = character(0), width = "100%")),
@@ -55,7 +58,8 @@ mod_sc_communication_spatial_ui <- function(id) {
       column(6, plotOutput(ns("spc_distances"), height = "360px"),
              fluidRow(
                column(6, downloadButton(ns("dl_spc_dist_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
-               column(6, downloadButton(ns("dl_spc_dist_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))))
+               column(6, downloadButton(ns("dl_spc_dist_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary"))))),
+    DT::dataTableOutput(ns("spc_table"), height = "320px")
   )
 }
 
@@ -73,6 +77,10 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
         ggplot2::theme_void()
     }
     spc_ctx <- reactiveVal(NULL)
+    # Lane 3c (2026-11-14, retour live « white card ») : résultat source du
+    # contexte courant — permet au reset de n'invalider que les contextes
+    # PÉRIMÉS (voir l'observateur reset ci-dessous).
+    spc_src <- reactiveVal(NULL)
 
     # Garde de peremption (resultat canonique vs objet courant) — garde legere,
     # le portage complet reste dans le module parent.
@@ -85,7 +93,19 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
     }
 
     # Nouveau resultat importe -> contexte precedant perime (jamais affiche).
-    observeEvent(comm_state$result, { spc_ctx(NULL) }, ignoreInit = TRUE)
+    # Lane 3c (retour live « white card », mesuré au log DIAG 2026-11-14) :
+    # au reload, le parent fait clear (result <- NULL) PUIS restaure le
+    # résultat — l'auto-calcul s'exécute entre les deux (il voit la valeur
+    # COURANTE, déjà restaurée), et ce reset — dont le 1er run est sauté par
+    # ignoreInit — arrivait APRÈS et effaçait un contexte calculé SUR le
+    # résultat courant ; le garde anti-recalcul de l'auto ne re-déclenchant
+    # pas sur spc_ctx, le panneau restait vide jusqu'au clic. Invalider
+    # UNIQUEMENT si le résultat courant diffère de celui du contexte.
+    observeEvent(comm_state$result, {
+      if (identical(comm_state$result, spc_src())) return()
+      spc_ctx(NULL)
+      spc_src(NULL)
+    }, ignoreInit = TRUE)
 
     # Redutions 2D disponibles (>= 2 colonnes), defaut umap.
     observeEvent(global_data$sc_obj, {
@@ -150,7 +170,7 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
       }
     }
 
-    observeEvent(input$spc_compute, {
+    .spc_compute_ctx <- function() {
       .guard_stale()
       tryCatch({
         idents <- .identities()
@@ -172,6 +192,7 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
           perm_seed         = 1L
         )
         spc_ctx(ctx)
+        spc_src(comm_state$result)
         # Provenance PRODUITE au calcul (regle 7) — appended, jamais reconstruite.
         if (!is.null(shared_rv)) provenance_append(shared_rv, ctx$provenance)
         pairs <- paste(ctx$pair_table$sender_node, ctx$pair_table$receiver_node, sep = "\u2192")
@@ -185,10 +206,27 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
         )
       }, error = function(e) {
         spc_ctx(NULL)
+        spc_src(NULL)
         showNotification(paste(.tr("Erreur contexte spatial :"), conditionMessage(e)),
                          type = "error", duration = 10)
       })
-    })
+    }
+
+    observeEvent(input$spc_compute, { .spc_compute_ctx() })
+
+    # Lane 3b (retour opérateur, 2026-11-14) : AUTO-CALCUL du contexte spatial
+    # — nécessite une réduction 2D sélectionnée (l'observer d'objet peuple les
+    # choix) ; tant qu'elle manque, on attend (l'observer se re-déclenche quand
+    # les choix arrivent). Le bouton reste (recalcul après changement de
+    # source/rayon/permutations).
+    observeEvent(c(comm_state$result, global_data$sc_obj, input$spc_reduction), {
+      if (is.null(comm_state$result)) return()
+      if (!is.null(spc_ctx())) return()
+      red <- input$spc_reduction
+      if (is.null(red) || !nzchar(red)) return()
+      if (is.null(.identities())) return()
+      .spc_compute_ctx()
+    }, ignoreInit = FALSE)
 
     output$spc_status <- renderText({
       ctx <- spc_ctx()

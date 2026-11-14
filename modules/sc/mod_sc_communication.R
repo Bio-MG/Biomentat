@@ -294,20 +294,27 @@ mod_sc_communication_output_ui <- function(id) {
     # source de vérité). Les contenus des panneaux sont INCHANGÉS (surfaces
     # 3E/B5 « Harmonisation identites » et 2G « Limites » respectées verbatim) ;
     # les `value` ASCII explicites sont consommés par le tiroir 2L.
+    # P0.4 k1/k2 (2026-11-14, mesures live 1920×1080) : géométrie de la carte.
+    # Les DT passent en height="auto" + fill=FALSE — une hauteur fixe < au
+    # contenu paginé (~807 px pour 15 lignes) fait DÉBORDER le wrapper
+    # DataTables sur le plot voisin (chevauchements 407 px mesurés : Centralité,
+    # Perturbation, Contexte vélocité). DotPlot/Heatmap passent en fill=TRUE —
+    # la carte s'étire au viewport (~135 px de blanc mort mesuré sous les
+    # boutons PNG/PDF sinon). Contrat verrouillé par test-mod-sc-communication-ui.R.
     navset_tab(
       id = ns("comm_tabs"),
       nav_menu(i18n$t("Exploration des interactions"),
         nav_panel(i18n$t("Table interactions"), value = "ccc_tab_interactions",
-                  DT::dataTableOutput(ns("comm_table"), height = "520px")),
+                  DT::dataTableOutput(ns("comm_table"), height = "auto", fill = FALSE)),
         nav_panel(i18n$t("Table (filtres)"), value = "ccc_tab_table_filtres",
-                  DT::dataTableOutput(ns("comm_table_filtered"), height = "520px")),
+                  DT::dataTableOutput(ns("comm_table_filtered"), height = "auto", fill = FALSE)),
         nav_panel(i18n$t("DotPlot"), value = "ccc_tab_dotplot",
-                plotOutput(ns("comm_dotplot"), height = "480px"),
+                plotOutput(ns("comm_dotplot"), fill = TRUE),
                 fluidRow(
                   column(6, downloadButton(ns("dl_comm_dotplot_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
                   column(6, downloadButton(ns("dl_comm_dotplot_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
       nav_panel(i18n$t("Heatmap pathways"), value = "ccc_tab_heatmap",
-                plotOutput(ns("comm_heatmap"), height = "480px"),
+                plotOutput(ns("comm_heatmap"), fill = TRUE),
                 fluidRow(
                   column(6, downloadButton(ns("dl_comm_heatmap_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
                   column(6, downloadButton(ns("dl_comm_heatmap_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
@@ -319,10 +326,14 @@ mod_sc_communication_output_ui <- function(id) {
       nav_panel(i18n$t("Centralité"), value = "ccc_tab_centralite",
                 div(class = "small text-muted m-2",
                     i18n$t("Centralité dérivée du réseau, descriptive — ce n'est pas un contrôle biologique.")),
-                DT::dataTableOutput(ns("comm_centrality"), height = "420px"),
+                # P0.4 harmonisation (2026-11-14, demande opérateur) : plot
+                # AU-DESSUS de la table — synthèse graphique d'abord, détail
+                # tabulaire ensuite (règle homogène sur tous les panneaux
+                # mixtes de la carte ; verrou test-mod-sc-communication-ui.R).
                 # CC-1 : dot plot des rôles (voie × groupe) — affiché quand les
                 # rôles CellChat du moteur sont présents, message i18n sinon.
-                plotOutput(ns("comm_centrality_plot"), height = "420px")),
+                plotOutput(ns("comm_centrality_plot"), height = "420px"),
+                DT::dataTableOutput(ns("comm_centrality"), height = "auto", fill = FALSE)),
       # CC-2 (O34/D3) : comparaison inter-conditions des runs CellChat de
       # session (mergeCellChat + rankNet + similarité). Conditionnée à ≥ 2
       # runs complets dans le registre (message i18n propre sinon) — fiche
@@ -334,9 +345,9 @@ mod_sc_communication_output_ui <- function(id) {
                 actionButton(ns("btn_ccc_compare"), i18n$t("Lancer la comparaison"),
                              class = "btn-primary btn-sm m-2", icon = icon("scale-balanced")),
                 h6(i18n$t("Table rankNet — flux d'information relatif par voie"), class = "m-2 text-muted"),
-                DT::dataTableOutput(ns("ccc_comp_ranknet"), height = "360px"),
+                DT::dataTableOutput(ns("ccc_comp_ranknet"), height = "auto", fill = FALSE),
                 h6(i18n$t("Matrice de similarité des réseaux (computeNetSimilarityPairwise)"), class = "m-2 text-muted"),
-                DT::dataTableOutput(ns("ccc_comp_similarity"), height = "260px"))
+                DT::dataTableOutput(ns("ccc_comp_similarity"), height = "auto", fill = FALSE))
       ),
       nav_menu(i18n$t("Contextes multi-modaux"),
       # ── Contextes V1.x (roadmap CCC avancée : contrainte/ordre/contexte —
@@ -352,7 +363,7 @@ mod_sc_communication_output_ui <- function(id) {
       ),
       nav_menu(i18n$t("Traçabilité & qualité"),
       nav_panel(i18n$t("Schema source"), value = "ccc_tab_schema",
-                DT::dataTableOutput(ns("comm_schema"), height = "380px"),
+                DT::dataTableOutput(ns("comm_schema"), height = "auto", fill = FALSE),
                 div(class = "small text-muted mt-2", textOutput(ns("comm_schema_note")))),
       nav_panel(i18n$t("Harmonisation identites"), value = "ccc_tab_harmonisation",
                 # ── 3E (O28, spéc §2.17) : surface de validation propose/valide ──
@@ -376,9 +387,9 @@ mod_sc_communication_output_ui <- function(id) {
                                          icon = icon("check")))
                 ),
                 br(),
-                DT::dataTableOutput(ns("comm_proposals"), height = "300px"),
+                DT::dataTableOutput(ns("comm_proposals"), height = "auto", fill = FALSE),
                 hr(),
-                DT::dataTableOutput(ns("comm_mapping"), height = "380px")),
+                DT::dataTableOutput(ns("comm_mapping"), height = "auto", fill = FALSE)),
       nav_panel(i18n$t("QC import"), value = "ccc_tab_qc_import",
                 uiOutput(ns("comm_qc")))
       ),
@@ -485,6 +496,25 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       if (is.null(tr)) return(key)
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
+
+    # ── i18n : retraduire les choix des options de résultats au changement de langue ──
+    observeEvent(global_data$language, {
+      updateRadioButtons(session, "comm_source",
+                         choices = setNames(
+                           c("cellchat_engine", "cellchat", "cellchat_object",
+                             "cellphonedb", "liana", "liana_engine"),
+                           c(.tr("Calculer dans l'application (CellChat)"),
+                             .tr("CellChat (table exportee)"),
+                             .tr("Objet CellChat (.rds, resultats deja calcules)"),
+                             .tr("CellPhoneDB (means.txt)"),
+                             .tr("LIANA (rangs agreges)"),
+                             .tr("Calculer dans l'application (LIANA)"))))
+      updateSelectInput(session, "comm_engine_species",
+                        choices = setNames(
+                          c("human", "mouse"),
+                          c(.tr("Humain (CellChatDB.human)"),
+                            .tr("Souris (CellChatDB.mouse)"))))
+    }, ignoreInit = TRUE)
 
     # 2L (O28, spéc §2.23 point 2) : carte des sous-panneaux pour les sauts du
     # tiroir offcanvas. ⚠️ JUMELLE de la carte déclarée en local dans
@@ -693,6 +723,9 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       shared_rv$communication_result <- NULL
       shared_rv$communication_collection <- NULL
       shared_rv$active_communication_sample <- NULL
+      # Lane 3 : purger AUSSI les miroirs snapshot (registre + comparatif).
+      shared_rv$communication_ccc_registry <- NULL
+      shared_rv$communication_ccc_comparison <- NULL
       updateNumericInput(session, "comm_f_score_min", value = NA)
       updateNumericInput(session, "comm_f_pmax", value = NA)
       updateNumericInput(session, "comm_f_rank_max", value = NA)
@@ -796,7 +829,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                            tagList(tags$span(class = "text-primary", "\u25B8 "),
                                    .tr(pn$label))
                          else .tr(pn$label),
-                         class = paste("btn btn-link btn-sm text-start p-0 d-block",
+                         class = paste("btn btn-link btn-sm text-start p-0 d-block mb-1",
                                        if (active) "fw-bold"))
           }))
       })
@@ -864,6 +897,30 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       })
     })
 
+    # Lane 3 (2026-11-14) : alimentation des filtres d'affichage — UN SEUL
+    # helper partagé par le dépôt (.store_result) ET la réhydratation
+    # (hook lane 3 ci-dessous) : zéro voie parallèle.
+    .refresh_display_filters <- function(canonical) {
+      updateNumericInput(session, "comm_f_score_min", value = NA)
+      updateNumericInput(session, "comm_f_pmax", value = NA)
+      updateNumericInput(session, "comm_f_rank_max", value = NA)
+      t0 <- canonical$canonical_table
+      sender_nodes <- ifelse(!is.na(t0$sender_mapped), t0$sender_mapped, t0$sender)
+      receiver_nodes <- ifelse(!is.na(t0$receiver_mapped), t0$receiver_mapped, t0$receiver)
+      updateSelectizeInput(session, "comm_f_pathways",
+                           choices = sort(unique(stats::na.omit(t0$pathway))),
+                           selected = character(0))
+      updateSelectizeInput(session, "comm_f_senders",
+                           choices = sort(unique(sender_nodes)),
+                           selected = character(0))
+      updateSelectizeInput(session, "comm_f_receivers",
+                           choices = sort(unique(receiver_nodes)),
+                           selected = character(0))
+      # 3E (O28) : un nouveau depot invalide les propositions en attente.
+      prop_rv(NULL)
+      .prop_apply_pending_rv(NULL)
+    }
+
     # Depot d'un resultat canonique : IDENTIQUE pour les deux voies (import =
     # Path A, calcul = Path B). Factorise parce que la regle des deux voies
     # exige que les deux chemins deposent le resultat au MEME endroit — sinon
@@ -913,6 +970,9 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         reg[[lbl]] <- list(label = lbl, object = canonical$cellchat_object,
                            ts = Sys.time())
         comm_state$ccc_registry <- reg
+        # Lane 3 : le registre vit AUSSI dans l'état partagé — le snapshot de
+        # session l'embarque (Comparaison CC-2 survive au reload).
+        shared_rv$communication_ccc_registry <- reg
       }
       shared_rv$communication_result <- canonical
       shared_rv$communication_collection <- collection
@@ -920,25 +980,36 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       if (isTRUE(append_provenance)) {
         provenance_append(shared_rv, canonical$provenance)
       }
-      updateNumericInput(session, "comm_f_score_min", value = NA)
-      updateNumericInput(session, "comm_f_pmax", value = NA)
-      updateNumericInput(session, "comm_f_rank_max", value = NA)
-      t0 <- canonical$canonical_table
-      sender_nodes <- ifelse(!is.na(t0$sender_mapped), t0$sender_mapped, t0$sender)
-      receiver_nodes <- ifelse(!is.na(t0$receiver_mapped), t0$receiver_mapped, t0$receiver)
-      updateSelectizeInput(session, "comm_f_pathways",
-                           choices = sort(unique(stats::na.omit(t0$pathway))),
-                           selected = character(0))
-      updateSelectizeInput(session, "comm_f_senders",
-                           choices = sort(unique(sender_nodes)),
-                           selected = character(0))
-      updateSelectizeInput(session, "comm_f_receivers",
-                           choices = sort(unique(receiver_nodes)),
-                           selected = character(0))
-      # 3E (O28) : un nouveau depot invalide les propositions en attente.
-      prop_rv(NULL)
-      .prop_apply_pending_rv(NULL)
+      .refresh_display_filters(canonical)
     }
+
+    # Lane 3 (2026-11-14) : réhydratation depuis un snapshot de session —
+    # app.R pose shared_rv$communication_restore (one-shot) au chargement d'un
+    # snapshot portant results$communication. NI ré-inféré NI recalculé :
+    # l'état voyage tel quel (objet CellChat inclus), les filtres passent par
+    # le MÊME helper que le dépôt, le registre CC-2 restauré N'EST PAS
+    # re-registré (il y est déjà).
+    observeEvent(shared_rv$communication_restore, {
+      rs <- shared_rv$communication_restore
+      shared_rv$communication_restore <- NULL  # one-shot
+      if (!is.list(rs) || is.null(rs$result)) return()
+      comm_state$result <- rs$result
+      # garde d'obsolescence : fingerprint recalculé SUR l'objet restauré —
+      # le snapshot porte datasets et résultats du même monde.
+      comm_state$object_fingerprint <-
+        if (!is.null(global_data$sc_obj)) velocity_object_fingerprint(global_data$sc_obj) else NULL
+      comm_state$collection <- rs$collection
+      comm_state$active_sample <- rs$active_sample
+      comm_state$ccc_registry <- rs$ccc_registry
+      comm_state$ccc_comparison <- rs$ccc_comparison
+      shared_rv$communication_result <- rs$result
+      shared_rv$communication_collection <- rs$collection
+      shared_rv$active_communication_sample <- rs$active_sample
+      shared_rv$communication_ccc_registry <- rs$ccc_registry
+      shared_rv$communication_ccc_comparison <- rs$ccc_comparison
+      .refresh_display_filters(rs$result)
+      comm_status_rv(.tr("Résultats restaurés depuis la session sauvegardée — ni ré-inférés ni recalculés."))
+    }, ignoreNULL = TRUE)
 
     # ── Import + validation (orchestration uniquement) ─────────────────────
     observeEvent(input$comm_import, {
@@ -1545,6 +1616,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         return()
       }
       comm_state$ccc_comparison <- res
+      # Lane 3 : le dernier comparatif voyage dans le snapshot de session.
+      shared_rv$communication_ccc_comparison <- res
       showNotification(.tr("Comparaison CCC terminée."), type = "message", duration = 4)
     })
 

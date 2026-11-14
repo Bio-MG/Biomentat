@@ -41,7 +41,9 @@ mod_sc_communication_perturbation_ui <- function(id) {
                  class = "btn-primary w-100", icon = icon("flask")),
     div(class = "small text-muted mt-1", textOutput(ns("pert_status"))),
     hr(),
-    DT::dataTableOutput(ns("pert_table"), height = "320px"),
+    # P0.4 harmonisation (2026-11-14, demande opérateur) : plots AU-DESSUS de
+    # la table + k1 complétion — hauteur fixe < contenu paginé = débord du
+    # wrapper DataTables sur la rangée de plots (mesuré live : 407 px).
     fluidRow(
       column(6, plotOutput(ns("pert_delta"), height = "360px"),
              fluidRow(
@@ -53,7 +55,8 @@ mod_sc_communication_perturbation_ui <- function(id) {
                column(6, downloadButton(ns("dl_pert_nodes_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary"))))),
     fluidRow(
       column(6, downloadButton(ns("dl_pert_csv"), i18n$t("Exporter deltas (CSV)"), class = "btn-sm btn-info w-100")),
-      column(6, verbatimTextOutput(ns("pert_recap"))))
+      column(6, verbatimTextOutput(ns("pert_recap")))),
+    DT::dataTableOutput(ns("pert_table"), height = "auto", fill = FALSE)
   )
 }
 
@@ -82,8 +85,10 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
 
     # Choix de valeur synchronisé avec la cible ET la table (importée ou
     # filtrée par les filtres du panneau parent — aucun matching flou).
+    # Lane 3c : garde sur la cible pas encore round-trippée (NULL au 1er
+    # flush d'une restauration — switch(NULL) plantait l'observateur).
     .target_col <- function() {
-      switch(input$pert_target,
+      switch(input$pert_target %||% "ligand",
              ligand = "ligand", receptor = "receptor", interaction = "interaction",
              sender = "sender_node", receiver = "receiver_node")
     }
@@ -97,7 +102,7 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
     }
     .update_value_choices <- function() {
       if (is.null(comm_state$result)) {
-        updateSelectInput(session, "pert_value", choices = character(0))
+        updateSelectInput(session, "pert_value", choices = character(0), selected = character(0))
         return()
       }
       t <- .node_table()

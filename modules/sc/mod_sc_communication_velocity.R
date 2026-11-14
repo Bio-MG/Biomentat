@@ -31,8 +31,11 @@ mod_sc_communication_velocity_ui <- function(id) {
                  class = "btn-primary w-100", icon = icon("tachometer-alt")),
     div(class = "small text-muted mt-1", textOutput(ns("vel_status"))),
     hr(),
-    DT::dataTableOutput(ns("vel_table"), height = "300px"),
+    # P0.4 harmonisation (2026-11-14, demande opérateur) : plot AU-DESSUS de la
+    # table + k1 complétion — hauteur fixe < contenu paginé = débord du wrapper
+    # DataTables sur le voisin (mesuré live : conteneur ~400 px vs 807 px).
     plotOutput(ns("vel_plot"), height = "380px"),
+    DT::dataTableOutput(ns("vel_table"), height = "auto", fill = FALSE),
     fluidRow(
       column(3, downloadButton(ns("dl_vel_csv"), i18n$t("CSV"), class = "btn-sm btn-outline-secondary")),
       column(3, downloadButton(ns("dl_vel_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
@@ -48,6 +51,10 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
     vel_ctx <- reactiveVal(NULL)
+    # Lane 3c (2026-11-14, retour live « white card ») : résultat source du
+    # contexte courant — permet au reset de n'invalider que les contextes
+    # PÉRIMÉS (voir l'observateur reset ci-dessous).
+    vel_src <- reactiveVal(NULL)
 
     .guard_stale <- function() {
       req(global_data$sc_obj, comm_state$result, comm_state$object_fingerprint)
@@ -57,7 +64,19 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
       }
     }
 
-    observeEvent(comm_state$result, { vel_ctx(NULL) }, ignoreInit = TRUE)
+    observeEvent(comm_state$result, {
+      # Lane 3c (retour live « white card », mesuré au log DIAG 2026-11-14) :
+      # au reload, le parent fait clear (result <- NULL) PUIS restaure le
+      # résultat — l'auto-calcul s'exécute entre les deux (il voit la valeur
+      # COURANTE, déjà restaurée), et ce reset — dont le 1er run est sauté par
+      # ignoreInit — arrivait APRÈS et effaçait un contexte calculé SUR le
+      # résultat courant ; le garde anti-recalcul de l'auto ne re-déclenchant
+      # pas sur vel_ctx, le panneau restait vide jusqu'au clic. Invalider
+      # UNIQUEMENT si le résultat courant diffère de celui du contexte.
+      if (identical(comm_state$result, vel_src())) return()
+      vel_ctx(NULL)
+      vel_src(NULL)
+    }, ignoreInit = TRUE)
 
     output$vel_info <- renderText({
       vr <- if (!is.null(shared_rv)) state_get(shared_rv, "velocity_result") else NULL
@@ -112,7 +131,7 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
       setNames(as.character(meta[[col]]), rownames(meta))
     }
 
-    observeEvent(input$vel_compute, {
+    .vel_compute_ctx <- function() {
       .guard_stale()
       tryCatch({
         vr <- if (!is.null(shared_rv)) state_get(shared_rv, "velocity_result") else NULL
@@ -137,6 +156,7 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
           )
         })
         vel_ctx(ctx)
+        vel_src(comm_state$result)
         if (!is.null(shared_rv)) provenance_append(shared_rv, ctx$provenance)
         if (identical(ctx$status, "valid")) {
           showNotification(
@@ -153,10 +173,26 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
         }
       }, error = function(e) {
         vel_ctx(NULL)
+        vel_src(NULL)
         showNotification(paste(.tr("Erreur contexte vélocité :"), conditionMessage(e)),
                          type = "error", duration = 10)
       })
-    })
+    }
+
+    observeEvent(input$vel_compute, { .vel_compute_ctx() })
+
+    # Lane 3b (retour opérateur, 2026-11-14) : AUTO-CALCUL du contexte dès que
+    # les entrées sont réunies et qu'aucun contexte n'est établi — plus de
+    # clic requis après un reload. Le bouton reste (recalcul explicite après
+    # changement de paramètre). Garde 3F IDENTIQUE (.vel_ready) ; identités
+    # absentes = pas d'auto (échec garanti sinon).
+    observeEvent(c(comm_state$result, .vel_vr(), global_data$sc_obj), {
+      if (is.null(comm_state$result)) return()
+      if (!is.null(vel_ctx())) return()
+      if (!.vel_ready(.vel_vr())) return()
+      if (is.null(.identities())) return()
+      .vel_compute_ctx()
+    }, ignoreInit = FALSE)
 
     output$vel_status <- renderText({
       ctx <- vel_ctx()

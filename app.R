@@ -620,8 +620,12 @@ ui_static <- page_navbar(
     h6(i18n$t("Session"), style = "font-weight: bold;"),
     
     downloadButton("save_session_btn", i18n$t("💾 Sauvegarder Session"),
-                   
+
                    class = "btn-sm btn-outline-primary w-100"),
+
+    # Lane 3 (2026-11-14) : poids estimé du snapshot AVANT écriture +
+    # énoncé honnête de ce qui est embarqué (datasets + résultats d'analyse).
+    div(class = "small text-muted", textOutput("save_session_weight")),
     
     fileInput("load_session_file", i18n$t("📂 Charger Session (.rds)"),
 
@@ -1527,14 +1531,74 @@ server <- function(input, output, session) {
   
   # === SAUVEGARDE / CHARGEMENT DE SESSION (point 7) ===
   
+  # Lane 3b (2026-11-14) : la ré-injection des résultats d'analyse doit
+  # passer APRÈS les purges du cycle de chargement — l'observer d'epoch de
+  # mod_sc (F08) purge shared_rv$velocity_result et l'observer sc_obj de
+  # mod_sc_velocity RESET le panneau ; les observers s'exécutent dans l'ordre
+  # de création, celui-ci étant créé APRÈS mod_sc_server(), il s'exécute
+  # APRÈS ces purges dans le MÊME cycle de flush que le bump d'epoch. Les
+  # hooks one-shot des modules (velocity_restore / communication_restore)
+  # s'exécutent ensuite au cycle suivant, plus aucune purge en attente.
+  observeEvent(global_data$session_results_pending, {
+    pay <- global_data$session_results_pending
+    global_data$session_results_pending <- NULL  # one-shot
+    if (!is.list(pay)) return()
+    shared <- global_data$sc_shared
+    if (is.null(shared)) return()
+    if (!is.null(pay$velocity_restore)) {
+      shared$velocity_restore <- pay$velocity_restore
+    }
+    if (!is.null(pay$communication_restore)) {
+      shared$communication_restore <- pay$communication_restore
+    }
+    if (!is.null(pay$provenance)) shared$provenance <- pay$provenance
+  })
+
+  # Lane 3 (2026-11-14) : poids estimé du snapshot AVANT écriture — le panneau
+  # énonce honnêtement ce qui est embarqué et à quel coût (§K proposition 2).
+  output$save_session_weight <- renderText({
+    shared <- global_data$sc_shared
+    parts <- list(global_data$sc_obj, global_data$sc_datasets,
+                  global_data$bulk_obj, global_data$bulk_datasets,
+                  global_data$bulk_multi_comparison,
+                  global_data$spatial_obj, global_data$spatial_datasets,
+                  global_data$spatial_results_cache, global_data$spatial_reference,
+                  global_data$spatial_multi_integration)
+    extra <- if (!is.null(shared)) list(
+      shared$velocity_result, shared$communication_result,
+      shared$communication_collection, shared$communication_ccc_registry,
+      shared$communication_ccc_comparison, shared$provenance) else list()
+    total_mb <- sum(vapply(c(parts, extra), function(x)
+      if (is.null(x)) 0 else as.numeric(object.size(x)) / 1024^2, numeric(1)))
+    has_results <- !is.null(shared) &&
+      (!is.null(shared$velocity_result) || !is.null(shared$communication_result))
+    n_runs <- length(shared$communication_ccc_registry %||% list())
+    if (total_mb < 0.1 && !has_results) {
+      return("Snapshot : vide — importez d'abord des données.")
+    }
+    paste0(
+      sprintf("Snapshot estimé ≈ %.0f Mo — datasets + %s",
+              total_mb,
+              if (has_results) paste0("résultats d'analyse (CellChat ×", n_runs,
+                                      " run(s), velocity ✓)") else "aucun résultat d'analyse"),
+      ".")
+  })
+
   output$save_session_btn <- downloadHandler(
     
     filename = function() paste0("biomentat_session_", Sys.Date(), ".rds"),
     
     content  = function(file) {
-      
+
+      # Lane 3 (2026-11-14) : résultats d'analyse embarqués dans le snapshot —
+      # velocity (vecteurs d'embedding consommés par Communication/viz) +
+      # communication (table canonique + objet CellChat) + registre comparatif
+      # CC-2 + journal de provenance. Référence partagée publiée par
+      # mod_sc_server (global_data$sc_shared — NULL avant init du module sc).
+      shared <- global_data$sc_shared
+
       session_snapshot <- list(
-        
+
         sc_obj      = global_data$sc_obj,
 
         sc_datasets = global_data$sc_datasets,
@@ -1546,25 +1610,51 @@ server <- function(input, output, session) {
         bulk_multi_comparison = global_data$bulk_multi_comparison,
 
         spatial_obj = global_data$spatial_obj,
-        
+
         spatial_datasets = global_data$spatial_datasets,
-        
+
         active_spatial_dataset = global_data$active_spatial_dataset,
-        
+
         spatial_results_cache = global_data$spatial_results_cache,
-        
+
         spatial_reference = global_data$spatial_reference,
-        
+
         spatial_multi_integration = global_data$spatial_multi_integration,
-        
+
+        results = if (!is.null(shared)) list(
+          velocity_result             = shared$velocity_result,
+          velocity_panel_state        = shared$velocity_panel_state,
+          communication_result        = shared$communication_result,
+          communication_collection    = shared$communication_collection,
+          active_communication_sample = shared$active_communication_sample,
+          ccc_registry                = shared$communication_ccc_registry,
+          ccc_comparison              = shared$communication_ccc_comparison,
+          provenance                  = shared$provenance
+        ) else NULL,
+
         saved_at    = Sys.time(),
-        
+
         app_version = "Biomentat v1.0"
-        
+
       )
-      
+
       saveRDS(session_snapshot, file)
-      
+
+      sz <- suppressWarnings(file.info(file)$size)
+      if (!is.na(sz)) {
+        showNotification(
+          sprintf(paste0("💾 Session sauvegardée (%.1f Mo). Résultats d'analyse inclus : ",
+                         "velocity %s · communication %s · registre CellChat %d run(s)."),
+                  sz / 1024^2,
+                  if (is.null(session_snapshot$results) ||
+                      is.null(session_snapshot$results$velocity_result)) "✗" else "✓",
+                  if (is.null(session_snapshot$results) ||
+                      is.null(session_snapshot$results$communication_result)) "✗" else "✓",
+                  length(session_snapshot$results$ccc_registry %||% list())),
+          type = "message", duration = 8
+        )
+      }
+
     }
     
   )
@@ -1657,6 +1747,54 @@ server <- function(input, output, session) {
       # jeux SC et Bulk. Sans bump d'epoch, les résultats partagés du jeu
       # précédent survivent et le rapport consolidé mélange deux jeux.
       .ts_bump_all_epochs(global_data)
+
+      # Lane 3b (2026-11-14) : la restauration passe par le PENDING PAYLOAD —
+      # l'observer session_results_pending (créé après mod_sc_server) réinjecte
+      # APRÈS les purges d'epoch/sc_obj du même cycle de flush. Directement
+      # poser shared$velocity_result ici = purgé juste après par l'observer
+      # d'epoch (bug mesuré par l'opérateur : « velocity nothing saved »).
+      # Anciens formats : dégradation HONNÊTE annoncée (pas de restauration
+      # silencieuse partielle).
+      shared <- global_data$sc_shared
+      res <- snapshot$results
+      if (!is.null(shared) && is.list(res)) {
+        global_data$session_results_pending <- list(
+          velocity_restore = list(
+            velocity_result = res$velocity_result,
+            panel_state     = res$velocity_panel_state
+          ),
+          communication_restore = if (!is.null(res$communication_result)) list(
+            result        = res$communication_result,
+            collection    = res$communication_collection,
+            active_sample = res$active_communication_sample,
+            ccc_registry  = res$ccc_registry,
+            ccc_comparison = res$ccc_comparison
+          ) else NULL,
+          provenance = res$provenance
+        )
+        showNotification(
+          paste0(
+            "✓ Résultats d'analyse restaurés : velocity ",
+            ifelse(is.null(res$velocity_result) && is.null(res$velocity_panel_state),
+                   "absent du snapshot",
+                   ifelse(is.null(res$velocity_panel_state), "✓ (résultat seul)",
+                          "✓ (panneau complet)")),
+            " · communication ",
+            ifelse(is.null(res$communication_result), "absent du snapshot", "✓"),
+            ifelse(length(res$ccc_registry %||% list()) > 0,
+                   paste0(" (registre CellChat : ", length(res$ccc_registry),
+                          " run(s) — Comparaison CC-2 disponible)"), ""),
+            " — rien n'est ré-inféré ni recalculé."),
+          type = "message", duration = 8
+        )
+      } else if (is.null(res)) {
+        showNotification(
+          paste0("ℹ️ Snapshot d'un format antérieur : les résultats d'analyse ",
+                 "(velocity/communication CellChat) ne sont pas embarqués — ",
+                 "re-sauvegardez depuis cette version pour les inclure."),
+          type = "warning", duration = 10
+        )
+      }
       
       
       

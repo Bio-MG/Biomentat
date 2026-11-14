@@ -355,3 +355,197 @@ test_that("P1-6b : LIANA délégué à un worker mirai, repli synchrone tracé",
   # Le moteur n'est PAS re-câblé en dur dans l'observer sync principal :
   expect_match(src, "liana_task$invoke(obj, args)", fixed = TRUE)
 })
+
+# =============================================================================
+# P0.4 suite (2026-11-14) — k1 / k2 / §F : géométrie de la carte Communication
+# =============================================================================
+# Mesures live 1920×1080 (session opérateur CellChat 503 interactions, tour du
+# 2026-11-14 ; rapport QC/p04_live_check_2026-11-13 §K) :
+#   k1 — CHAQUE DT de la carte déclare une hauteur FIXE plus PETITE que son
+#        contenu paginé naturel (15 lignes ≈ 807 px mesurés). Le wrapper
+#        DataTables déborde (overflow visible) et recouvre le plot voisin :
+#        Centralité (chevauchement 407 px mesuré), Perturbation in silico
+#        (407 px), Contexte vélocité (407 px — plot masqué à 100 %),
+#        Table interactions (footer/pagination sur le contenu voisin).
+#        Cause exacte : dataTableOutput(..., height = "420px") contraint le
+#        CONTENEUR, le contenu ne scrolle pas (aucun scrollY) et le moteur de
+#        remplissage bslib écrase en plus le conteneur (~400 px mesurés).
+#   k2 — les cartes DotPlot / Heatmap pathways s'étirent à la hauteur du
+#        viewport (829 px mesurés) pour ~604 px de contenu : ~135 px de blanc
+#        mort SOUS les boutons PNG/PDF (mesure DOM live).
+#   §F — tiroir Navigation CCC : chips empilées SANS interligne (chips se
+#        touchant, 24_comm_drawer.png + live 2026-11-14).
+#
+# Contrat source (RED avant fix) :
+#   (1) les 8 dataTableOutput du module passent en height = "auto" +
+#       fill = FALSE — taille naturelle, la carte scrolle au lieu de
+#       superposer ;
+#   (2) comm_dotplot + comm_heatmap passent en fill = TRUE sans hauteur fixe
+#       (le plot absorbe l'espace disponible — plus de blanc mort) ;
+#       comm_circle / comm_centrality_plot gardent leurs hauteurs explicites
+#       (réseau et dot-plot de centralité : gabarits stables voulus) ;
+#   (3) les chips du tiroir portent mb-1 (interligne).
+# =============================================================================
+test_that("P0.4 k1 : aucun DT de la carte Communication n'est plus contraint par une hauteur fixe", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "sc",
+                                   "mod_sc_communication.R"),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # les anciens appels à hauteurs fixées ont DISPARU (par id — précis, les
+  # mêmes hauteurs restent légitimes sur les plotOutput voisins) :
+  olds <- c("comm_table" = "520px", "comm_table_filtered" = "520px",
+            "comm_centrality" = "420px", "ccc_comp_ranknet" = "360px",
+            "ccc_comp_similarity" = "260px", "comm_schema" = "380px",
+            "comm_proposals" = "300px", "comm_mapping" = "380px")
+  for (id in names(olds)) {
+    expect_identical(
+      .n_hits(src, paste0('DT::dataTableOutput(ns("', id, '"), height = "', olds[[id]], '")')),
+      0L, info = paste0("k1 : hauteur DT fixe héritée subsiste — ", id))
+    expect_match(src,
+                 paste0('DT::dataTableOutput(ns("', id, '"), height = "auto", fill = FALSE)'),
+                 fixed = TRUE, info = paste0("k1 : DT non-fill absent — ", id))
+  }
+})
+
+test_that("P0.4 k2 : DotPlot et Heatmap pathways remplissent l'espace disponible", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "sc",
+                                   "mod_sc_communication.R"),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src, 'plotOutput(ns("comm_dotplot"), fill = TRUE)',
+               fixed = TRUE, info = "k2 : DotPlot pas fill")
+  expect_match(src, 'plotOutput(ns("comm_heatmap"), fill = TRUE)',
+               fixed = TRUE, info = "k2 : Heatmap pas fill")
+  expect_identical(.n_hits(src, 'plotOutput(ns("comm_dotplot"), height = "480px")'), 0L,
+                   info = "k2 : hauteur fixe DotPlot subsiste")
+  expect_identical(.n_hits(src, 'plotOutput(ns("comm_heatmap"), height = "480px")'), 0L,
+                   info = "k2 : hauteur fixe Heatmap subsiste")
+  # gabarits stables conservés :
+  expect_match(src, 'plotOutput(ns("comm_circle"), height = "520px")', fixed = TRUE)
+  expect_match(src, 'plotOutput(ns("comm_centrality_plot"), height = "420px")', fixed = TRUE)
+})
+
+test_that("P0.4 §F : interligne des chips du tiroir Navigation CCC", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "sc",
+                                   "mod_sc_communication.R"),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src, '"btn btn-link btn-sm text-start p-0 d-block mb-1"',
+               fixed = TRUE, info = "§F : chips sans interligne (mb-1 absent)")
+})
+
+# =============================================================================
+# P0.4 harmonisation (2026-11-14, demande opérateur) : plot AU-DESSUS de la
+# table + complétion k1 des sous-modules
+# =============================================================================
+# L'opérateur a épinglé les plots de Centralité / Contexte spatial / Contexte
+# vélocité / Perturbation : « plot should be upper table » — hiérarchie visuelle
+# homogène sur TOUS les panneaux mixtes de la carte Communication (synthèse
+# graphique d'abord, détail tabulaire ensuite). Trajectoire était déjà dans
+# cet ordre — garde anti-régression.
+# Par ailleurs les DT des sous-modules portaient ENCORE les hauteurs fixes de
+# la famille k1 (vel_table 300px, pert_table 320px, trj_pair_summary 260px —
+# conteneurs écrasés ~400 px vs wrapper naturel ~807 px, mesurés live) :
+# complétion du contrat non-fill posé pour la carte mère. spc_table garde son
+# scrollY CQF-1 (défile DANS son conteneur, épinglé par
+# test-sc-communication-spatial.R) — NON converti.
+# =============================================================================
+test_that("P0.4 harmonisation : le plot précède la table dans les panneaux mixtes", {
+  # carte mère — Centralité
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "sc",
+                                   "mod_sc_communication.R"), warn = FALSE,
+                         encoding = "UTF-8"), collapse = "\n")
+  expect_lt(regexpr('plotOutput(ns("comm_centrality_plot")', src, fixed = TRUE)[1],
+            regexpr('DT::dataTableOutput(ns("comm_centrality")', src, fixed = TRUE)[1])
+  # sous-module vélocité
+  srcv <- paste(readLines(file.path(ts_project_root(), "modules", "sc",
+                                    "mod_sc_communication_velocity.R"), warn = FALSE,
+                          encoding = "UTF-8"), collapse = "\n")
+  expect_lt(regexpr('plotOutput(ns("vel_plot")', srcv, fixed = TRUE)[1],
+            regexpr('DT::dataTableOutput(ns("vel_table")', srcv, fixed = TRUE)[1])
+  # sous-module perturbation
+  srcp <- paste(readLines(file.path(ts_project_root(), "modules", "sc",
+                                    "mod_sc_communication_perturbation.R"), warn = FALSE,
+                          encoding = "UTF-8"), collapse = "\n")
+  expect_lt(regexpr('plotOutput(ns("pert_delta")', srcp, fixed = TRUE)[1],
+            regexpr('DT::dataTableOutput(ns("pert_table")', srcp, fixed = TRUE)[1])
+  # sous-module spatial : plots (edges/distances) précèdent la table
+  srcs <- paste(readLines(file.path(ts_project_root(), "modules", "sc",
+                                    "mod_sc_communication_spatial.R"), warn = FALSE,
+                          encoding = "UTF-8"), collapse = "\n")
+  expect_lt(regexpr('plotOutput(ns("spc_edges")', srcs, fixed = TRUE)[1],
+            regexpr('DT::dataTableOutput(ns("spc_table")', srcs, fixed = TRUE)[1])
+  # trajectoire : déjà harmonisée — garde anti-régression
+  srct <- paste(readLines(file.path(ts_project_root(), "modules", "sc",
+                                    "mod_sc_communication_trajectory.R"), warn = FALSE,
+                          encoding = "UTF-8"), collapse = "\n")
+  expect_lt(regexpr('plotOutput(ns("trj_curves")', srct, fixed = TRUE)[1],
+            regexpr('DT::dataTableOutput(ns("trj_pair_summary")', srct, fixed = TRUE)[1])
+})
+
+test_that("P0.4 k1 complétion : les DT des sous-modules passent en non-fill naturel", {
+  for (item in list(
+    list("mod_sc_communication_velocity.R", "vel_table", "300px"),
+    list("mod_sc_communication_perturbation.R", "pert_table", "320px"),
+    list("mod_sc_communication_trajectory.R", "trj_pair_summary", "260px"))) {
+    src <- paste(readLines(file.path(ts_project_root(), "modules", "sc", item[[1]]),
+                           warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+    expect_match(src,
+                 paste0('DT::dataTableOutput(ns("', item[[2]],
+                        '"), height = "auto", fill = FALSE)'),
+                 fixed = TRUE, info = paste0("k1 complétion : ", item[[1]]))
+    expect_identical(
+      .n_hits(src, paste0('DT::dataTableOutput(ns("', item[[2]],
+                          '"), height = "', item[[3]], '")')),
+      0L, info = paste0("k1 complétion : hauteur fixe résiduelle — ", item[[1]]))
+  }
+})
+
+# =============================================================================
+# Lane 3 (2026-11-14) — sauvegarde de session COMPLÈTE (§K proposition 2)
+# =============================================================================
+# Contrats source : le snapshot app.R porte les résultats d'analyse, la
+# restauration pose le déclencheur one-shot, le module publie le registre CC-2
+# et réhydrate via le helper partagé. Comportement testé par
+# test-sc-communication-session-restore.R.
+# =============================================================================
+test_that("lane3 : le snapshot app.R embarque les résultats d'analyse", {
+  src <- paste(readLines(file.path(ts_project_root(), "app.R"),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src, "results = if (!is.null(shared)) list(", fixed = TRUE,
+               info = "sous-liste results absente du snapshot")
+  for (f in c("velocity_result", "communication_result", "communication_collection",
+              "active_communication_sample", "communication_ccc_registry",
+              "communication_ccc_comparison", "provenance")) {
+    expect_match(src, paste0("shared$", f), fixed = TRUE,
+                 info = paste0("champ results absent : ", f))
+  }
+  expect_match(src, "global_data$session_results_pending <- list(", fixed = TRUE,
+               info = "pending payload absent du chargement (lane 3b)")
+  expect_match(src, "communication_restore = if (!is.null(res$communication_result)) list(",
+               fixed = TRUE, info = "déclencheur de réhydratation non posé au chargement")
+  expect_match(src, "global_data$sc_shared", fixed = TRUE,
+               info = "pont shared_rv absent d'app.R")
+  expect_match(src, "output$save_session_weight <- renderText(", fixed = TRUE,
+               info = "poids estimé du snapshot absent (honnêteté §K)")
+})
+
+test_that("lane3 : le module publie le registre CC-2 et réhydrate depuis le snapshot", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "sc",
+                                   "mod_sc_communication.R"),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src, "shared_rv$communication_ccc_registry <- reg", fixed = TRUE,
+               info = "publication registre CC-2 absente du dépôt")
+  expect_match(src, "shared_rv$communication_ccc_comparison <- res", fixed = TRUE,
+               info = "publication comparatif CCC absent")
+  expect_match(src, "observeEvent(shared_rv$communication_restore", fixed = TRUE,
+               info = "hook de réhydratation absent")
+  expect_match(src, "Résultats restaurés depuis la session sauvegardée", fixed = TRUE,
+               info = "statut honnête de restauration absent")
+  # zéro voie parallèle : dépôt et réhydratation partagent le MÊME helper
+  expect_match(src, ".refresh_display_filters(canonical)", fixed = TRUE)
+  expect_match(src, ".refresh_display_filters(rs$result)", fixed = TRUE)
+})
+
+test_that("lane3 : mod_sc.R expose la référence partagée à l'app", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "sc", "mod_sc.R"),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src, "global_data$sc_shared <- shared_rv", fixed = TRUE)
+})
