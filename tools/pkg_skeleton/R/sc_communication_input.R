@@ -491,8 +491,20 @@ cellchat_input_from_matrix <- function(data, features, labels, species = NULL,
     type          = "cellchat_input",
     status        = "valid",
     data          = data,
-    meta          = data.frame(Cell = colnames(data), labels = labels,
-                               stringsAsFactors = FALSE),
+    # §H.9a (2026-11-14) : les rownames de $meta portent les VRAIS barcodes —
+    # un data.frame sans rownames arrive à createCellChat() avec des index
+    # numériques (1, 2, 3…) et CellChat lève « cell barcodes in 'meta' is
+    # 1 2 3 4 5 6… » : l'alignement meta/matrice repose alors sur l'ORDRE, pas
+    # sur l'identité — exactement le doute d'alignement rapporté par
+    # l'opérateur. Le `samples` explicite (« sample1 ») colle à l'attente v2
+    # de createCellChat (split multi-datasets) : une seule valeur pour un
+    # jeu unique, la colonne `Cell` garde les barcodes (pin test-cellchat-input).
+    meta          = local({
+      m <- data.frame(Cell = colnames(data), labels = labels,
+                      samples = "sample1", stringsAsFactors = FALSE)
+      rownames(m) <- colnames(data)
+      m
+    }),
     group_by      = group_by,
     species       = tolower(as.character(species)),
     database      = db,

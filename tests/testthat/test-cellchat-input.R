@@ -79,6 +79,15 @@ test_that("cellchat_input_from_matrix produces a CellChat-ready object", {
   # meta is aligned with the data columns, exactly as createCellChat() expects
   expect_identical(x$meta$Cell, colnames(x$data))
   expect_identical(x$meta$labels, unname(lab))
+  # §H.9a (2026-11-14) : les rownames de $meta portent les VRAIS barcodes —
+  # un data.frame sans rownames arrivait à createCellChat() avec des index
+  # numériques (1, 2, 3…) et CellChat levait « cell barcodes in 'meta' is
+  # 1 2 3 4 5 6… » : l'alignement meta/matrice reposait sur l'ORDRE.
+  expect_identical(rownames(x$meta), colnames(x$data))
+  # colonne `samples` explicite (attente v2 de createCellChat, split
+  # multi-datasets) — une seule valeur pour un jeu unique
+  expect_true("samples" %in% colnames(x$meta))
+  expect_identical(unique(x$meta$samples), "sample1")
   expect_equal(x$input_summary$n_populations, 3L)
   expect_true(nzchar(x$object_identity$fingerprint))
   expect_identical(x$analysis_id, "sc-cellchat-input")

@@ -731,6 +731,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       comm_state$collection <- NULL
       comm_state$active_sample <- NULL
       comm_state$context_cells <- NULL
+      # §H.9b : la signature de calcul vit avec le résultat qu'elle décrit.
+      comm_state$compute_signature <- NULL
       # CC-2 : le registre comparatif vit dans le MÊME contexte que le run
       # (un nouveau jeu de données invalide la comparaison en cours) — purgé
       # avec le reste, jamais conservé au-delà du contexte.
@@ -943,6 +945,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     # elles divergeraient, et une divergence est un bug.
     .store_result <- function(canonical, obj, append_provenance = TRUE,
                               collection = NULL, active_sample = NULL) {
+      # §H.9b : tout dépôt purge la signature de recalcul — elle ne décrit
+      # plus le résultat affiché ; .apply_cellchat_result la repose pour la
+      # voie CellChat (un import ou un run LIANA la rend caduque).
+      comm_state$compute_signature <- NULL
       context_cells <- NULL
       if (!is.null(collection) && length(active_sample) == 1L &&
           !is.na(active_sample) && nzchar(as.character(active_sample))) {
@@ -1009,6 +1015,9 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       rs <- shared_rv$communication_restore
       shared_rv$communication_restore <- NULL  # one-shot
       if (!is.list(rs) || is.null(rs$result)) return()
+      # §H.9b : un résultat RESTAURÉ n'est pas un calcul de cette session —
+      # la signature de recalcul ne le décrit pas.
+      comm_state$compute_signature <- NULL
       comm_state$result <- rs$result
       # garde d'obsolescence : fingerprint recalculé SUR l'objet restauré —
       # le snapshot porte datasets et résultats du même monde.
@@ -1031,6 +1040,9 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     observeEvent(input$comm_import, {
       req(global_data$sc_obj)
       tryCatch({
+        # §H.9b : un import remplace le résultat affiché — la purge de la
+        # signature de recalcul se fait au dépôt (.store_result), point
+        # unique ; aucune ligne ici (une règle, un endroit).
         src <- input$comm_source %||% "cellchat_engine"
         if (identical(src, "cellchat_engine") || identical(src, "liana_engine")) {
            .import_ui_stop(
@@ -1235,6 +1247,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       file.path(.ts_sc_daemon_root(), "tools", "pkg_skeleton", "R", "sc_communication_input.R"),
       file.path(.ts_sc_daemon_root(), "tools", "pkg_skeleton", "R", "sc_communication_engine.R")
     )
+    # §H.9b : signature de la DERNIÈRE invocation CellChat — la voie async
+    # la relit à l'achèvement (l'objet args du mirai n'est pas relisibles par
+    # l'observateur) ; posée à l'invoke, consommée au dépôt.
+    last_cellchat_sig <- reactiveVal(NULL)
     cellchat_task <- if (!is.null(ext_task_cls_cellchat) && requireNamespace("mirai", quietly = TRUE)) {
       t <- ext_task_cls_cellchat$new(function(cc_input, args, deps = cellchat_core_deps) {
         ensure_app_daemons()
@@ -1260,9 +1276,13 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       NULL
     }
 
-    .apply_cellchat_result <- function(result, obj) {
+    .apply_cellchat_result <- function(result, obj, compute_signature = NULL) {
       # MÊMES surfaces que le chemin synchrone (CC-5) : depot + statut + notif.
+      # §H.9b : la signature de calcul est (re)posée APRÈS le dépôt — elle
+      # décrit le résultat AFFICHÉ ; .store_result l'a purgée avec l'ancien
+      # état (tout dépôt non-CellChat la rend caduque).
       .store_result(result, obj)
+      if (!is.null(compute_signature)) comm_state$compute_signature <- compute_signature
       eng <- result$engine
       msg <- sprintf(
         paste0("Calcul OK : %s interactions, %s populations, %s voies ",
@@ -1335,6 +1355,31 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                      nboot = as.integer(input$comm_engine_nboot),
                      seurat_obj = obj)
 
+        # §H.9b (2026-11-14) : garde anti-recalcul REDONDANT — mesuré chez
+        # l'opérateur : 3 inférences IDENTIQUES enchaînées (19:39/19:41/19:43,
+        # ~95 s + ~1,2 Gio de coercition CHACUNE) = 5 min perdues pour le même
+        # résultat. Un clic dont les paramètres décrivent EXACTEMENT le
+        # résultat déjà affiché est refusé avec le remède (graine/permutations
+        # ou import externe) ; tout autre clic passe — la garde n'est PAS un
+        # blocage général, elle ne cible que l'identité parfaite des 4
+        # paramètres (empreinte objet, colonne d'identités, graine, nboot).
+        # La signature est POSE PAR .apply_cellchat_result au dépôt (elle
+        # décrit le résultat AFFICHÉ, pas l'intention) et purgée par
+        # .store_result — tout autre dépôt (import, LIANA) la rend caduque.
+        cc_sig <- list(fingerprint = velocity_object_fingerprint(obj),
+                       identity    = identity_col,
+                       seed        = args$seed,
+                       nboot       = args$nboot,
+                       species     = species)
+        if (!is.null(comm_state$compute_signature) &&
+            identical(comm_state$compute_signature, cc_sig)) {
+          showNotification(
+            .tr("Résultat CellChat déjà présent pour CES paramètres (même objet, identités, graine, permutations) — recalcul refusé. Changez la graine ou les permutations pour recalculer."),
+            type = "warning", duration = 10)
+          return(invisible())
+        }
+        last_cellchat_sig(cc_sig)
+
         pool_ok <- isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE))
         if (!is.null(cellchat_task) && pool_ok) {
           # ASYNC : le calcul part en daemon — la session reste réactive ;
@@ -1356,7 +1401,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                          seurat_obj = obj,
                          on_progress = function(msg) incProgress(0, detail = msg))
           })
-          .apply_cellchat_result(result, obj)
+          .apply_cellchat_result(result, obj, compute_signature = cc_sig)
         }
 
       }, error = function(e) {
@@ -1380,7 +1425,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         st <- cellchat_task$status()
         if (identical(st, "success")) {
           tryCatch({
-            .apply_cellchat_result(cellchat_task$result(), global_data$sc_obj)
+            # §H.9b : la signature posée à l'INVOKE est reposee au depot —
+            # la garde de recalcul décrit le résultat affiché.
+            .apply_cellchat_result(cellchat_task$result(), global_data$sc_obj,
+                                   compute_signature = last_cellchat_sig())
           }, error = function(e) {
             .clear_result_state()
             stt <- cellchat_engine_error_state(e)

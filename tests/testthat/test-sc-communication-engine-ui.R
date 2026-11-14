@@ -311,3 +311,41 @@ test_that("CC-1 : la vue Centralité consomme les rôles CellChat (rôles-first,
   # le fallback dérivé reste présent (voie import) — jamais supprimé par CC-1
   expect_gte(.count(.cc_ui_src, "build_communication_centrality"), 1L)
 })
+
+# ── §H.9b (2026-11-14) : garde anti-recalcul redondant ──────────────────────
+# Mesuré chez l'opérateur : 3 inférences CellChat IDENTIQUES enchaînées
+# (19:39/19:41/19:43, ~95 s + ~1,2 Gio de coercition chacune) — des clics
+# répétés sur des paramètres inchangés. La garde refuse l'identité parfaite
+# des 4 paramètres (empreinte objet, colonne d'identités, graine, nboot),
+# avec le remède dans le message ; la signature est posée PAR LE DÉPÔT
+# (.apply_cellchat_result) et purgée par .store_result — un import ou un
+# run LIANA la rend caduque, un résultat restauré aussi.
+test_that("§H.9b : la signature de calcul décrit le résultat AFFICHÉ (cycle de vie)", {
+  # la signature vit dans comm_state (survit au tps du module)
+  expect_true(grepl("comm_state$compute_signature <- NULL", .cc_ui_src, fixed = TRUE),
+              label = "purge dans .store_result (tout dépôt rend la signature caduque)")
+  # pose au dépôt CellChat, APRÈS .store_result — jamais avant le calcul
+  expect_true(grepl(".apply_cellchat_result <- function(result, obj, compute_signature = NULL)",
+                    .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("if (!is.null(compute_signature)) comm_state$compute_signature <- compute_signature",
+                    .cc_ui_src, fixed = TRUE))
+  # la voie async relit la signature posée à l'invoke
+  expect_true(grepl("last_cellchat_sig <- reactiveVal(NULL)", .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("compute_signature = last_cellchat_sig()", .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("compute_signature = cc_sig)", .cc_ui_src, fixed = TRUE))
+  # un résultat restauré n'est pas un calcul de la session
+  expect_true(grepl("comm_state$compute_signature <- NULL", .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("n'est pas un calcul de cette session", .cc_ui_src, fixed = TRUE))
+})
+
+test_that("§H.9b : le refus de recalcul couvre les 4 paramètres avec le remède", {
+  # empreinte objet + identités + graine + nboot — l'espèce est incluse aussi
+  expect_true(grepl("fingerprint = velocity_object_fingerprint(obj)", .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("identity    = identity_col,", .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("seed        = args$seed,", .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("nboot       = args$nboot,", .cc_ui_src, fixed = TRUE))
+  expect_true(grepl("identical(comm_state$compute_signature, cc_sig)", .cc_ui_src, fixed = TRUE))
+  # le message de refus porte le REMÈDE (clé i18n déclarée — C7)
+  expect_true(grepl("Changez la graine ou les permutations pour recalculer.",
+                    .cc_ui_src, fixed = TRUE))
+})
