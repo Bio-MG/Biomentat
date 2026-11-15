@@ -817,7 +817,18 @@ new_entries <- list(
   c("Comment lire le z-score de co-occurrence ?",
     "How to read the co-occurrence z-score?"),
   c("Qu'est-ce que l'etiquetage aleatoire (Ripley's K) ?",
-    "What is label randomization (Ripley's K)?")
+    "What is label randomization (Ripley's K)?"),
+  # --- P3-ÉTAPE 1 (2026-11-15) : section Paramètres + purge « inverse du
+  # load » + reset déménagé (proposal PROPOSAL_UX_UI_HARMONISATION_WORKFLOW
+  # _2026-11-15 ; « 🔄 Réinitialiser l'App » existait déjà en clé).
+  c("\u2699\ufe0f Param\u00e8tres", "\u2699\ufe0f Settings"),
+  c("\U0001F9F9 Purger les donn\u00e9es charg\u00e9es", "\U0001F9F9 Purge loaded data"),
+  c("\u26a0\ufe0f Purger les donn\u00e9es charg\u00e9es ?", "\u26a0\ufe0f Purge loaded data?"),
+  c("Tous les jeux charg\u00e9s (Single-Cell, Bulk, Spatial) et les r\u00e9sultats d\u00e9riv\u00e9s seront effac\u00e9s. Les r\u00e9glages (RAM, checkpoints, langue) sont conserv\u00e9s.",
+    "All loaded datasets (Single-Cell, Bulk, Spatial) and derived results will be cleared. Settings (RAM, checkpoints, language) are preserved."),
+  c("Oui, tout purger", "Yes, purge everything"),
+  c("L'inverse du chargement : efface les jeux et les r\u00e9sultats d\u00e9riv\u00e9s \u2014 les r\u00e9glages (RAM, checkpoints, langue) sont conserv\u00e9s.",
+    "The reverse of loading: clears datasets and derived results \u2014 settings (RAM, checkpoints, language) are preserved.")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

@@ -591,37 +591,50 @@ ui_static <- page_navbar(
     
     
     hr(),
-    
-    
-    
-    h6(i18n$t("Paramètres RAM"), style = "font-weight: bold;"),
-    
+
+    # P3-ÉTAPE 1 (proposal PROPOSAL_UX_UI_HARMONISATION_WORKFLOW_2026-11-15,
+    # arbitrage opérateur) : NOUVELLE SECTION « Paramètres » — regroupe les
+    # réglages d'exécution (RAM) et l'activation des checkpoints (déménagés
+    # de la section Session) ; accueillera aussi le mode d'affichage du
+    # workflow (P1, étape 3). Les ids des inputs sont INTACTS
+    # (ram_future_gb / ram_upload_gb / apply_ram_settings / session_ckpt) —
+    # le déplacement est purement positionnel (tests ASR : montage
+    # source-level, insensible à la position).
+    h6(i18n$t("\u2699\ufe0f Param\u00e8tres"), style = "font-weight: bold;"),
+
     div(class = "small text-muted", style = "font-size:0.75rem;",
-        
+
         i18n$t("Bulk n'est presque jamais limité par la RAM (matrices de quelques Mo)."),
         " ",
         i18n$t("La pression vient surtout du Single-Cell/Spatial (objets Seurat volumineux) —"),
         " ",
         i18n$t("ajustez ici si vous travaillez avec de très gros jeux de données.")),
-    
+
     numericInput("ram_future_gb", i18n$t("Limite mémoire par tâche parallèle (Go)"),
-                 
+
                  value = 10, min = 1, max = 64, step = 1),
-    
+
     numericInput("ram_upload_gb", i18n$t("Taille maximale d'upload (Go)"),
-                 
+
                  value = 5, min = 1, max = 50, step = 1),
-    
+
     actionButton("apply_ram_settings", i18n$t("Appliquer"),
-                 
+
                  class = "btn-sm btn-outline-primary w-100"),
-    
-    
-    
+
     hr(),
-    
-    
-    
+
+    # ASR-3 (O29) — checkpoints de session : toggle opt-in (OFF par défaut)
+    # + ligne d'état du dernier checkpoint. DÉMÉNAGÉ de la section Session
+    # vers « Paramètres » (P3-ÉTAPE 1) : c'est un réglage d'exécution, pas
+    # une action de persistance. Tant que le toggle est OFF : AUCUN appel
+    # moteur, AUCUN rendu (contrat §4/§7.5 — comportement inchangé).
+    mod_session_checkpoint_ui("session_ckpt"),
+
+    hr(),
+
+
+
     h6(i18n$t("Objets Chargés"), style = "font-weight: bold;"),
     
     uiOutput("global_status_panel"),
@@ -648,7 +661,7 @@ ui_static <- page_navbar(
               buttonLabel = i18n$t("Parcourir...")),
     
     div(class = "small text-muted", style = "font-size:0.75rem;",
-        
+
         i18n$t("La sauvegarde capture l'ensemble des données chargées (Single-Cell, Bulk, Spatial) —"),
         " ",
         i18n$t("elle est déclenchée uniquement par ce bouton, jamais automatiquement. Pour le Spatial,"),
@@ -656,19 +669,29 @@ ui_static <- page_navbar(
         i18n$t("seul le \"sketch\" (echantillon RAM) est garanti portable : les donnees BPCells sur"),
         " ",
         i18n$t("disque doivent rester disponibles au meme chemin pour relancer clustering/deconvolution.")),
-    
-    
-    
-    # ASR-3 (O29) — checkpoints de session : toggle opt-in (OFF par défaut)
-    # + ligne d'état du dernier checkpoint. Tant que le toggle est OFF :
-    # AUCUN appel moteur, AUCUN rendu (contrat §4/§7.5 — comportement actuel
-    # byte pour byte). Panneau placé dans la section Session, voisin des
-    # boutons Sauvegarder/Charger Session (même domaine : persistance).
-    mod_session_checkpoint_ui("session_ckpt"),
+
+    # P3-ÉTAPE 1 : « Purger » = l'INVERSE du « Charger » (arbitrage
+    # opérateur 2026-11-15) — efface les jeux + résultats dérivés de la
+    # session courante, SANS toucher aux réglages (RAM/checkpoints/langue).
+    # AUCUNE purge automatique au chargement : le multi-chargement
+    # (session traitement A puis B) reste tel quel. Idéation long terme
+    # (cumul 2-3 sessions en RAM) : docs/ideation/
+    # IDEATION_MULTI_SESSIONS_2026-11-15.md.
+    actionButton("purge_data_btn", i18n$t("\U0001F9F9 Purger les donn\u00e9es charg\u00e9es"),
+                 class = "btn-sm btn-outline-danger w-100 mt-1"),
+
+    div(class = "small text-muted", style = "font-size:0.75rem; margin-top:2px;",
+        i18n$t("L'inverse du chargement : efface les jeux et les résultats dérivés — les réglages (RAM, checkpoints, langue) sont conservés.")),
 
     hr(),
 
-
+    # P3-ÉTAPE 1 : « Réinitialiser l'App » DÉMÉNAGÉ du footer de la modale
+    # Guide/Aide (il y était invisible — arbitrage opérateur 2026-11-15 :
+    # « de guide aide -> au dessus du bouton guide aide ») vers la sidebar
+    # Système, en position dominante. La modal de confirmation
+    # (observeEvent input$reset_app -> confirm_reset) est inchangée.
+    actionButton("reset_app", i18n$t("\U0001F504 R\u00e9initialiser l'App"),
+                 class = "btn-warning btn-sm w-100 mb-1"),
 
     actionButton("help_btn", i18n$t("📖 Guide / Aide"),
                  
@@ -2054,11 +2077,13 @@ server <- function(input, output, session) {
       
       
       footer = tagList(
-        
-        modalButton(.tr_h("Fermer")),
-        
-        actionButton("reset_app", .tr_h("🔄 Réinitialiser l'App"), class = "btn-warning")
-        
+
+        modalButton(.tr_h("Fermer"))
+
+        # P3-ÉTAPE 1 : « Réinitialiser l'App » est DÉMÉNAGÉ dans la sidebar
+        # Système (au-dessus du bouton Guide/Aide) — arbitrage opérateur ;
+        # l'action (modal de confirmation -> confirm_reset) est inchangée.
+
       )
       
     ))
@@ -2091,8 +2116,13 @@ server <- function(input, output, session) {
   
   
   
-  observeEvent(input$confirm_reset, {
-    
+  # P3-ÉTAPE 1 (proposal 2026-11-15) : le CORPS de purge est extrait UNE
+  # fois — « Purger les données chargées » (purge_data_confirm) et
+  # « Réinitialiser l'App » (confirm_reset) partagent EXACTEMENT le même
+  # geste (jeux + résultats dérivés, réglages conservés) ; seuls les
+  # libellés/toasts diffèrent. Extractions futures (settings distincts)
+  # n'ont qu'une fonction à éditer.
+  .ts_purge_loaded_data <- function(toast) {
     global_data$sc_obj <- NULL
 
     global_data$sc_datasets <- list()
@@ -2104,28 +2134,51 @@ server <- function(input, output, session) {
     global_data$bulk_multi_comparison <- NULL
 
     global_data$spatial_obj <- NULL
-    
+
     global_data$spatial_datasets <- list()
-    
+
     global_data$active_spatial_dataset <- NULL
-    
+
     global_data$spatial_results_cache <- list()
-    
+
     global_data$spatial_reference <- NULL
-    
+
     global_data$spatial_multi_integration <- NULL
-    
+
     # F08 (revue externe 2026-10-28) : tout effacer = remplacer les jeux par
     # rien. Le bump est ce qui déclenche la purge des résultats partagés
     # (mod_sc.R / mod_bulk.R sur observeEvent(<domaine>_obj_epoch)).
     .ts_bump_all_epochs(global_data)
-    
+
     clean_mem()
-    
+
     removeModal()
-    
-    showNotification("✓ Application réinitialisée", type = "message")
-    
+
+    showNotification(toast, type = "message")
+  }
+
+  observeEvent(input$confirm_reset, {
+    .ts_purge_loaded_data("✓ Application réinitialisée")
+  })
+
+  # P3-ÉTAPE 1 : « 🧹 Purger les données chargées » — l'INVERSE du
+  # « Charger Session » (arbitrage opérateur) : purge explicite de la
+  # session courante (jeux + résultats dérivés), réglages conservés,
+  # AUCUNE purge automatique au chargement (le multi-chargement
+  # traitement A puis B n'est pas touché).
+  observeEvent(input$purge_data_btn, {
+    showModal(modalDialog(
+      title = i18n$t("⚠️ Purger les données chargées ?"),
+      i18n$t("Tous les jeux chargés (Single-Cell, Bulk, Spatial) et les résultats dérivés seront effacés. Les réglages (RAM, checkpoints, langue) sont conservés."),
+      footer = tagList(
+        modalButton(i18n$t("Annuler")),
+        actionButton("purge_data_confirm", i18n$t("Oui, tout purger"), class = "btn-danger")
+      )
+    ))
+  })
+
+  observeEvent(input$purge_data_confirm, {
+    .ts_purge_loaded_data("✓ Données chargées purgées")
   })
   
   
