@@ -318,7 +318,10 @@ test_that("contract document is in sync (key sections present)", {
                   "mmuReactome.db", "org.Hs.eg.db",
                   "292 895", "11 030", "53,1", "max_join_hops",
                   "PAS un PPI", "Réseau PCSF (interactome)",
-                  "3g. Réseau PCSF (interactome)", "tab_bulk_network")) {
+                  # P2-ÉTAPE 2 (2026-11-15) : le module est renuméroté « 5. »
+                  # (harmonisation étape ↔ résultats) — token re-basé, le
+                  # contrat porte la note de renommage.
+                  "5. Réseau PCSF (interactome)", "tab_bulk_network")) {
     expect_match(.contract, token, fixed = TRUE,
                  info = paste("token absent du contrat :", token))
   }
@@ -334,7 +337,7 @@ test_that("i18n keys used by the module exist in translation.json", {
     simplifyVector = FALSE)$translation
   fr_keys <- vapply(json, function(x) x$fr %||% "", character(1))
   needed <- c(
-    "3g. Réseau PCSF (interactome)", "Réseau PCSF",
+    "5. Réseau PCSF (interactome)", "Réseau PCSF",
     "Sous-réseau PCSF (heuristique)",
     "Interactome dérivé des voies Reactome — ce n'est PAS un PPI.",
     "Espèce (déclarée)", "Humain (hsapiens)", "Source des gènes d'intérêt",

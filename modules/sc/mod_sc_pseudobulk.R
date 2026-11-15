@@ -274,6 +274,8 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
       updateTextInput(session, "pb_send_label", label = .tr("Label du dataset"),
                       placeholder = .tr("ex : pseudobulk_T2_vs_ctrl"))
       updateActionButton(session, "pb_send", label = .tr("Envoyer vers comparaison Bulk"))
+      agg_status_rv(.tr("En attente d'agregation..."))
+      de_status_rv(.tr("En attente de l'analyse..."))
     }, ignoreInit = TRUE)
 
     pb <- reactiveValues(counts = NULL, metadata = NULL, dropped = NULL, de_result = NULL)
@@ -296,7 +298,7 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
     }, ignoreInit = TRUE)
 
     # ── Step 1: aggregate ───────────────────────────────────────────────────
-    agg_status_rv <- reactiveVal("En attente d'agregation...")
+    agg_status_rv <- reactiveVal(.tr("En attente d'agregation..."))
     output$aggregate_status <- renderText({ agg_status_rv() })
 
     observeEvent(input$run_aggregate, {
@@ -391,7 +393,7 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
     })
 
     # ── Step 2: differential expression ─────────────────────────────────────
-    de_status_rv <- reactiveVal("En attente de l'analyse...")
+    de_status_rv <- reactiveVal(.tr("En attente de l'analyse..."))
     output$de_status <- renderText({ de_status_rv() })
 
     # ── Plan sans réplicat (n = p) : même diagnostic que le Bulk ────────────
@@ -532,7 +534,7 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
     observeEvent(input$pb_send, {
       global_data$language  # i18n
       if (is.null(pb$de_result) || is.null(pb$counts) || is.null(pb$metadata)) {
-        showNotification(.tr("Aucun résultat DE pseudobulk à envoyer — lancez d'abord l'analyse différentielle (étape 2)."),
+        showNotification(.tr("Aucun résultat DE pseudobulk à envoyer — lancez d'abord l'analyse différentielle (étape 2b)."),
                          type = "warning", duration = 6)
         return()
       }

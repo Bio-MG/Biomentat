@@ -114,16 +114,23 @@ test_that("O14 : le CTA design & QC coexiste avec le CTA LOT 4A (ajout, pas remp
 })
 
 # ── B1-D (O21, 2026-10-28) : ordre de la sidebar bulk ────────────────────────
-# La proposition V1.x (§2.2) demande la progression 3e → 3f → 3g → « 4.
-# Livrables » ; l'arbre mesuré (dossier round 5) montre 3g APRÈS « 4.
-# Livrables » et après les blocs Multi-jeux. Épingle l'ORDRE par le source.
-test_that("B1-D: le panneau 3g. Réseau PCSF précède « 4. Livrables » dans la sidebar bulk", {
+# La progression historique (réseau avant livrables) est CONSERVÉE et,
+# depuis P2-ÉTAPE 2 (2026-11-15), complétée pour suivre l'ordre des
+# RÉSULTATS : 5 · PCSF → 6a/6b · Multi-jeux → 7 · Livrables. Épingle
+# l'ORDRE par le source (values INTACTES, positions mises à jour).
+test_that("B1-D: la sidebar bulk suit l'ordre des résultats (5 PCSF < 6a/6b Multi-jeux < 7 Livrables)", {
   lines <- readLines(file.path(ts_project_root(), "modules", "bulk", "mod_bulk.R"), warn = FALSE)
-  pos_net <- grep('value = "panel_network"', lines)
-  pos_rep <- grep('value = "panel_report"', lines)
+  pos_net  <- grep('value = "panel_network"', lines)
+  pos_ds   <- grep('value = "panel_datasets"', lines)
+  pos_mrg  <- grep('value = "panel_merge"', lines)
+  pos_rep  <- grep('value = "panel_report"', lines)
   testthat::expect_length(pos_net, 1L)
+  testthat::expect_length(pos_ds, 1L)
+  testthat::expect_length(pos_mrg, 1L)
   testthat::expect_length(pos_rep, 1L)
-  testthat::expect_lt(pos_net, pos_rep)
+  testthat::expect_lt(pos_net, pos_ds)
+  testthat::expect_lt(pos_ds, pos_mrg)
+  testthat::expect_lt(pos_mrg, pos_rep)
 })
 
 # ── B3-C (round 5, 2026-10-28) : couche présentation du verrouillage ─────────

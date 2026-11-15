@@ -300,14 +300,14 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
       if (input$pathway_source == "markers") {
         df <- shared_rv$markers_data
         if (is.null(df) || nrow(df)==0) {
-          showNotification(.tr("⚠️ Lancez d'abord l'étape 4 (Marqueurs)."), type="warning"); return()
+          showNotification(.tr("⚠️ Lancez d'abord l'étape 1d (Marqueurs)."), type="warning"); return()
         }
         genes_to_test <- head(df$gene, 100)
 
       } else if (input$pathway_source == "correlated") {
         df <- shared_rv$correlated_genes
         if (is.null(df) || nrow(df)==0) {
-          showNotification(.tr("⚠️ Lancez d'abord l'étape 5 (Corrélation)."), type="warning"); return()
+          showNotification(.tr("⚠️ Lancez d'abord l'étape 3a (Corrélation)."), type="warning"); return()
         }
         genes_to_test <- c(shared_rv$corr_target_gene, df$gene)
 

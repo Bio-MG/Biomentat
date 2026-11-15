@@ -14,7 +14,7 @@ mod_sc_mapping_ui <- function(id) {
         bsicons::bs_icon("info-circle"),
         span(i18n$t("Étape facultative — uniquement si vos identifiants ne sont PAS déjà des symboles (ex: ENSG00000141510, 7157).")),
         " ",
-        tags$strong(i18n$t("À lancer AVANT l'étape '1. Pipeline' :")),
+        tags$strong(i18n$t("À lancer AVANT le Pipeline :")),
         " ",
         span(i18n$t("toute normalisation ou clustering déjà calculé sera réinitialisé."))),
 
@@ -86,7 +86,7 @@ mod_sc_mapping_server <- function(id, global_data) {
       if (detected == "unknown") {
         return(div(class="alert alert-warning", style="font-size:0.8em;",
           icon("circle-exclamation"),
-          .t_fmt(.tr("Type d'identifiant NON reconnu (ex. trouvé dans vos données : {example}). Si ce ne sont PAS des identifiants de gènes (ex: comptages personnalisés, autre type de feature), ignorez cette étape facultative et passez directement à l'étape 1."), example = example_id)))
+          .t_fmt(.tr("Type d'identifiant NON reconnu (ex. trouvé dans vos données : {example}). Si ce ne sont PAS des identifiants de gènes (ex: comptages personnalisés, autre type de feature), ignorez cette étape facultative et passez directement au Pipeline."), example = example_id)))
       }
       label <- switch(detected,
         ensembl    = .tr("Ensembl Gene ID"),
@@ -155,9 +155,9 @@ mod_sc_mapping_server <- function(id, global_data) {
 
         mapping_status_rv(paste0(
           .t_fmt(.tr("✓ {mapped} mappés, {unmapped} non-mappés ({pct}%), {collapsed} fusion(s) de doublon → {final} gènes finaux."), mapped = result$n_mapped, unmapped = result$n_unmapped, pct = sprintf("%.1f", pct_unmapped), collapsed = result$n_collapsed, final = nrow(result$object)),
-          if (has_downstream) paste0(" ", .tr("Pipeline réinitialisé — relancez l'étape 1.")) else ""
+          if (has_downstream) paste0(" ", .tr("Pipeline réinitialisé — relancez le Pipeline.")) else ""
         ))
-        showNotification(.tr("✓ Mapping appliqué — relancez l'étape 1 (Filtrage & VST) pour l'utiliser."), type="message", duration=5)
+        showNotification(.tr("✓ Mapping appliqué — relancez le Pipeline (Filtrage & VST) pour l'utiliser."), type="message", duration=5)
 
       }, error=function(e) {
         showNotification(paste(.tr("Erreur de mapping:"), conditionMessage(e)),

@@ -828,7 +828,57 @@ new_entries <- list(
     "All loaded datasets (Single-Cell, Bulk, Spatial) and derived results will be cleared. Settings (RAM, checkpoints, language) are preserved."),
   c("Oui, tout purger", "Yes, purge everything"),
   c("L'inverse du chargement : efface les jeux et les r\u00e9sultats d\u00e9riv\u00e9s \u2014 les r\u00e9glages (RAM, checkpoints, langue) sont conserv\u00e9s.",
-    "The reverse of loading: clears datasets and derived results \u2014 settings (RAM, checkpoints, language) are preserved.")
+    "The reverse of loading: clears datasets and derived results \u2014 settings (RAM, checkpoints, language) are preserved."),
+  # --- P2-ÉTAPE 2 (2026-11-15) : harmonisation de la numérotation étape ↔
+  # résultats (Bulk : la sidebar suit les résultats 1-7 ; SC : les menus de
+  # résultats sont numérotés 1-5 et les étapes portent le numéro de leur
+  # menu). Anciennes clés laissées en place (append-only). En = miroir des
+  # traductions existantes, numéros mis à jour.
+  # Bulk (sidebar → résultats 1-7) :
+  c("4a. Signatures cellulaires", "4a. Cellular signatures"),
+  c("4b. Réseau de co-expression (WGCNA)", "4b. Co-expression network (WGCNA)"),
+  c("4c. Survie & association clinique", "4c. Survival & clinical association"),
+  c("4d. Clustering de profils", "4d. Profile clustering"),
+  c("4e. Dose–réponse / time-course", "4e. Dose–response / time-course"),
+  c("5. Réseau PCSF (interactome)", "5. PCSF network (interactome)"),
+  c("6a. Multi-jeux — Datasets enregistrés", "6a. Multi-dataset — Registered datasets"),
+  c("6b. Multi-jeux — Fusion de jeux", "6b. Multi-dataset — Merge datasets"),
+  c("7. Livrables — Rapport & Script R", "7. Deliverables — Report & R script"),
+  # SC (sidebar étapes + menus résultats) :
+  c("Pipeline (QC → UMAP)", "Pipeline (QC → UMAP)"),
+  c("Métadonnées — condition / réplicat", "Metadata — condition / replicate"),
+  c("1a. Annotation", "1a. Annotation"),
+  c("1b. Rareté par population", "1b. Rarity per population"),
+  c("1c. Visualisation", "1c. Visualization"),
+  c("1d. Marqueurs", "1d. Markers"),
+  c("3a. Gene Correlation", "3a. Gene Correlation"),
+  c("3b. Pathway Enrichment", "3b. Pathway Enrichment"),
+  c("3c. Communication (import)", "3c. Communication (import)"),
+  c("4a. Trajectory Analysis", "4a. Trajectory Analysis"),
+  c("4b. Vélocité ARN — orientation des trajectoires", "4b. RNA velocity — trajectory orientation"),
+  c("2a. Pseudobulk — agrégation des cellules par échantillon", "2a. Pseudobulk — cell aggregation per sample"),
+  c("2b. Abondance différentielle — design, méthodes & vues croisées", "2b. Differential abundance — design, methods & cross views"),
+  c("5a. Rapport Complet", "5a. Complete Report"),
+  c("5b. Rapport consolidé (4F)", "5b. Consolidated report (4F)"),
+  c("1 · Exploration", "1 · Exploration"),
+  c("2 · Différentiel & DA", "2 · Differential & DA"),
+  c("3 · Réseaux & Signalisation", "3 · Networks & Signalling"),
+  c("4 · Dynamique", "4 · Dynamics"),
+  c("5 · Contrôle & Rapports", "5 · Control & Reports"),
+  # Textes pédagogiques renumérotés (clés full-string .tr/i18n$t) :
+  c("⚠️ Lancez d'abord l'étape 1d (Marqueurs).", "⚠️ Run step 1d (Markers) first."),
+  c("⚠️ Lancez d'abord l'étape 3a (Corrélation).", "⚠️ Run step 3a (Correlation) first."),
+  c("Aucun résultat DE pseudobulk à envoyer — lancez d'abord l'analyse différentielle (étape 2b).",
+    "No pseudobulk DE result to send — run the differential analysis first (step 2b)."),
+  c("Le modèle porte sur la paire de conditions choisie ; scCODA n'interprète pas les voisinages Milo — les deux méthodes restent des résultats distincts (vues croisées descriptives à l'étape 2b).",
+    "The model targets the chosen condition pair; scCODA does not interpret Milo neighbourhoods — both methods remain distinct results (descriptive cross views in step 2b)."),
+  c("⚙️ Ouvrir les Métadonnées (condition / réplicat)", "⚙️ Open Metadata (condition / replicate)"),
+  c("Pipeline réinitialisé — relancez le Pipeline.", "Pipeline reset — re-run the Pipeline."),
+  c("✓ Mapping appliqué — relancez le Pipeline (Filtrage & VST) pour l'utiliser.",
+    "✓ Mapping applied — re-run the Pipeline (Filtering & VST) to use it."),
+  c("Type d'identifiant NON reconnu (ex. trouvé dans vos données : {example}). Si ce ne sont PAS des identifiants de gènes (ex: comptages personnalisés, autre type de feature), ignorez cette étape facultative et passez directement au Pipeline.",
+    "Unrecognised identifier type (e.g. found in your data: {example}). If these are NOT gene identifiers (e.g. custom counts, another feature type), skip this optional step and go straight to the Pipeline."),
+  c("À lancer AVANT le Pipeline :", "Run BEFORE the Pipeline:")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

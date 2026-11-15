@@ -48,12 +48,15 @@ test_that("sidebar panels 3e and 3g have greyed span + padlock gating matching 3
   e <- .load_mod_bulk_env()
   html <- as.character(e$mod_bulk_ui("bulk"))
 
+  # P2-ÉTAPE 2 (2026-11-15) : titres renumérotés selon les groupes de
+  # résultats (4 · Signatures & profils, 5 · PCSF) — labels re-basés,
+  # mécanique (span grisé + 🔒) INCHANGÉE.
   expected_locked <- c(
-    "3c. Réseau de co-expression (WGCNA)",
-    "3d. Survie & association clinique",
-    "3e. Clustering de profils",
-    "3f. Dose–réponse / time-course",
-    "3g. Réseau PCSF (interactome)"
+    "4b. Réseau de co-expression (WGCNA)",
+    "4c. Survie & association clinique",
+    "4d. Clustering de profils",
+    "4e. Dose–réponse / time-course",
+    "5. Réseau PCSF (interactome)"
   )
   for (lbl in expected_locked) {
     pat <- paste0('<span style="color:#8a8f98">', lbl, "</span> 🔒")
@@ -71,16 +74,19 @@ test_that("mod_bulk_ui mounts step_sync_bar and signatures_guard_ui in header", 
   expect_true(grepl("bulk-bulk_signatures_guard_ui", html, fixed = TRUE))
 })
 
-test_that(".bulk_tab_step_meta maps 4 · Signatures & profils and 5 · Réseau PCSF to sidebar steps 3b-3g", {
+test_that(".bulk_tab_step_meta maps 4 · Signatures & profils and 5 · Réseau PCSF to sidebar steps 4a-4e/5", {
+  # P2-ÉTAPE 2 (2026-11-15) : la sidebar suit la numérotation des résultats —
+  # les sous-étapes du groupe « 4 · Signatures & profils » deviennent 4a-4e,
+  # le PCSF devient « 5 » (comme le menu de résultats).
   e <- .load_mod_bulk_env()
   expect_true(exists(".bulk_tab_step_meta", envir = e, inherits = FALSE))
 
-  expect_identical(e$.bulk_tab_step_meta("tab_signatures")$step, "3b")
-  expect_identical(e$.bulk_tab_step_meta("tab_wgcna")$step, "3c")
-  expect_identical(e$.bulk_tab_step_meta("tab_survival")$step, "3d")
-  expect_identical(e$.bulk_tab_step_meta("tab_pattern")$step, "3e")
-  expect_identical(e$.bulk_tab_step_meta("tab_dose")$step, "3f")
-  expect_identical(e$.bulk_tab_step_meta("tab_bulk_network")$step, "3g")
+  expect_identical(e$.bulk_tab_step_meta("tab_signatures")$step, "4a")
+  expect_identical(e$.bulk_tab_step_meta("tab_wgcna")$step, "4b")
+  expect_identical(e$.bulk_tab_step_meta("tab_survival")$step, "4c")
+  expect_identical(e$.bulk_tab_step_meta("tab_pattern")$step, "4d")
+  expect_identical(e$.bulk_tab_step_meta("tab_dose")$step, "4e")
+  expect_identical(e$.bulk_tab_step_meta("tab_bulk_network")$step, "5")
   expect_identical(e$.bulk_tab_step_meta("tab_bulk_network")$panel, "panel_network")
 })
 

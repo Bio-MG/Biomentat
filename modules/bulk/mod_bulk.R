@@ -15,16 +15,24 @@
   tab_multimethod  = list(step = "3",  panel = "panel_de",         key = "2. Design & Contrastes"),
   tab_venn         = list(step = "3",  panel = "panel_de",         key = "2. Design & Contrastes"),
   tab_pathway      = list(step = "3",  panel = "panel_pathways",   key = "3. Pathway Enrichment"),
-  tab_signatures   = list(step = "3b", panel = "panel_signatures", key = "3b. Signatures cellulaires"),
-  tab_wgcna        = list(step = "3c", panel = "panel_wgcna",      key = "3c. Réseau de co-expression (WGCNA)"),
-  tab_survival     = list(step = "3d", panel = "panel_survival",   key = "3d. Survie & association clinique"),
-  tab_pattern      = list(step = "3e", panel = "panel_pattern",    key = "3e. Clustering de profils"),
-  tab_dose         = list(step = "3f", panel = "panel_dose",       key = "3f. Dose–réponse / time-course"),
-  tab_bulk_network = list(step = "3g", panel = "panel_network",    key = "3g. Réseau PCSF (interactome)"),
-  tab_bulk_multi   = list(step = "6",  panel = "panel_datasets",   key = "Multi-jeux — Datasets enregistrés"),
-  tab_bulk_merge   = list(step = "6",  panel = "panel_merge",      key = "Multi-jeux — Fusion de jeux"),
-  tab_resume       = list(step = "4",  panel = "panel_report",     key = "4. Livrables — Rapport & Script R")
+  tab_signatures   = list(step = "4a", panel = "panel_signatures", key = "4a. Signatures cellulaires"),
+  tab_wgcna        = list(step = "4b", panel = "panel_wgcna",      key = "4b. Réseau de co-expression (WGCNA)"),
+  tab_survival     = list(step = "4c", panel = "panel_survival",   key = "4c. Survie & association clinique"),
+  tab_pattern      = list(step = "4d", panel = "panel_pattern",    key = "4d. Clustering de profils"),
+  tab_dose         = list(step = "4e", panel = "panel_dose",       key = "4e. Dose–réponse / time-course"),
+  tab_bulk_network = list(step = "5",  panel = "panel_network",    key = "5. Réseau PCSF (interactome)"),
+  tab_bulk_multi   = list(step = "6a", panel = "panel_datasets",   key = "6a. Multi-jeux — Datasets enregistrés"),
+  tab_bulk_merge   = list(step = "6b", panel = "panel_merge",      key = "6b. Multi-jeux — Fusion de jeux"),
+  tab_resume       = list(step = "7",  panel = "panel_report",     key = "7. Livrables — Rapport & Script R")
 )
+# P2-ÉTAPE 2 (proposal PROPOSAL_UX_UI_HARMONISATION_WORKFLOW_2026-11-15,
+# arbitrage opérateur) : la sidebar SUIT la numérotation des résultats
+# (1·QC … 7·Résumé, déjà affichée dans le navset). Les sous-étapes d'un même
+# groupe de résultats portent le numéro du groupe en partie entière :
+# 4a-4e (Signatures & profils), 6a-6b (Multi-jeux). La barre de synchro
+# (badge = `step`) devient cohérente : cliquer « 5 · Réseau PCSF » affiche
+# l'étape 5, plus « 3g ». Les `panel`/values et TS_DRIVE_BULK_TABS sont
+# INTANGIBLES — seuls les libellés et ce map changent.
 
 .bulk_tab_step_meta <- function(tab) {
   if (is.null(tab) || !is.character(tab) || length(tab) != 1L || !nzchar(tab)) return(NULL)
@@ -77,7 +85,10 @@ mod_bulk_ui <- function(id) {
           accordion_panel(i18n$t("3. Pathway Enrichment"), value = "panel_pathways",
                           icon = icon("dna"), mod_bulk_pathways_ui(ns("pathways"))),
           # Bulk V2 M3 : signatures cellulaires (Hallmark/PROGENy/DoRothEA/RDS local).
-          accordion_panel(i18n$t("3b. Signatures cellulaires"), value = "panel_signatures",
+          # P2-ÉTAPE 2 : titres renumérotés selon les groupes de résultats
+          # (4 · Signatures & profils, 5 · PCSF, 6 · Multi-jeux, 7 · Résumé) —
+          # cf. .BULK_TAB_STEP_MAP ci-dessus.
+          accordion_panel(i18n$t("4a. Signatures cellulaires"), value = "panel_signatures",
                           icon = icon("fingerprint"), mod_bulk_signatures_ui(ns("signatures"))),
           # Bulk V2 M4 : réseaux de co-expression WGCNA (safe-mode).
           # B3-C (round 5) : les trois panneaux GARDÉS du verrouillage
@@ -92,46 +103,48 @@ mod_bulk_ui <- function(id) {
           # titre est GRISÉ (look désactivé = « pas utilisable pour l'instant,
           # faites d'abord l'étape 1 / ayez les bonnes données ») ; le cadenas
           # 🔒 reste normal, HORS du span grisé.
-          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("3c. R\u00e9seau de co-expression (WGCNA)"), '</span>',
+          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("4b. R\u00e9seau de co-expression (WGCNA)"), '</span>',
                                       ' 🔒')),
                           value = "panel_wgcna",
                           icon = icon("project-diagram"), mod_bulk_wgcna_ui(ns("wgcna"))),
           # Bulk V2 M5 : survie & associations cliniques (KM + Cox).
-          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("3d. Survie & association clinique"), '</span>',
+          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("4c. Survie & association clinique"), '</span>',
                                       ' 🔒')),
                           value = "panel_survival",
                           icon = icon("heart-pulse"), mod_bulk_survival_ui(ns("survival"))),
           # STAT-S3 : clustering de profils d'expression (kmeans MVP, descriptif).
-          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("3e. Clustering de profils"), '</span>',
+          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("4d. Clustering de profils"), '</span>',
                                       ' 🔒')),
                           value = "panel_pattern",
                           icon = icon("chart-line"), mod_bulk_pattern_ui(ns("pattern"))),
           # NEW-1 : dose-réponse / time-course (drc, descriptif).
-          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("3f. Dose–réponse / time-course"), '</span>',
+          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("4e. Dose–réponse / time-course"), '</span>',
                                       ' 🔒')),
                           value = "panel_dose",
                           icon = icon("chart-area"), mod_bulk_dose_response_ui(ns("dose"))),
           # NEW-3 : réseau PCSF / interactome dérivé des voies Reactome
           # (heuristique, hors ligne ; N'EST PAS un PPI).
-          # B1-D (O21, 2026-10-28) : 3g REMONTE avant « 4. Livrables » — la
-          # progression redevient 3e → 3f → 3g → 4 → Multi-jeux.
-          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("3g. Réseau PCSF (interactome)"), '</span>',
+          # B1-D (O21, 2026-10-28) : le réseau remonte avant les livrables.
+          # P2-ÉTAPE 2 : l'ORDRE de la sidebar suit les résultats — 5 · PCSF →
+          # 6a/6b · Multi-jeux → 7 · Livrables (comme dans le navset de
+          # résultats) ; values INTACTES.
+          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("5. Réseau PCSF (interactome)"), '</span>',
                                       ' 🔒')),
                           value = "panel_network",
                           icon = icon("share-nodes"), mod_bulk_network_ui(ns("network"))),
+          # MD-1 : conteneur bulk_datasets — enregistrement/gestion des jeux
+          # nommés (producteur "pipeline_save") ; la comparaison est MD-2.
+          accordion_panel(i18n$t("6a. Multi-jeux — Datasets enregistr\u00e9s"), value = "panel_datasets",
+                          icon = icon("layer-group"), mod_bulk_datasets_ui(ns("datasets"))),
+          # NEW-2 : fusion de jeux enregistrés (gènes communs + ComBat-seq
+          # optionnel, produit chargé comme jeu actif).
+          accordion_panel(i18n$t("6b. Multi-jeux — Fusion de jeux"), value = "panel_merge",
+                          icon = icon("object-group"), mod_bulk_merge_ui(ns("merge"))),
           # LOT 3A (V1.x UX): deliverables come after the analysis steps
           # (B1-D : report + reproducible R script already live together in
           # mod_bulk_report.R — renamed only).
-          accordion_panel(i18n$t("4. Livrables — Rapport & Script R"), value = "panel_report",
-                          icon = icon("file-export"), mod_bulk_report_ui(ns("report"))),
-          # MD-1 : conteneur bulk_datasets — enregistrement/gestion des jeux
-          # nommés (producteur "pipeline_save") ; la comparaison est MD-2.
-          accordion_panel(i18n$t("Multi-jeux — Datasets enregistr\u00e9s"), value = "panel_datasets",
-                          icon = icon("layer-group"), mod_bulk_datasets_ui(ns("datasets"))),
-          # NEW-2 : fusion de jeux enregistrés (gènes communs + ComBat-seq
-          # optionnel, produit chargé comme jeu actif). DERNIER panneau.
-          accordion_panel(i18n$t("Multi-jeux — Fusion de jeux"), value = "panel_merge",
-                          icon = icon("object-group"), mod_bulk_merge_ui(ns("merge")))
+          accordion_panel(i18n$t("7. Livrables — Rapport & Script R"), value = "panel_report",
+                          icon = icon("file-export"), mod_bulk_report_ui(ns("report")))
         )
       ),
       navset_card_underline(

@@ -206,14 +206,16 @@ test_that("report module defines exactly its three orchestration functions", {
                      src))
 })
 
-test_that("mod_sc.R mounts panel 9b + tab without touching the legacy panel 9", {
+test_that("mod_sc.R mounts panel 5b (ex-9b) + tab without touching the legacy panel 5a (ex-9)", {
   mod_sc_src <- .rep_report_src("modules/sc/mod_sc.R")
-  expect_match(mod_sc_src, "9b. Rapport consolidé (4F)", fixed = TRUE)
+  # P2-ÉTAPE 2 (2026-11-15) : étapes livrables renumérotées 5a/5b (menu
+  # « 5 · Contrôle & Rapports ») — TITRES re-basés, values/pins INTACTS.
+  expect_match(mod_sc_src, "5b. Rapport consolidé (4F)", fixed = TRUE)
   expect_match(mod_sc_src, "tab_report_consolide", fixed = TRUE)
   expect_match(mod_sc_src, "mod_sc_report_consolidated_server", fixed = TRUE)
-  # Le panneau 9 historique (rapport Rmd par domaine) reste en place.
+  # Le panneau historique (rapport Rmd par domaine) reste en place.
   expect_match(mod_sc_src, "sc_report_template.Rmd", fixed = TRUE)
-  expect_match(mod_sc_src, "9. Rapport Complet", fixed = TRUE)
+  expect_match(mod_sc_src, "5a. Rapport Complet", fixed = TRUE)
 })
 
 test_that("app.R sources the report domain AFTER all domain files", {

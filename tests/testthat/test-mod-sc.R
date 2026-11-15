@@ -323,8 +323,11 @@ test_that("2A : les 17 onglets Résultats sont regroupés en 5 nav_menu thémati
                          warn = FALSE, encoding = "UTF-8"), collapse = "\n")
   # 5 pôles, libellés de la spéc §2.6 (le caret des menus est dessiné par
   # bslib — pas de « ▾ » dans les clés i18n) :
-  for (grp in c("Exploration", "Différentiel & DA", "Réseaux & Signalisation",
-                "Dynamique", "Contrôle & Rapports")) {
+  # 5 pôles, libellés NUMÉROTÉS depuis P2-ÉTAPE 2 (2026-11-15) — chaque
+  # chiffre = le préfixe des étapes de la sidebar qui l'alimentent (le caret
+  # des menus est dessiné par bslib — pas de « ▾ » dans les clés i18n) :
+  for (grp in c("1 · Exploration", "2 · Différentiel & DA", "3 · Réseaux & Signalisation",
+                "4 · Dynamique", "5 · Contrôle & Rapports")) {
     expect_match(src, sprintf('nav_menu(i18n$t("%s")', grp), fixed = TRUE, info = grp)
   }
   # Exactement 5 nav_menu dans le fichier (pas de regroupement partiel) :
@@ -383,7 +386,9 @@ test_that("1E : la carte porte le contenu arbitré O28(b) — pourquoi + voie r�
   # LA VOIE RÉELLE EXISTANTE (import multi-échantillons, parse A_1/B2, table
   # design éditable) :
   expect_match(src, "A_1 / B2", fixed = TRUE)
-  expect_match(src, "Ouvrir l'\u00e9tape 0.5", fixed = TRUE)
+  # P2-ÉTAPE 2 (2026-11-15) : la section Métadonnées est DÉNUMÉROTÉE (outil
+  # amont) — le CTA suit le nouveau libellé.
+  expect_match(src, "Ouvrir les M\u00e9tadonn\u00e9es", fixed = TRUE)
   # CTA deep-link import : saut racine par le sélecteur BS5 STABLE data-value
   # (nav_select("main_nav") est un no-op depuis un module — makeScope préfixe
   # sendInputMessage ; shinyjs n'est pas activé dans app.R).

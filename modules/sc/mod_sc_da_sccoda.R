@@ -94,7 +94,7 @@ mod_sc_da_sccoda_output_ui <- function(id) {
                 div(class = "alert alert-warning m-3", style = "font-size:0.9em;",
                     i18n$t("L'unité de composition est l'ÉCHANTILLON — les cellules ne sont pas des réplicats biologiques. L'identité de référence est une hypothèse scientifique (supposée inchangée), affichée sur chaque figure.")),
                 div(class = "alert alert-light m-3", style = "font-size:0.9em;",
-                    i18n$t("Le modèle porte sur la paire de conditions choisie ; scCODA n'interprète pas les voisinages Milo — les deux méthodes restent des résultats distincts (vues croisées descriptives à l'étape 16).")),
+                    i18n$t("Le modèle porte sur la paire de conditions choisie ; scCODA n'interprète pas les voisinages Milo — les deux méthodes restent des résultats distincts (vues croisées descriptives à l'étape 2b).")),
                 div(class = "alert alert-light m-3", style = "font-size:0.9em;",
                     uiOutput(ns("sccoda_spec_note"))))
     ),

@@ -708,21 +708,32 @@ run_markers <- function(input, global_data, shared_rv, session) {
 
 # P3.1 (O28 / UIUX_SINGLECELL_FLAW_TRIAGE RC2): Canonical Step <-> Result Tab
 # mapping for Single-Cell workflow unification (Spatial-inspired 1-step-at-a-time).
+# P2-ÉTAPE 2 (proposal PROPOSAL_UX_UI_HARMONISATION_WORKFLOW_2026-11-15,
+# arbitrage opérateur « you decide ») : numérotation SC alignée sur les MENUS
+# de résultats (numérotés 1-5 dans le navset). Chaque étape porte le numéro du
+# menu où vit son résultat : 1a-1d (Exploration), 2a-2b (Différentiel & DA),
+# 3a-3c (Réseaux & Signalisation — la Communication DÉMÉNAGE du groupe
+# Dynamique vers Analyse : son résultat vit dans « 3 · Réseaux »), 4a-4b
+# (Dynamique), 5a-5b (Contrôle & Rapports). La préparation (mapping/pipeline/
+# métadonnées/datasets) est DÉNUMÉROTÉE — ce sont des outils amont, pas des
+# étapes de résultat. Les `value` (0_mapping, 2_annotation, 8b_communication,
+# 8_da_merged…) sont INTANGIBLES (pins drive) — seuls les libellés, ce map et
+# le groupe d'accordéon de la Communication changent.
 .SC_STEP_TAB_MAP <- list(
   "0_autopipeline"      = list(group = "grp_prep",      acc = "acc_prep",      tab = "tab_summary",          label_key = "Pipeline auto (1 clic)"),
-  "1_pipeline"          = list(group = "grp_prep",      acc = "acc_prep",      tab = "tab_qc",               label_key = "1. Pipeline"),
-  "2_annotation"        = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_annotation",       label_key = "2. Annotation"),
-  "2b_rarity"           = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_rarity",           label_key = "2b. Rareté par population"),
-  "3_viz"               = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_viz",              label_key = "3. Visualisation"),
-  "4_markers"           = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_table",            label_key = "4. Marqueurs"),
-  "5_corr"              = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_correlation",      label_key = "5. Gene Correlation"),
-  "6_pathway"           = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_pathway",          label_key = "6. Pathway Enrichment"),
-  "7_trajectory"        = list(group = "grp_dynamique", acc = "acc_dynamique", tab = "tab_trajectory",       label_key = "7. Trajectory Analysis"),
-  "8_velocity"          = list(group = "grp_dynamique", acc = "acc_dynamique", tab = "tab_velocity",         label_key = "Vélocité ARN — orientation des trajectoires"),
-  "8b_communication"    = list(group = "grp_dynamique", acc = "acc_dynamique", tab = "tab_communication",    label_key = "8b. Communication (import)"),
-  "4b_pseudobulk"       = list(group = "grp_abondance", acc = "acc_abondance", tab = "tab_pseudobulk",       label_key = "Pseudobulk — agrégation des cellules par échantillon"),
-  "8_da_merged"         = list(group = "grp_abondance", acc = "acc_abondance", tab = "tab_da_design",        label_key = "Abondance différentielle — design, méthodes & vues croisées"),
-  "9b_report_consolide" = list(group = "grp_livrables", acc = "acc_livrables", tab = "tab_report_consolide", label_key = "9b. Rapport consolidé (4F)")
+  "1_pipeline"          = list(group = "grp_prep",      acc = "acc_prep",      tab = "tab_qc",               label_key = "Pipeline (QC → UMAP)"),
+  "2_annotation"        = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_annotation",       label_key = "1a. Annotation"),
+  "2b_rarity"           = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_rarity",           label_key = "1b. Rareté par population"),
+  "3_viz"               = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_viz",              label_key = "1c. Visualisation"),
+  "4_markers"           = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_table",            label_key = "1d. Marqueurs"),
+  "5_corr"              = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_correlation",      label_key = "3a. Gene Correlation"),
+  "6_pathway"           = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_pathway",          label_key = "3b. Pathway Enrichment"),
+  "7_trajectory"        = list(group = "grp_dynamique", acc = "acc_dynamique", tab = "tab_trajectory",       label_key = "4a. Trajectory Analysis"),
+  "8_velocity"          = list(group = "grp_dynamique", acc = "acc_dynamique", tab = "tab_velocity",         label_key = "4b. Vélocité ARN — orientation des trajectoires"),
+  "8b_communication"    = list(group = "grp_analyse",   acc = "acc_analyse",   tab = "tab_communication",    label_key = "3c. Communication (import)"),
+  "4b_pseudobulk"       = list(group = "grp_abondance", acc = "acc_abondance", tab = "tab_pseudobulk",       label_key = "2a. Pseudobulk — agrégation des cellules par échantillon"),
+  "8_da_merged"         = list(group = "grp_abondance", acc = "acc_abondance", tab = "tab_da_design",        label_key = "2b. Abondance différentielle — design, méthodes & vues croisées"),
+  "9b_report_consolide" = list(group = "grp_livrables", acc = "acc_livrables", tab = "tab_report_consolide", label_key = "5b. Rapport consolidé (4F)")
 )
 
 .sc_step_to_tab_map <- function(step, da_tab = NULL, da_method_tab = NULL) {
@@ -812,7 +823,7 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
             accordion_panel(i18n$t("0. Mapping IDs (Optionnel)"), icon = icon("arrows-rotate"),
                             value = "0_mapping",
                             mod_sc_mapping_ui(ns("mapping"))),
-            accordion_panel(tagList(i18n$t("1. Pipeline"),
+            accordion_panel(tagList(i18n$t("Pipeline (QC → UMAP)"),
                                     # 2K (O28) : pastille de résumé dans l'en-tête
                                     # — visible panneau replié (spéc §2.22).
                                     uiOutput(ns("acc_pipeline_resume_badge"))),
@@ -823,7 +834,7 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
             # (condition / réplicat) — sans cette colonne, tout le volet
             # A-vs-B (pseudobulk, Milo/scCODA, plots par condition) est
             # structurellement inaccessible (mod_sc.R:798, da_design:152).
-            accordion_panel(tagList(i18n$t("0.5 Métadonnées — condition / réplicat"),
+            accordion_panel(tagList(i18n$t("Métadonnées — condition / réplicat"),
                                     span(class = "badge text-bg-secondary ms-1", "Optionnel")),
                             icon = icon("table"),
                             value = "0_metadata",
@@ -840,47 +851,52 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
         # ── 2. Analyse ────────────────────────────────────────────────────
         accordion_panel(i18n$t("Analyse"), icon = icon("chart-area"), value = "grp_analyse",
           accordion(id = ns("acc_analyse"), multiple = FALSE,
-            accordion_panel(i18n$t("2. Annotation"), icon = icon("user-tag"),
+            # P2-ÉTAPE 2 : titres renumérotés selon les menus de résultats
+            # (1 · Exploration, 3 · Réseaux & Signalisation) — cf.
+            # .SC_STEP_TAB_MAP. La Communication DÉMÉNAGE dans ce groupe (son
+            # résultat vit dans « 3 · Réseaux »), value/pins INTACTS.
+            accordion_panel(i18n$t("1a. Annotation"), icon = icon("user-tag"),
                             value = "2_annotation",
                             mod_sc_annotation_ui(ns("annotation"))),
             # CCC 9 (Q1) : rareté par population annotée — DESCRIPTIF et
             # mono-condition. Onglet du panneau SC existant, jamais un nouveau
             # panneau latéral (point de friction UX n°2).
-            accordion_panel(i18n$t("2b. Rareté par population"), icon = icon("magnifying-glass-chart"),
+            accordion_panel(i18n$t("1b. Rareté par population"), icon = icon("magnifying-glass-chart"),
                             value = "2b_rarity",
                             mod_sc_rarity_ui(ns("rarity"))),
-            accordion_panel(i18n$t("3. Visualisation"), icon = icon("chart-area"),
+            accordion_panel(i18n$t("1c. Visualisation"), icon = icon("chart-area"),
                             value = "3_viz",
                             mod_sc_viz_ui(ns("viz"))),
-            accordion_panel(i18n$t("4. Marqueurs"), icon = icon("magnifying-glass-chart"),
+            accordion_panel(i18n$t("1d. Marqueurs"), icon = icon("magnifying-glass-chart"),
                             value = "4_markers",
                             mod_sc_markers_ui(ns("markers"))),
-            accordion_panel(i18n$t("5. Gene Correlation"), icon = icon("project-diagram"),
+            accordion_panel(i18n$t("3a. Gene Correlation"), icon = icon("project-diagram"),
                             value = "5_corr",
                             mod_sc_corr_ui(ns("corr"))),
-            accordion_panel(i18n$t("6. Pathway Enrichment"), icon = icon("sitemap"),
+            accordion_panel(i18n$t("3b. Pathway Enrichment"), icon = icon("sitemap"),
                             value = "6_pathway",
-                            mod_sc_pathways_ui(ns("pathways")))
+                            mod_sc_pathways_ui(ns("pathways"))),
+            accordion_panel(i18n$t("3c. Communication (import)"), icon = icon("satellite-dish"),
+                            value = "8b_communication",
+                            mod_sc_communication_ui(ns("communication")))
           )),
         # ── 3. Dynamique ──────────────────────────────────────────────────
         accordion_panel(i18n$t("Dynamique"), icon = icon("route"), value = "grp_dynamique",
           accordion(id = ns("acc_dynamique"), multiple = FALSE,
-            accordion_panel(i18n$t("7. Trajectory Analysis"), icon = icon("route"),
+            accordion_panel(i18n$t("4a. Trajectory Analysis"), icon = icon("route"),
                             value = "7_trajectory",
                             mod_sc_trajectory_ui(ns("trajectory"))),
             # LOT 5 (V1.x UX glossary): dual label — what RNA velocity means.
-            accordion_panel(i18n$t("Vélocité ARN — orientation des trajectoires"), icon = icon("wind"),
+            accordion_panel(i18n$t("4b. Vélocité ARN — orientation des trajectoires"), icon = icon("wind"),
                             value = "8_velocity",
-                            mod_sc_velocity_ui(ns("velocity"))),
-            accordion_panel(i18n$t("8b. Communication (import)"), icon = icon("satellite-dish"),
-                            value = "8b_communication",
-                            mod_sc_communication_ui(ns("communication")))
+                            mod_sc_velocity_ui(ns("velocity")))
           )),
         # ── 4. Abondance cellulaire ───────────────────────────────────────
         accordion_panel(i18n$t("Abondance cellulaire"), icon = icon("balance-scale"), value = "grp_abondance",
           accordion(id = ns("acc_abondance"), multiple = FALSE,
             # LOT 5 (V1.x UX glossary): dual label — what "pseudobulk" means.
-            accordion_panel(i18n$t("Pseudobulk — agrégation des cellules par échantillon"), icon = icon("layer-group"),
+            # P2-ÉTAPE 2 : étapes renumérotées 2a/2b (menu « 2 · Différentiel & DA »).
+            accordion_panel(i18n$t("2a. Pseudobulk — agrégation des cellules par échantillon"), icon = icon("layer-group"),
                             value = "4b_pseudobulk",
                             mod_sc_pseudobulk_ui(ns("pseudobulk"))),
             # LOT 2 (mandatory DA nesting): the four flat panels 8c/8d/8e/8f
@@ -889,7 +905,7 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
             # side (8d/8e) — existing UIs nested, NO backend merge; C = cross
             # views (8f). Gating of C stays where it is today: mod_sc_da_cross
             # already req()s both results internally (no new gate invented).
-            accordion_panel(i18n$t("Abondance différentielle — design, méthodes & vues croisées"),
+            accordion_panel(i18n$t("2b. Abondance différentielle — design, méthodes & vues croisées"),
                             icon = icon("balance-scale"), value = "8_da_merged",
                             navset_pill(
                               id = ns("da_tabs"),
@@ -914,7 +930,9 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
         accordion_panel(i18n$t("Livrables"), icon = icon("file-export"), value = "grp_livrables",
           accordion(id = ns("acc_livrables"), multiple = FALSE,
             accordion_panel(
-              i18n$t("9. Rapport Complet"), icon = icon("file-export"),
+              # P2-ÉTAPE 2 : étapes livrables renumérotées 5a/5b (menu
+              # « 5 · Contrôle & Rapports ») ; values/pins INTACTS.
+              i18n$t("5a. Rapport Complet"), icon = icon("file-export"),
               value = "9_report",
               div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #2C3E50;",
                   i18n$t("Rapport autonome (QC, Réduction, Annotation, Marqueurs, Pathways, Trajectoire).")),
@@ -954,7 +972,7 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
             # Stage 17 (4F) : rapport consolide — compile l'etat canonique + la
             # provenance (aucune re-execution d'analyse ; le panneau 9 historique
             # reste le rapport Rmd par domaine, inchangé).
-            accordion_panel(i18n$t("9b. Rapport consolidé (4F)"), icon = icon("clipboard-check"),
+            accordion_panel(i18n$t("5b. Rapport consolidé (4F)"), icon = icon("clipboard-check"),
                             value = "9b_report_consolide",
                             mod_sc_report_consolidated_ui(ns("report_consolide")))
           ))
@@ -970,14 +988,18 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
     navset_card_underline(
       id = ns("main_tabs"), title = i18n$t("Résultats"),
       header = bslib::card_body(fill = FALSE, class = "p-0", uiOutput(ns("sc_step_sync_bar"))),
-      nav_menu(i18n$t("Exploration"),
+      # P2-ÉTAPE 2 : menus numérotés — chaque chiffre = le préfixe des étapes
+      # de la sidebar qui l'alimentent (1a-1d → Exploration, 2a-2b → Différentiel
+      # & DA, 3a-3c → Réseaux & Signalisation, 4a-4b → Dynamique, 5a-5b →
+      # Contrôle & Rapports). `value`/contenus INTACTS.
+      nav_menu(i18n$t("1 · Exploration"),
         nav_panel(i18n$t("Graphiques"), value = "tab_viz", mod_sc_viz_output_ui(ns("viz"))),
         # MAJ 2
         nav_panel(i18n$t("Table Marqueurs"), value = "tab_table", mod_sc_markers_output_ui(ns("markers"))),
         nav_panel(i18n$t("Annotation"), value = "tab_annotation", mod_sc_annotation_output_ui(ns("annotation"))),
         nav_panel(i18n$t("Rareté par population"), value = "tab_rarity", mod_sc_rarity_output_ui(ns("rarity")))
       ),
-      nav_menu(i18n$t("Différentiel & DA"),
+      nav_menu(i18n$t("2 · Différentiel & DA"),
         nav_panel(uiOutput(ns("pseudobulk_tab_title")), value = "tab_pseudobulk",
                   uiOutput(ns("pseudobulk_guarded"))),
         nav_panel(i18n$t("DA design"), value = "tab_da_design", mod_sc_da_design_output_ui(ns("da_design"))),
@@ -997,16 +1019,16 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
         nav_panel(uiOutput(ns("da_cross_tab_title")), value = "tab_da_cross",
                   uiOutput(ns("da_cross_guarded")))
       ),
-      nav_menu(i18n$t("Réseaux & Signalisation"),
+      nav_menu(i18n$t("3 · Réseaux & Signalisation"),
         nav_panel(i18n$t("Gènes Corrélés"), value = "tab_correlation", mod_sc_corr_output_ui(ns("corr"))),
         nav_panel(i18n$t("Pathways"), value = "tab_pathway", mod_sc_pathways_output_ui(ns("pathways"))),
         nav_panel(i18n$t("Communication"), value = "tab_communication", mod_sc_communication_output_ui(ns("communication")))
       ),
-      nav_menu(i18n$t("Dynamique"),
+      nav_menu(i18n$t("4 · Dynamique"),
         nav_panel(i18n$t("Trajectory"), value = "tab_trajectory", mod_sc_trajectory_output_ui(ns("trajectory"))),
         nav_panel(i18n$t("Velocity"), value = "tab_velocity", mod_sc_velocity_output_ui(ns("velocity")))
       ),
-      nav_menu(i18n$t("Contrôle & Rapports"),
+      nav_menu(i18n$t("5 · Contrôle & Rapports"),
         nav_panel(i18n$t("QC"), value = "tab_qc",
           card(max_height = 750,
             div(class = "card-header bg-light", h5(i18n$t("Contrôle Qualité"), class = "card-title mb-0")),
@@ -1138,7 +1160,7 @@ mod_sc_server <- function(id, global_data) {
                    div(class = "small text-muted mt-1",
                        .tr("Ouvre l'onglet « Import Données » → Single-Cell."))),
             column(6, actionButton(ns(paste0(pfx, "_goto_design")),
-                                   .tr("⚙️ Ouvrir l'étape 0.5 — Métadonnées (condition / réplicat)"),
+                                   .tr("⚙️ Ouvrir les Métadonnées (condition / réplicat)"),
                                    class = "btn-outline-primary w-100")))))
     }
     # Saut racine vers l'onglet Import Single-Cell. ⚠️ nav_select("main_nav")
