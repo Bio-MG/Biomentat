@@ -193,7 +193,12 @@ mod_spatial_ui <- function(id) {
                           nav_panel(i18n$t("Rapport HTML/PDF"), value = "report",
                                     mod_spatial_report_controls_ui(ns("report")))
                         ))
-      )
+      ),
+      # P1-ÉTAPE 3 : style réactif du mode d'affichage { Spécialisé | Complet }
+      # (cf. observer côté serveur) — rendu ICI pour être re-envoyé à chaque
+      # connexion client (renderUI survit aux reconnect, contrairement aux
+      # messages shinyjs envoyés avant connect).
+      uiOutput(ns("wf_mode_style"))
     ),
     navset_card_underline(
       id = ns("results"), title = i18n$t("Résultats"),
@@ -536,6 +541,40 @@ mod_spatial_server <- function(id, global_data) {
         try(nav_select(id = "export_report_controls_tabs", selected = sub_tab, session = session), silent = TRUE)
       }
     }, ignoreInit = TRUE)
+
+    # ── P1-ÉTAPE 3 (proposal 2026-11-15, défaut SPÉCIALISÉ — arbitrage
+    # opérateur) : mode d'affichage { Spécialisé | Complet } du workflow
+    # latéral. SPÉCIALISÉ = l'ancien Spatial (« je clique déconvolution,
+    # il n'ouvre QUE déconvolution »). MÉCANIQUE : un style CSS RÉACTIF
+    # (renderUI → re-envoyé au client à CHAQUE connexion, donc sans perte
+    # au boot headless — MEASURÉ boot33 : les messages shinyjs envoyés
+    # avant la connexion client sont PERDUS) masque les .accordion-item
+    # portant data-value != étape ouverte ; AUCUN id/value changé (garde
+    # drive) et la synchro bidirectionnelle résultats↔étape ci-dessus
+    # garantit la navigation. COMPLET = style vide (statu quo option A).
+    # Si TOUTES les étapes sont refermées, la dernière connue est
+    # rouverte en Spécialisé — une étape est TOUJOURS visible.
+    .ts_wf_last_panel <- shiny::reactiveVal("panel_pipeline")
+    observeEvent(input$steps, {
+      panels <- input$steps
+      if (!is.null(panels) && length(panels) > 0) {
+        p <- utils::tail(panels, 1)
+        if (length(p) == 1L && !is.na(p) && nzchar(p)) .ts_wf_last_panel(p)
+      } else if (identical(global_data$workflow_display_mode %||% "specialise", "specialise")) {
+        try(bslib::accordion_panel_set(id = "steps", values = .ts_wf_last_panel(),
+                                       session = session), silent = TRUE)
+      }
+      invisible(NULL)
+    }, ignoreNULL = FALSE)
+    output$wf_mode_style <- renderUI({
+      global_data$wf_mode_version  # re-rendu À CHAQUE émission client du radio (MEASURÉ boot33)
+      mode <- global_data$workflow_display_mode %||% "specialise"
+      if (identical(mode, "complet")) return(NULL)
+      open <- .ts_wf_last_panel()
+      tags$style(HTML(sprintf(
+        "#%1$s > .accordion-item:not([data-value='%2$s']) { display: none; }",
+        ns("steps"), open)))
+    })
 
     output$active_step_breadcrumb_ui <- renderUI({
       global_data$language

@@ -602,6 +602,31 @@ ui_static <- page_navbar(
     # source-level, insensible à la position).
     h6(i18n$t("\u2699\ufe0f Param\u00e8tres"), style = "font-weight: bold;"),
 
+    # P1-ÉTAPE 3 (proposal 2026-11-15, arbitrage opérateur : « défaut =
+    # specialize ») : mode d'affichage du workflow latéral. SPÉCIALISÉ =
+    # l'ancien Spatial — « si je clique déconvolution, il n'ouvre QUE
+    # déconvolution » (les autres étapes sont masquées ; navigation par les
+    # onglets de résultats + barre de synchro). COMPLET = statu quo option A
+    # (pile complète + scroll indépendant + bande sticky). Le paramètre vit
+    # dans global_data (sérialisé avec la session) ; les modules Spatial/
+    # Bulk/SC consomment la valeur — mécanique par sélecteurs CSS sur les
+    # .accordion-item[data-value] (AUCUN id/value changé — garde drive).
+    div(class = "small text-muted", style = "font-size:0.75rem;",
+        .tr_plain("Affichage du workflow latéral :")),
+    # .tr_plain (PATTERNS UI glob.R) et PAS i18n$t : avec use_js() actif,
+    # $t() rend un tag <span data-key> — c(tag, tag) ne peut PAS alimenter
+    # choiceNames (MEASURÉ boot33 : « choiceNames and choiceValues must have
+    # the same length »). Le pattern setNames(choices, .tr_plain()) est
+    # celui des radios de mod_spatial/mod_bulk.
+    radioButtons("workflow_display_mode", NULL,
+                 choices = stats::setNames(
+                   c("specialise", "complet"),
+                   c(.tr_plain("Spécialisé — une seule étape à la fois"),
+                     .tr_plain("Complet — toutes les étapes empilées"))),
+                 selected = "specialise"),
+
+    hr(),
+
     div(class = "small text-muted", style = "font-size:0.75rem;",
 
         i18n$t("Bulk n'est presque jamais limité par la RAM (matrices de quelques Mo)."),
@@ -880,6 +905,16 @@ server <- function(input, output, session) {
     packs = list(),          # PK-1 : registre session des packs valides (clé = pack id) — motif sc_datasets ; fiche PROPOSAL_PACKS_ECOSYSTEM_2026-11-09.md §3
 
     packs_refusals = list(), # PK-1 : refus honnêtes du scan des packs (manifest invalide = message isolé, JAMAIS un crash — fiche idéation §9) ; les jalons PK-2+ en font un statut visible
+
+    # P1-ÉTAPE 3 (proposal 2026-11-15) : mode d'affichage du workflow —
+    # DÉFAUT SPÉCIALISÉ (arbitrage opérateur 2026-11-15 : « défaut =
+    # specialize »). wf_mode_version = compteur bumpé à chaque émission du
+    # radio (y compris la valeur initiale à la connexion) : les renderUI de
+    # visibilité des modules Spatial/Bulk/SC le lisent pour re-rendre leur
+    # style (payloads pré-connect perdus — MEASURÉ boot33). INIT ICI, avant
+    # les mod_*_server : une lecture de champ NULL ne crée PAS de dépendance.
+    workflow_display_mode = "specialise",
+    wf_mode_version = 0L,
 
     spatial_obj = NULL,  # Spatial : liste (sketch, bpcells_dir, coords, ...) — voir tools/pkg_skeleton/R/spatial_io.R (ex-R/utils_spatial_io.R)
     # — POINTE TOUJOURS vers l'echantillon "actif" (voir spatial_datasets ci-dessous)
@@ -2231,8 +2266,35 @@ server <- function(input, output, session) {
   
   
   
+  # === P1-ÉTAPE 3 : MODE D'AFFICHAGE DU WORKFLOW ===
+  # Défaut SPÉCIALISÉ (arbitrage opérateur 2026-11-15). La valeur vit dans
+  # global_data (bus partagé, sérialisé avec la session) ; les modules
+  # Spatial/Bulk/SC la lisent dans leurs styles réactifs (renderUI).
+  # (init des champs : voir le bloc P1-ÉTAPE 3 juste après la CRÉATION de
+  # global_data — les modules Spatial/Bulk/SC lisent wf_mode_version dans
+  # leurs renderUI AVANT ces observers : une lecture de champ NULL ne crée
+  # PAS de dépendance réactive, MEASURÉ boot33d : style vide au boot quand
+  # l'init arrive après les mod_*_server.)
+  # MEASURÉ boot33 : les payloads calculés AVANT la connexion client sont
+  # perdus (sortie suspendue hors onglet actif) — la version est donc bumpée
+  # À CHAQUE émission du radio, y compris la valeur initiale envoyée à la
+  # connexion : les renderUI des modules lisent wf_mode_version et
+  # re-rendent leur style exactement quand un client (re)devient présent.
+  observeEvent(input$workflow_display_mode, {
+    global_data$workflow_display_mode <- input$workflow_display_mode
+    global_data$wf_mode_version <- (global_data$wf_mode_version %||% 0L) + 1L
+  }, ignoreNULL = FALSE)
+  # Restauration de session : re-synchroniser le radio avec l'état restauré
+  # (le rendu statique repart du défaut, l'état restauré peut différer).
+  observeEvent(global_data$workflow_display_mode, {
+    if (!identical(global_data$workflow_display_mode, input$workflow_display_mode)) {
+      updateRadioButtons(session, "workflow_display_mode",
+                         selected = global_data$workflow_display_mode)
+    }
+  }, ignoreInit = TRUE)
+
   # === PARAMÈTRES RAM AJUSTABLES À CHAUD ===
-  
+
   observeEvent(input$apply_ram_settings, {
     
     options(future.globals.maxSize = input$ram_future_gb * 1024^3)

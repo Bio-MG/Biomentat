@@ -878,7 +878,12 @@ new_entries <- list(
     "✓ Mapping applied — re-run the Pipeline (Filtering & VST) to use it."),
   c("Type d'identifiant NON reconnu (ex. trouvé dans vos données : {example}). Si ce ne sont PAS des identifiants de gènes (ex: comptages personnalisés, autre type de feature), ignorez cette étape facultative et passez directement au Pipeline.",
     "Unrecognised identifier type (e.g. found in your data: {example}). If these are NOT gene identifiers (e.g. custom counts, another feature type), skip this optional step and go straight to the Pipeline."),
-  c("À lancer AVANT le Pipeline :", "Run BEFORE the Pipeline:")
+  c("À lancer AVANT le Pipeline :", "Run BEFORE the Pipeline:"),
+  # --- P1-ÉTAPE 3 (2026-11-15) : mode d'affichage du workflow (défaut
+  # SPÉCIALISÉ — arbitrage opérateur).
+  c("Affichage du workflow latéral :", "Side workflow display:"),
+  c("Spécialisé — une seule étape à la fois", "Specialised — one step at a time"),
+  c("Complet — toutes les étapes empilées", "Full — all steps stacked")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

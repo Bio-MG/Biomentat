@@ -145,7 +145,10 @@ mod_bulk_ui <- function(id) {
           # mod_bulk_report.R — renamed only).
           accordion_panel(i18n$t("7. Livrables — Rapport & Script R"), value = "panel_report",
                           icon = icon("file-export"), mod_bulk_report_ui(ns("report")))
-        )
+        ),
+        # P1-ÉTAPE 3 : style réactif du mode d'affichage (cf. serveur) —
+        # renderUI survit aux reconnect client.
+        uiOutput(ns("wf_mode_style"))
       ),
       navset_card_underline(
         id = ns("main_tabs"), title = i18n$t("R\u00e9sultats Bulk RNA-seq"),
@@ -274,7 +277,49 @@ mod_bulk_server <- function(id, global_data) {
     # « DT jamais rendue » (Up/Down table, tables multi/venn…).
     observeEvent(input$main_tabs, {
       shared_rv$main_tabs_current <- input$main_tabs
+      # P1-ÉTAPE 3 (proposal 2026-11-15) : en mode SPÉCIALISÉ, l'onglet de
+      # résultats ouvre son étape dans la sidebar (miroir de la synchro
+      # bidirectionnelle spatiale) — la visibilité ne laisse voir QUE cette
+      # étape. En COMPLET, comportement historique (aucune ouverture forcée).
+      if (identical(global_data$workflow_display_mode %||% "specialise", "specialise")) {
+        meta <- .bulk_tab_step_meta(input$main_tabs)
+        if (!is.null(meta)) {
+          try(bslib::accordion_panel_open(id = "acc_bulk", values = meta$panel,
+                                          session = session), silent = TRUE)
+        }
+      }
     }, ignoreNULL = TRUE)
+
+    # P1-ÉTAPE 3 : visibilité du workflow { Spécialisé | Complet } — STYLE
+    # CSS RÉACTIF (renderUI, re-envoyé à chaque connexion client — les
+    # messages shinyjs envoyés avant connect sont perdus, MEASURÉ boot33)
+    # masquant les .accordion-item portant data-value != étape ouverte ;
+    # AUCUN id/value changé (garde drive). Une étape est TOUJOURS visible :
+    # si toutes sont refermées, la dernière connue est rouverte.
+    .ts_wf_last_panel <- shiny::reactiveVal("panel_filter")
+    observeEvent(input$acc_bulk, {
+      panels <- input$acc_bulk
+      if (!is.null(panels) && length(panels) > 0) {
+        p <- utils::tail(panels, 1)
+        if (length(p) == 1L && !is.na(p) && nzchar(p)) .ts_wf_last_panel(p)
+      } else if (identical(global_data$workflow_display_mode %||% "specialise", "specialise")) {
+        try(bslib::accordion_panel_set(id = "acc_bulk", values = .ts_wf_last_panel(),
+                                       session = session), silent = TRUE)
+      }
+      invisible(NULL)
+    }, ignoreNULL = FALSE)
+    # ⚠️ mod_bulk_server n'a PAS de `ns <- session$ns` (les appels inline
+    # utilisent session$ns(...)) — utiliser session$ns ICI (MEASURÉ boot33e :
+    # « could not find function "ns" » sinon).
+    output$wf_mode_style <- renderUI({
+      global_data$wf_mode_version  # re-rendu À CHAQUE émission client du radio (MEASURÉ boot33)
+      mode <- global_data$workflow_display_mode %||% "specialise"
+      if (identical(mode, "complet")) return(NULL)
+      open <- .ts_wf_last_panel()
+      tags$style(HTML(sprintf(
+        "#%1$s > .accordion-item:not([data-value='%2$s']) { display: none; }",
+        session$ns("acc_bulk"), open)))
+    })
 
     output$bulk_step_sync_bar <- renderUI({
       global_data$language

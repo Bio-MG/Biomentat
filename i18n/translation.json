@@ -13304,6 +13304,18 @@
     {
       "fr": "Le chargement par lot (« Charger la sélection ») enregistre chaque dataset coché sous son identifiant de scan, indépendamment du label ci-dessus.",
       "en": "Batch loading (\"Load selection\") registers each checked dataset under its scan id, independently of the label above."
+    },
+    {
+      "fr": "Affichage du workflow latéral :",
+      "en": "Side workflow display:"
+    },
+    {
+      "fr": "Spécialisé — une seule étape à la fois",
+      "en": "Specialised — one step at a time"
+    },
+    {
+      "fr": "Complet — toutes les étapes empilées",
+      "en": "Full — all steps stacked"
     }
   ]
 }

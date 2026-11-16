@@ -976,7 +976,10 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
                             value = "9b_report_consolide",
                             mod_sc_report_consolidated_ui(ns("report_consolide")))
           ))
-      )
+      ),
+      # P1-ÉTAPE 3 : style réactif du mode d'affichage (cf. serveur) —
+      # renderUI survit aux reconnect client.
+      uiOutput(ns("wf_mode_style"))
     ),
     # ── 2A (O28, spéc §2.6) : les 17 onglets consécutifs de « Résultats »
     # (wrap 2 lignes à 1920×1080, re-sweep du 2026-10-30 — couche L2 du goulot
@@ -1265,7 +1268,12 @@ mod_sc_server <- function(id, global_data) {
     active_sc_step_rv <- reactiveVal("1_pipeline")
     .sync_sc_step_to_tab <- function(step_val) {
       if (is.null(step_val) || !length(step_val) || !nzchar(as.character(step_val[1]))) return()
-      s <- as.character(step_val[1])
+      # P1-ÉTAPE 3 (MEASURÉ boot33h) : prendre le DERNIER ouvert, pas le
+      # premier — quand l'auto-sync ouvre 8_velocity pendant que
+      # 7_trajectory est encore ouvert (aria-expanded double, mesure live),
+      # step_val[1] rendait l'ÉTAPE PRÉCÉDENTE active (désynchronisation
+      # sidebar↔résultat). Même défense que l'observer spatial (tail).
+      s <- as.character(utils::tail(step_val, 1))
       active_sc_step_rv(s)
       target_tab <- .sc_step_to_tab_map(
         s,
@@ -1286,6 +1294,50 @@ mod_sc_server <- function(id, global_data) {
       if (identical(isolate(active_sc_step_rv()), "8_da_merged")) {
         .sync_sc_step_to_tab("8_da_merged")
       }
+    }, ignoreInit = TRUE)
+
+    # ── P1-ÉTAPE 3 (proposal 2026-11-15, défaut SPÉCIALISÉ — arbitrage
+    # opérateur) : visibilité du workflow { Spécialisé | Complet }. En
+    # Spécialisé, la sidebar n'affiche que le GROUPE de l'étape active
+    # (acc_workflow) et, dedans, que l'étape active (l'accordéon interne).
+    # MÉCANIQUE : STYLE CSS RÉACTIF (renderUI, re-envoyé à chaque connexion
+    # client — les messages shinyjs envoyés avant connect sont perdus,
+    # MEASURÉ boot33) sur les .accordion-item[data-value] ; AUCUN value/id
+    # changé (garde drive). Source de vérité = active_sc_step_rv (tenue
+    # par .sync_sc_step_to_tab, le CTA de la barre de synchro et l'auto-sync
+    # résultats ci-dessous) + .SC_STEP_TAB_MAP pour le groupe.
+    output$wf_mode_style <- renderUI({
+      global_data$wf_mode_version  # re-rendu À CHAQUE émission client du radio (MEASURÉ boot33)
+      mode <- global_data$workflow_display_mode %||% "specialise"
+      if (identical(mode, "complet")) return(NULL)
+      step <- active_sc_step_rv()
+      info <- .SC_STEP_TAB_MAP[[step]]
+      if (is.null(info)) return(NULL)
+      # ⚠️ tags$style(HTML(...)) COMME spatial/bulk : un HTML() NU dans
+      # renderUI est rendu ÉCHAPPÉ (texte) — MEASURÉ boot33g (« &gt; » dans
+      # le div, aucune règle appliquée) ; le wrapper tag préserve le HTML.
+      tags$style(HTML(sprintf(
+        paste0("#%1$s > .accordion-item:not([data-value='%2$s']) { display: none; }\n",
+               "#%3$s > .accordion-item:not([data-value='%4$s']) { display: none; }"),
+        ns("acc_workflow"), info$group, ns(info$acc), step)))
+    })
+
+    # P1-ÉTAPE 3 : en SPÉCIALISÉ, l'onglet de résultats ouvre son groupe et
+    # son étape (miroir de la synchro bidirectionnelle spatiale — sc_sync_
+    # open_step en est la variante manuelle). COMPLET : comportement
+    # historique (aucune ouverture forcée).
+    observeEvent(input$main_tabs, {
+      if (!identical(global_data$workflow_display_mode %||% "specialise", "specialise")) {
+        return(invisible(NULL))
+      }
+      tab <- input$main_tabs
+      if (is.null(tab) || length(tab) != 1L || is.na(tab) || !nzchar(tab)) return(invisible(NULL))
+      info <- .sc_tab_to_step_info(tab)
+      if (is.null(info)) return(invisible(NULL))
+      active_sc_step_rv(info$panel)
+      try(bslib::accordion_panel_open(id = "acc_workflow", values = info$group, session = session), silent = TRUE)
+      try(bslib::accordion_panel_open(id = info$acc, values = info$panel, session = session), silent = TRUE)
+      invisible(NULL)
     }, ignoreInit = TRUE)
 
     output$sc_step_sync_bar <- renderUI({
