@@ -95,6 +95,25 @@ test_that("P0.4 lane1 : la couche gène complète n'est plus re-convertie vers R
 })
 
 # ---------------------------------------------------------------------------
+# (A2) Cap 10k : l'AnnData doit etre construite depuis les matrices
+#      SOUS-ENSEMBLEES, pas depuis le resultat complet. Mesure 2026-11-16 en
+#      session live : obs_names = 10000 (cap) vs X = 28894 x 300 (complet)
+#      => ValueError du moteur scVelo/AnnData.
+# ---------------------------------------------------------------------------
+test_that("opt-in : AnnData X/layers/obs_names utilisent le meme sous-ensemble de cellules", {
+  src <- paste(readLines(file.path(ts_project_root(),
+                                   "tools/pkg_skeleton/R/sc_velocity.R"),
+                         warn = FALSE), collapse = "\n")
+  # RED avant fix : les deux constructeurs pointaient sur le resultat COMPLET
+  expect_false(grepl("AnnData(X = .velopt_csc(result$spliced))", src, fixed = TRUE))
+  expect_false(grepl(".velopt_csc(result$unspliced)", src, fixed = TRUE))
+  # GREEN : les variables deja limitees au cap sont effectivement utilisees
+  expect_true(grepl("AnnData(X = .velopt_csc(spliced))", src, fixed = TRUE))
+  expect_true(grepl('layers["unspliced"] <- .velopt_csc(unspl)', src, fixed = TRUE))
+  expect_true(grepl("obs_names <- reticulate::r_to_py(cells_used)", src, fixed = TRUE))
+})
+
+# ---------------------------------------------------------------------------
 # (B) Trace persistante de l'échec opt-in (moteur stubbé absent)
 # ---------------------------------------------------------------------------
 test_that("P0.4 lane1 : échec opt-in => optin_error persistant + statut avec raison", {
