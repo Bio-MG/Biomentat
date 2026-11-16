@@ -87,18 +87,9 @@
   bslib::bind_task_button(ref_viz_task, "btn_ref_viz")
 
   observeEvent(input$btn_ref_viz, {
-    # ── Garde pool (diagnostic live 2026-11-12 : 4 journaux refviz à 0 octet) ─
-    # Les daemons peuvent mourir en cours de session (RAM) : un mirai() émis
-    # sur un pool mort n'écrit JAMAIS la 1re ligne du journal puis attend le
-    # .timeout. Même doctrine que le couple SC/bulk (mod_sc.R:1870,
-    # mod_bulk_de_run.R:568) : on ARME — le watchdog d'init_spatial_daemons()
-    # respawn un pool épuisé — et on VÉRIFIE avant tout dispatch ; sans pool,
-    # notification honnête, pas d'invoke et PAS de reset_log (un journal
-    # tronqué puis jamais écrit = le fichier à 0 octet mesuré).
-    pool_ok <- requireNamespace("mirai", quietly = TRUE) &&
-      isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE)) &&
-      isTRUE(tryCatch(mirai::daemons_set(), error = function(e) FALSE))
-    if (!pool_ok) {
+    # Garde pool (diagnostic live 2026-11-12 : 4 journaux refviz à 0 octet) :
+    # armer + vérifier avant dispatch ; sans pool, notification honnête et pas de reset_log.
+    if (!ts_mirai_pool_available(ensure_fn = ensure_app_daemons)) {
       showNotification(.tr("Pool mirai indisponible — relancez l'application."),
                        type = "error", duration = 10)
       return()

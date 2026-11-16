@@ -515,6 +515,19 @@ ensure_app_daemons <- function(...) {
   invisible(isTRUE(.spatial_async_env$daemons_ready))
 }
 
+#' Verify that the mirai daemon pool is alive and ready for dispatch
+#'
+#' Arms the pool via `ensure_fn` (which may respawn an exhausted pool) and
+#' confirms `mirai::daemons_set()` before invoking an async task.
+#'
+#' @param ensure_fn Function called to ensure/respawn the daemon pool.
+#' @return Logical scalar (`TRUE` if ready, `FALSE` otherwise).
+ts_mirai_pool_available <- function(ensure_fn = ensure_app_daemons) {
+  requireNamespace("mirai", quietly = TRUE) &&
+    isTRUE(tryCatch(ensure_fn(), error = function(e) FALSE)) &&
+    isTRUE(tryCatch(mirai::daemons_set(), error = function(e) FALSE))
+}
+
 #' Are the spatial mirai daemons started? (pool up, NOT necessarily verified)
 spatial_daemons_ready <- function() isTRUE(.spatial_async_env$daemons_ready)
 
