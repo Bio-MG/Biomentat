@@ -170,11 +170,12 @@ test_that("communication module defines exactly its three orchestration function
   expect_match(src, "run_liana_by_sample(", fixed = TRUE)
   expect_match(src, "liana_engine_available(", fixed = TRUE)
   expect_false(grepl("liana::", src, fixed = TRUE))
-  # Le nom de la base n'apparait que dans des LIBELLES utilisateur (les deux
-  # choix d'espece) — jamais dans du code.
+  # Le nom de la base n'apparait que dans des LIBELLES utilisateur (2 choix
+  # d'espece dans l'UI initiale + 2 choix dans l'observeEvent i18n) — jamais
+  # dans du code.
   expect_identical(
     lengths(regmatches(src, gregexpr("CellChatDB", src, fixed = TRUE))),
-    2L
+    4L
   )
 })
 

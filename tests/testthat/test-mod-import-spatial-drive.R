@@ -607,7 +607,7 @@ test_that("a re-import under the same name replaces it and says so", {
   second <- suppressWarnings(writer(root, "probe", "slideseq"))
   expect_true(second$ok, info = second$error)
   expect_identical(second$n_datasets, 1L)   # replaced, not accumulated
-  expect_true(any(grepl("existait deja", steps, fixed = TRUE)))
+  expect_true(any(grepl("existait déjà", steps, fixed = TRUE)))
   # Re-importing the ACTIVE dataset must emit the explicit re-import signal, or
   # the centralised observer in mod_spatial.R would not re-synchronise.
   expect_false(is.null(envir$global_data$spatial_reimport_signal))
