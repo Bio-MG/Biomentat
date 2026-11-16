@@ -3025,7 +3025,8 @@ sc_velocity_scvelo_available <- function() {
 #' @param params list nommée : seed (défaut 1L), n_pcs (30L), n_neighbors
 #'   (30L), mode ("stochastic"|"deterministic"|"dynamical").
 #' @return list(embedding_vectors = cellules x 2 (rownames = barcodes),
-#'   gene_vectors = gènes x cellules, params, banner, provenance).
+#'   params, banner, provenance) — P0.4 lane 1 (2026-11-13) : la couche gène
+#'   complète (~1,2 Gio dense) RETIRÉE, zéro consommateur mesuré.
 #' @keywords internal
 sc_velocity_scvelo_optin_infer <- function(result, embedding, params = list()) {
     if (!is.list(result) || is.null(result$spliced) ||
@@ -3085,32 +3086,78 @@ sc_velocity_scvelo_optin_infer <- function(result, embedding, params = list()) {
             class = c("sc_velocity_engine_missing", "sc_velocity_error")))
     }
 
-    spliced <- as.matrix(result$spliced[, cells_used, drop = FALSE])
-    unspl <- as.matrix(result$unspliced[, cells_used, drop = FALSE])
+    # P0.4 lane 1 (2026-11-13) : sous-ensembles RESTÉS SPARSE — l'ancien
+    # as.matrix() densifiait 2 matrices pleines (1,2 Gio chacune à l'échelle
+    # réelle) avant même l'entrée python.
+    spliced <- result$spliced[, cells_used, drop = FALSE]
+    unspl <- result$unspliced[, cells_used, drop = FALSE]
     emb <- embedding[cells_used, seq_len(min(2L, ncol(embedding))), drop = FALSE]
 
     res_py <- tryCatch({
         np <- reticulate::import("numpy", convert = FALSE)
+        # P0.4 lane 1 (2026-11-13) : backend Agg FORCÉ avant tout import scvelo.
+        # Mesuré : sous reticulate, le backend tkagg par défaut tente tk.Tk()
+        # (pyplot.new_figure_manager) et lève `_tkinter.TclError` — le R process
+        # embarque son propre tcl8.6 qui masque celui du venv (init.tcl
+        # introuvable) — TOUT le bloc moteur mourait à `velocity_embedding`.
+        # Moteur serveur = sans écran : Agg est le choix honnête et
+        # environnement-indépendant (en python pur tkagg « marche » — d'où un
+        # bug qui ne se voyait qu'en session app/reticulate).
+        mpl <- reticulate::import("matplotlib", convert = FALSE)
+        mpl$use("Agg", force = TRUE)
         ad <- reticulate::import("anndata", convert = FALSE)
         scv <- reticulate::import("scvelo", convert = FALSE)
         reticulate::py_set_seed(as.integer(p$seed))
-        adata <- ad$AnnData(X = np$array(t(spliced)))
-        adata$layers["unspliced"] <- np$array(t(unspl))
+        # P0.4 lane 1 (2026-11-13) : entrée SCIPY SPARSE — plus de coercition
+        # dense R-side (2 copies pleines = 1,2 Gio chacune à 4444×35k,
+        # x2 avec unspliced) ni d'injection dense `np$array(t(...))` côté
+        # python. AnnData et scvelo acceptent nativement le sparse ; le triple
+        # slot CSC d'une dgCMatrix transposée (i/p/x + shape) reconstruit
+        # exactement la même matrice sans jamais allouer le dense.
+        .velopt_csc <- function(m_sparse) {
+            # garde : validate_velocity_matrices peut livrer du dense selon la
+            # voie d'import (RDS dense) — cohérence dgCMatrix avant les slots.
+            if (!inherits(m_sparse, "dgCMatrix")) {
+                m_sparse <- Matrix::Matrix(as.matrix(m_sparse), sparse = TRUE)
+            }
+            m_t <- Matrix::t(m_sparse) # cells x genes (dgCMatrix, slots CSC)
+            scipy <- reticulate::import("scipy.sparse", convert = FALSE)
+            scipy$csc_matrix(
+                reticulate::tuple(
+                    reticulate::r_to_py(as.numeric(m_t@x)),
+                    reticulate::r_to_py(as.integer(m_t@i)),
+                    reticulate::r_to_py(as.integer(m_t@p))
+                ),
+                shape = reticulate::tuple(as.integer(nrow(m_t)),
+                                          as.integer(ncol(m_t)))
+            )
+        }
+        # FIX 2026-11-16 : X/layers DOIVENT venir des matrices deja
+        # sous-ensemblees sur cells_used (cap 10000), sinon obs_names (10000)
+        # ne correspond plus a X (28894 x 300) => ValueError AnnData.
+        adata <- ad$AnnData(X = .velopt_csc(spliced))
+        adata$layers["unspliced"] <- .velopt_csc(unspl)
         adata$obs_names <- reticulate::r_to_py(cells_used)
         adata$var_names <- reticulate::r_to_py(rownames(spliced))
         adata$obsm["X_optin"] <- np$array(emb)
         scv$pp$normalize_per_cell(adata)
         scv$pp$log1p(adata)
+        # P0.4 lane 1 (2026-11-13) : show_progress_bar = FALSE sur velocity_graph
+        # (seule signature scvelo 0.3.4 qui l'accepte — mesuré au venv). Le
+        # fallback tqdm/ipywidgets absent est GRACIEUX là (simple warning) ;
+        # sans lui le bloc moteur reste sain sous reticulate.
         scv$pp$neighbors(adata, n_pcs = as.integer(p$n_pcs),
                          n_neighbors = as.integer(p$n_neighbors))
         scv$pp$moments(adata)
         scv$tl$velocity(adata, mode = p$mode)
-        scv$tl$velocity_graph(adata)
+        scv$tl$velocity_graph(adata, show_progress_bar = FALSE)
         scv$tl$velocity_embedding(adata, basis = "optin")
-        list(
-            vel_emb = reticulate::py_to_r(np$array(adata$obsm["velocity_optin"])),
-            vel_g = reticulate::py_to_r(np$array(adata$layers["velocity"]))
-        )
+        # P0.4 lane 1 (2026-11-13) : la couche gène COMPLÈTE n'est PAS
+        # re-convertie vers R (~1,2 Gio dense à 4444×35k) — AUCUN consommateur
+        # mesuré (grep global) ; sa conversion py_to_r était la cause probable
+        # de l'échec mémoire de la session live. L'embedding seul (cellules × 2)
+        # est le seul produit nécessaire à l'affichage et au contexte CCC.
+        list(vel_emb = reticulate::py_to_r(np$array(adata$obsm["velocity_optin"])))
     }, error = function(e) {
         stop(errorCondition(
             paste0("sc_velocity_scvelo_optin_infer() : échec du moteur scVelo : ",
@@ -3129,9 +3176,8 @@ sc_velocity_scvelo_optin_infer <- function(result, embedding, params = list()) {
     embedding_vectors <- vel_emb[, seq_len(2L), drop = FALSE]
     rownames(embedding_vectors) <- cells_used
 
-    gene_vectors <- t(res_py$vel_g)
-    rownames(gene_vectors) <- rownames(spliced)
-    colnames(gene_vectors) <- cells_used
+    # P0.4 lane 1 (2026-11-13) : couche gène RETIRÉE du retour — plus de
+    # gène convertie, plus de clé consommée par personne (grep global mesuré).
 
     provenance <- new_provenance_entry(
         analysis_id = "sc-velocity-optin",
