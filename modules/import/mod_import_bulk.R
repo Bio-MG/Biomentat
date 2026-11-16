@@ -167,11 +167,11 @@ mod_import_bulk_ui <- function(id) {
     layout_sidebar(
       sidebar = sidebar(
         width = 400,
-        title = "Import RNA Bulk",
+        title = i18n$t("Import RNA Bulk"),
         
         div(class = "alert alert-info", style = "font-size: 0.85rem;",
             bsicons::bs_icon("info-circle"),
-            " Importez des données RNA-Seq en Bulk (matrice de counts + métadonnées)."),
+            i18n$t(" Importez des données RNA-Seq en Bulk (matrice de counts + métadonnées).")),
 
         # LOT 4A (V1.x UX): mapping stays in the analysis module (no UI move);
         # remind + native jump to the existing Bulk "0. Mapping IDs" panel.
@@ -198,34 +198,35 @@ mod_import_bulk_ui <- function(id) {
         accordion(
           # ── Panel 1 : counts (mode merged_matrix) ───────────────────────
           accordion_panel(
-            "1. Matrice de Counts",
+            i18n$t("1. Matrice de Counts"),
+            value = "panel_counts",
             icon = icon("table"),
             
             conditionalPanel(
               condition = sprintf("input['%s'] === 'merged_matrix'", ns("bulk_import_mode")),
               
-              fileInput(ns("counts_file"), "Fichier de Counts (CSV/TSV/TXT)",
+              fileInput(ns("counts_file"), i18n$t("Fichier de Counts (CSV/TSV/TXT)"),
                         accept = c(".csv", ".tsv", ".txt", ".xlsx",
                                    ".rda", ".RData", ".rds", ".RDS"),
                         buttonLabel = i18n$t("Parcourir...")),
               
-              helpText("Format attendu : Lignes = Gènes, Colonnes = Échantillons. ",
-                       "Un filtrage fin (par réplicat) est disponible à l'étape 1 du module d'analyse — ",
-                       "le seuil ci-dessous (Options d'Import) n'est qu'un pré-nettoyage grossier."),
+              helpText(i18n$t("Format attendu : Lignes = Gènes, Colonnes = Échantillons. "),
+                       i18n$t("Un filtrage fin (par réplicat) est disponible à l'étape 1 du module d'analyse — "),
+                       i18n$t("le seuil ci-dessous (Options d'Import) n'est qu'un pré-nettoyage grossier.")),
               
               radioButtons(ns("counts_format"), i18n$t("Format de la matrice"),
                            choices  = setNames(c("rows", "cols"),
                                               c(.tr_plain("Genes en lignes (standard)"), .tr_plain("Genes en colonnes (transposé)"))),
                            selected = "rows"),
               
-              checkboxInput(ns("counts_has_header"),   "La 1ère ligne est un en-tête", value = TRUE),
-              checkboxInput(ns("counts_has_rownames"), "La 1ère colonne est le nom des gènes", value = TRUE),
+              checkboxInput(ns("counts_has_header"),   i18n$t("La 1ère ligne est un en-tête"), value = TRUE),
+              checkboxInput(ns("counts_has_rownames"), i18n$t("La 1ère colonne est le nom des gènes"), value = TRUE),
               
-              h6("Aperçu de la matrice:", style = "font-weight: bold; margin-top: 10px;"),
+              h6(i18n$t("Aperçu de la matrice:"), style = "font-weight: bold; margin-top: 10px;"),
               # IMP-B1-B (O26, 2026-10-29) : pastille d'orientation ACTIVE + override manuel
               div(class = "d-flex align-items-center gap-2 mb-2",
                   uiOutput(ns("orientation_badge")),
-                  actionButton(ns("toggle_transpose"), "↻ Inverser lignes / colonnes",
+                  actionButton(ns("toggle_transpose"), i18n$t("↻ Inverser lignes / colonnes"),
                                class = "btn-xs btn-outline-secondary")),
               div(style = "max-height: 200px; overflow: auto; border: 1px solid #ddd; padding: 5px;",
                   tableOutput(ns("counts_preview"))),
@@ -239,23 +240,24 @@ mod_import_bulk_ui <- function(id) {
           
           # ── Panel 2 : métadonnées (mode merged_matrix) ──────────────────
           accordion_panel(
-            "2. Métadonnées (Optionnel)",
+            i18n$t("2. Métadonnées (Optionnel)"),
+            value = "panel_metadata",
             icon = icon("tags"),
             
             conditionalPanel(
               condition = sprintf("input['%s'] === 'merged_matrix'", ns("bulk_import_mode")),
               
-              fileInput(ns("metadata_file"), "Fichier de Métadonnées (CSV/TSV/TXT)",
+              fileInput(ns("metadata_file"), i18n$t("Fichier de Métadonnées (CSV/TSV/TXT)"),
                         accept = c(".csv", ".tsv", ".txt", ".xlsx",
                                    ".rda", ".RData", ".rds", ".RDS"),
                         buttonLabel = i18n$t("Parcourir...")),
               
-              helpText("Format : Lignes = Échantillons, Colonnes = Variables (condition, batch, etc.)."),
+              helpText(i18n$t("Format : Lignes = Échantillons, Colonnes = Variables (condition, batch, etc.).")),
               
-              checkboxInput(ns("metadata_has_header"),   "La 1ère ligne est un en-tête", value = TRUE),
-              checkboxInput(ns("metadata_has_rownames"), "La 1ère colonne est le nom des échantillons", value = TRUE),
+              checkboxInput(ns("metadata_has_header"),   i18n$t("La 1ère ligne est un en-tête"), value = TRUE),
+              checkboxInput(ns("metadata_has_rownames"), i18n$t("La 1ère colonne est le nom des échantillons"), value = TRUE),
               
-              h6("Aperçu des métadonnées actives:", style = "font-weight: bold; margin-top: 10px;"),
+              h6(i18n$t("Aperçu des métadonnées actives:"), style = "font-weight: bold; margin-top: 10px;"),
               div(style = "max-height: 200px; overflow: auto; border: 1px solid #ddd; padding: 5px;",
                   tableOutput(ns("metadata_preview"))),
 
@@ -267,20 +269,20 @@ mod_import_bulk_ui <- function(id) {
               div(
                 class = "border rounded p-2",
                 style = "background:#f8f9fa;",
-                h6("Pas de fichier ? Inférer depuis les noms d'échantillons",
+                h6(i18n$t("Pas de fichier ? Inférer depuis les noms d'échantillons"),
                    style = "font-weight: bold; font-size: 0.85em;"),
                 helpText(style = "font-size:0.78em;",
-                         "Ex: 'Ctrl_1', 'Ctrl_2', 'KO_1', 'KO_2' → colonnes condition + réplicat. ",
-                         "Ignoré si un fichier de métadonnées est fourni ci-dessus."),
+                         i18n$t("Ex: 'Ctrl_1', 'Ctrl_2', 'KO_1', 'KO_2' → colonnes condition + réplicat. "),
+                         i18n$t("Ignoré si un fichier de métadonnées est fourni ci-dessus.")),
                 
-                textInput(ns("infer_delimiter"), "Délimiteur (regex)", value = "[_-]"),
-                actionButton(ns("btn_infer_preview"), "👁 Prévisualiser le découpage",
+                textInput(ns("infer_delimiter"), i18n$t("Délimiteur (regex)"), value = "[_-]"),
+                actionButton(ns("btn_infer_preview"), i18n$t("👁 Prévisualiser le découpage"),
                              class = "btn-outline-secondary btn-sm w-100"),
                 
                 uiOutput(ns("infer_preview_ui")),
                 uiOutput(ns("infer_colnames_ui")),
                 
-                actionButton(ns("btn_infer_apply"), "✓ Utiliser ces métadonnées inférées",
+                actionButton(ns("btn_infer_apply"), i18n$t("✓ Utiliser ces métadonnées inférées"),
                              class = "btn-outline-success btn-sm w-100 mt-2")
               )
             )
@@ -288,10 +290,11 @@ mod_import_bulk_ui <- function(id) {
           
           # ── Panel 3 : options d'import ───────────────────────────────────
           accordion_panel(
-            "3. Options d'Import",
+            i18n$t("3. Options d'Import"),
+            value = "panel_options",
             icon = icon("cogs"),
             
-            textInput(ns("project_name"), "Nom du Projet",
+            textInput(ns("project_name"), i18n$t("Nom du Projet"),
                       value = "BulkRNA_Project", placeholder = "Ex: Study_2024"),
 
             # MD-1 : label optionnel — enregistre aussi le jeu importé dans
@@ -309,15 +312,16 @@ mod_import_bulk_ui <- function(id) {
 
             conditionalPanel(
               condition = sprintf("input['%s'] === 'merged_matrix'", ns("bulk_import_mode")),
-              numericInput(ns("min_counts"), "Counts minimum par gène (pré-filtre grossier)",
+              numericInput(ns("min_counts"), i18n$t("Counts minimum par gène (pré-filtre grossier)"),
                            value = 10, min = 0, step = 1),
-              helpText("Les gènes avec moins de counts seront filtrés dès l'import.")
+              helpText(i18n$t("Les gènes avec moins de counts seront filtrés dès l'import."))
             )
           ),
           
           # ── Panel 4 : NEW — one file per sample ─────────────────────────
           accordion_panel(
-            "4. Import multi-fichiers (one file per sample)",
+            i18n$t("4. Import multi-fichiers (one file per sample)"),
+            value = "panel_multi",
             icon = icon("copy"), # previous icon("files") = problem
             
             conditionalPanel(
@@ -325,7 +329,7 @@ mod_import_bulk_ui <- function(id) {
               
               fileInput(
                 ns("ps_files"),
-                "Fichiers bulk (un fichier = un sample)",
+                i18n$t("Fichiers bulk (un fichier = un sample)"),
                 multiple = TRUE,
                 accept   = c(".csv", ".tsv", ".txt", ".gz"),
                 buttonLabel = i18n$t("Parcourir...")
@@ -333,7 +337,7 @@ mod_import_bulk_ui <- function(id) {
               
               numericInput(
                 ns("ps_dup_threshold"),
-                "Seuil max. gene IDs dupliqués (fraction)",
+                i18n$t("Seuil max. gene IDs dupliqués (fraction)"),
                 value = 0.05, min = 0, max = 1, step = 0.01
               ),
               
@@ -342,7 +346,7 @@ mod_import_bulk_ui <- function(id) {
               # Résolution ambiguïté colonnes (rendu dynamique)
               uiOutput(ns("ps_resolve_ui")),
               
-              h6("📋 Aperçu des fichiers détectés",
+              h6(i18n$t("📋 Aperçu des fichiers détectés"),
                  style = "font-weight:bold; margin-top:8px;"),
               DT::DTOutput(ns("ps_preview_table")),
               
@@ -350,7 +354,7 @@ mod_import_bulk_ui <- function(id) {
               
               checkboxInput(
                 ns("ps_fill_zero"),
-                "✅ J'accepte de remplacer les counts manquants (full join) par 0",
+                i18n$t("✅ J'accepte de remplacer les counts manquants (full join) par 0"),
                 value = FALSE
               ),
               
@@ -361,14 +365,14 @@ mod_import_bulk_ui <- function(id) {
               # métadonnées vivent dans les dossiers, invisibles du navigateur.
               fileInput(
                 ns("ps_metadata_file"),
-                "Métadonnées (CSV/TSV, optionnel — 1 ligne par fichier)",
+                i18n$t("Métadonnées (CSV/TSV, optionnel — 1 ligne par fichier)"),
                 accept = c(".csv", ".tsv", ".txt"),
                 buttonLabel = i18n$t("Parcourir...")
               ),
-              helpText("Alignées par ORDRE des fichiers ci-dessus (ligne 1 ↔ 1er fichier). Si une colonne « sample_id » est présente, elle remplace les identifiants déduits du nom de fichier ; les autres colonnes sont ajoutées telles quelles. La colonne utilisée comme condition doit être choisie ci-dessous."),
+              helpText(i18n$t("Alignées par ORDRE des fichiers ci-dessus (ligne 1 ↔ 1er fichier). Si une colonne « sample_id » est présente, elle remplace les identifiants déduits du nom de fichier ; les autres colonnes sont ajoutées telles quelles. La colonne utilisée comme condition doit être choisie ci-dessous.")),
               uiOutput(ns("ps_meta_condition_ui")),
               
-              h6("📝 Métadonnées auto-générées (éditables)",
+              h6(i18n$t("📝 Métadonnées auto-générées (éditables)"),
                  style = "font-weight:bold; margin-top:8px;"),
               DT::DTOutput(ns("ps_metadata_dt")),
               
@@ -417,31 +421,31 @@ mod_import_bulk_ui <- function(id) {
           style = "background:#eef2f5;padding:10px;border-radius:6px;border:1px solid #d6dde1;",
           uiOutput(ns("readiness_banner")),
           div(id = ns("load_button_container"), style = "margin-top:8px;",
-              actionButton(ns("btn_load"), "🚀 Charger les Données",
+              actionButton(ns("btn_load"), i18n$t("🚀 Charger les Données"),
                            class = "btn-success w-100", icon = icon("play"))
           )
         )
       ),
       
       card(
-        card_header("Résumé des Données Bulk"),
+        card_header(i18n$t("Résumé des Données Bulk")),
         # O15 (2026-10-27) : grille fluide .bulk-kpi-grid (règle injectée sur
         # my_theme via bs_add_rules) remplace layout_columns — les 4 KPI ne
         # s'enveloppent plus en colonnes rigides sur 1080p (correctif B2-A).
         div(class = "bulk-kpi-grid",
-          value_box(title = "Échantillons",
+          value_box(title = i18n$t("Échantillons"),
                     value   = textOutput(ns("nb_samples")),
                     showcase = bsicons::bs_icon("grid-3x3"),
                     theme   = "primary"),
-          value_box(title = "Gènes",
+          value_box(title = i18n$t("Gènes"),
                     value   = textOutput(ns("nb_genes")),
                     showcase = bsicons::bs_icon("diagram-3"),
                     theme   = "secondary"),
-          value_box(title = "Variables Métadonnées",
+          value_box(title = i18n$t("Variables Métadonnées"),
                     value   = textOutput(ns("nb_metadata_vars")),
                     showcase = bsicons::bs_icon("tags"),
                     theme   = "info"),
-          value_box(title = "Statut",
+          value_box(title = i18n$t("Statut"),
                     value   = textOutput(ns("status_obj")),
                     showcase = bsicons::bs_icon("check-circle"),
                     theme   = "light")
@@ -457,7 +461,7 @@ mod_import_bulk_ui <- function(id) {
         # défini sur my_theme ; IMPORT-05 reste NON VÉRIFIÉ navigateur).
         card_body(
           div(class = "bulk-console-scroll",
-            h5("Console de Log", class = "text-muted"),
+            h5(i18n$t("Console de Log"), class = "text-muted"),
             verbatimTextOutput(ns("console_log"), placeholder = TRUE)
           )
         )
@@ -549,7 +553,7 @@ mod_import_bulk_server <- function(id, global_data) {
                             producer = "import"),
         bulk_multi_error = function(e) e)
       if (inherits(res, "bulk_multi_error")) {
-        add_log(paste(" ⚠️ Dataset non enregistré (multi-jeux) :", res$message))
+        add_log(sprintf(.tr(" ⚠️ Dataset non enregistré (multi-jeux) : %s"), res$message))
         showNotification(
           sprintf(.tr("⚠️ Dataset non enregistré (multi-jeux) : %s"), res$message),
           type = "warning", duration = 8)
@@ -557,7 +561,7 @@ mod_import_bulk_server <- function(id, global_data) {
       }
       global_data$bulk_datasets <- res
       if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("import_complete", lbl)  # ASR-WIRING : point de pose (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §3.1)
-      add_log(paste(" 📦 Dataset enregistré pour la comparaison multi-jeux :", lbl))
+      add_log(sprintf(.tr(" 📦 Dataset enregistré pour la comparaison multi-jeux : %s"), lbl))
       showNotification(
         sprintf(.tr("📦 Import enregistré pour la comparaison multi-jeux : « %s »."), lbl),
         type = "message", duration = 6)
@@ -614,7 +618,7 @@ mod_import_bulk_server <- function(id, global_data) {
     }, ignoreInit = TRUE)
 
     # ── Logger (B2-G : garde anti-spam ajoutée, le reste inchangé) ─────────
-    logs <- reactiveVal("En attente d'import...")
+    logs <- reactiveVal(.tr("En attente d'import..."))
     .last_log_msg <- ""
     add_log <- function(msg) {
       # B2-G (O21, 2026-10-28) : une réactive qui ré-invalide ne rejoue plus
@@ -669,18 +673,18 @@ mod_import_bulk_server <- function(id, global_data) {
                               stringsAsFactors = FALSE, fileEncoding = "UTF-8-BOM"),
           "xlsx" = {
             if (!requireNamespace("readxl", quietly = TRUE))
-              stop(errorCondition("Package 'readxl' nécessaire pour lire les fichiers .xlsx", class = "bulk_import_error"))
+              stop(errorCondition(.tr("Package 'readxl' nécessaire pour lire les fichiers .xlsx"), class = "bulk_import_error"))
             tmp <- readxl::read_excel(filepath, col_names = has_header)
             tmp <- as.data.frame(tmp, check.names = FALSE, stringsAsFactors = FALSE)
             if (has_rownames) { rownames(tmp) <- tmp[[1]]; tmp <- tmp[, -1, drop = FALSE] }
             tmp
           },
-          stop(errorCondition("Format de fichier non supporté", class = "bulk_import_error"))
+          stop(errorCondition(.tr("Format de fichier non supporté"), class = "bulk_import_error"))
         )
         if (!is.null(colnames(df))) colnames(df) <- trimws(sub("^\ufeff", "", colnames(df)))
         if (!is.null(rownames(df))) rownames(df) <- trimws(sub("^\ufeff", "", rownames(df)))
         df
-      }, error = function(e) stop(errorCondition(paste("Erreur de lecture:", e$message), class = "bulk_import_error")))
+      }, error = function(e) stop(errorCondition(sprintf(.tr("Erreur de lecture: %s"), e$message), class = "bulk_import_error")))
     }
 
     # ── Assemblage de l'objet bulk — UNE seule source de vérité (G3) ───────
@@ -697,21 +701,21 @@ mod_import_bulk_server <- function(id, global_data) {
     # `counts`   : data.frame/matrix gènes × échantillons.
     # `metadata` : data.frame aligné par ROWNAMES, ou NULL.
     assemble_bulk_obj <- function(counts, metadata, min_counts, project_name) {
-      add_log(" → Conversion des valeurs en numérique...")
+      add_log(.tr(" → Conversion des valeurs en numérique..."))
       counts <- as.data.frame(counts, check.names = FALSE, stringsAsFactors = FALSE)
       for (col in colnames(counts)) {
         if (is.character(counts[[col]]))
           counts[[col]] <- suppressWarnings(as.numeric(counts[[col]]))
       }
       if (anyNA(as.matrix(counts)))
-        add_log(" ⚠️ Certaines valeurs ne sont pas numériques (NA après conversion)")
+        add_log(.tr(" ⚠️ Certaines valeurs ne sont pas numériques (NA après conversion)"))
 
       counts_matrix <- as.matrix(counts)
       gene_counts   <- rowSums(counts_matrix, na.rm = TRUE)
       keep_genes    <- gene_counts >= min_counts
       counts_matrix <- counts_matrix[keep_genes, , drop = FALSE]
-      add_log(paste(" → Gènes filtrés:", sum(!keep_genes), "retirés,",
-                    sum(keep_genes), "conservés"))
+      add_log(sprintf(.tr(" → Gènes filtrés: %d retirés, %d conservés"),
+                    sum(!keep_genes), sum(keep_genes)))
 
       bulk_obj <- list(counts    = counts_matrix,
                        metadata  = NULL,
@@ -728,16 +732,16 @@ mod_import_bulk_server <- function(id, global_data) {
           # 'dose' absente des métadonnées » (H21, dataset clinique) implique
           # un drop en amont que le code de CET assembleur ne montre pas —
           # tracer les colonnes réellement retenues à l'assemblage.
-          add_log(paste(" ✓ Métadonnées alignées:", ncol(bulk_obj$metadata), "variables :",
+          add_log(sprintf(.tr(" ✓ Métadonnées alignées: %d variables : %s"), ncol(bulk_obj$metadata),
                         paste(colnames(bulk_obj$metadata), collapse = ", ")))
         } else {
           bulk_obj$metadata <- data.frame(sample = sample_names, row.names = sample_names)
-          add_log(" ⚠️ Métadonnées non alignées - création de métadonnées par défaut")
+          add_log(.tr(" ⚠️ Métadonnées non alignées - création de métadonnées par défaut"))
         }
       } else {
         bulk_obj$metadata <- data.frame(
           sample = colnames(counts_matrix), row.names = colnames(counts_matrix))
-        add_log(" → Aucune métadonnée — colonne 'sample' par défaut créée")
+        add_log(.tr(" → Aucune métadonnée — colonne 'sample' par défaut créée"))
       }
       bulk_obj
     }
@@ -802,7 +806,7 @@ mod_import_bulk_server <- function(id, global_data) {
       commit_fn    = function(obj, obj_name) {
         if (is.data.frame(obj)) obj <- as.matrix(obj)
         counts_rda_obj(obj)
-        add_log(paste("✓ Objet .RData sélectionné comme comptages :", obj_name))
+        add_log(sprintf(.tr("✓ Objet .RData sélectionné comme comptages : %s"), obj_name))
       },
       expected     = c("matrix", "dgCMatrix", "dgTMatrix", "data.frame"),
       context      = "import bulk counts (.RData)",
@@ -815,7 +819,7 @@ mod_import_bulk_server <- function(id, global_data) {
       file_rv      = rdata_meta_rv,
       commit_fn    = function(obj, obj_name) {
         metadata_rda_obj(obj)
-        add_log(paste("✓ Objet .RData sélectionné comme métadonnées :", obj_name))
+        add_log(sprintf(.tr("✓ Objet .RData sélectionné comme métadonnées : %s"), obj_name))
       },
       expected     = c("data.frame", "matrix", "dgCMatrix", "dgTMatrix"),
       context      = "import bulk metadata (.RData)",
@@ -831,31 +835,31 @@ mod_import_bulk_server <- function(id, global_data) {
         if (rdata_is_explorable_file(input$counts_file$datapath)) {
           obj <- counts_rda_obj()
           if (is.null(obj)) {
-            add_log("ℹ Aperçu .RData actif : sélectionnez l'objet à utiliser comme comptages.")
+            add_log(.tr("ℹ Aperçu .RData actif : sélectionnez l'objet à utiliser comme comptages."))
             return(NULL)
           }
           if (input$counts_format == "cols") obj <- t(obj)
           df <- as.data.frame(obj)
-          add_log(paste("✓ Matrice de counts .RData chargée:", nrow(df), "gènes ×", ncol(df), "échantillons"))
+          add_log(sprintf(.tr("✓ Matrice de counts .RData chargée: %d gènes × %d échantillons"), nrow(df), ncol(df)))
           return(df)
         }
-        add_log("📂 Lecture du fichier de counts...")
+        add_log(.tr("📂 Lecture du fichier de counts..."))
         df <- smart_read(input$counts_file$datapath,
                          input$counts_has_header, input$counts_has_rownames)
         if (input$counts_format == "cols") {
           df <- as.data.frame(t(df))
-          add_log(" ↻ Matrice transposée (genes étaient en colonnes)")
+          add_log(.tr(" ↻ Matrice transposée (genes étaient en colonnes)"))
         }
         if (nrow(df) == 0 || ncol(df) == 0) {
-          stop(errorCondition("Matrice vide après lecture. Vérifie les options d'en-tête/rownames.", class = "bulk_import_error"))
+          stop(errorCondition(.tr("Matrice vide après lecture. Vérifie les options d'en-tête/rownames."), class = "bulk_import_error"))
         } else {
-          add_log(paste("✓ Matrice de counts chargée:", nrow(df), "gènes ×", ncol(df), "échantillons"))
+          add_log(sprintf(.tr("✓ Matrice de counts chargée: %d gènes × %d échantillons"), nrow(df), ncol(df)))
         }
         df
       }, error = function(e) {
         err_msg <- e$message
-        add_log(paste("⚠️ Erreur lecture counts:", err_msg))
-        showNotification(paste("⚠️ Erreur lecture counts:", err_msg), type = "error", duration = 10)
+        add_log(sprintf(.tr("⚠️ Erreur lecture counts: %s"), err_msg))
+        showNotification(sprintf(.tr("⚠️ Erreur lecture counts: %s"), err_msg), type = "error", duration = 10)
         NULL
       })
     })
@@ -870,13 +874,13 @@ mod_import_bulk_server <- function(id, global_data) {
     })
     observeEvent(input$toggle_transpose, {
       transposed(!transposed())
-      add_log("↻ Inversion manuelle lignes / colonnes (pastille mise à jour)")
+      add_log(.tr("↻ Inversion manuelle lignes / colonnes (pastille mise à jour)"))
     })
     output$orientation_badge <- renderUI({
       df <- active_counts()
       req(!is.null(df))
       span(class = "badge bg-info",
-           sprintf("Matrice active : %d gènes (lignes) × %d échantillons (colonnes)",
+           sprintf(.tr("Matrice active : %d gènes (lignes) × %d échantillons (colonnes)"),
                    nrow(df), ncol(df)))
     })
 
@@ -887,21 +891,21 @@ mod_import_bulk_server <- function(id, global_data) {
         if (rdata_is_explorable_file(input$metadata_file$datapath)) {
           obj <- metadata_rda_obj()
           if (is.null(obj)) {
-            add_log("ℹ Aperçu .RData actif : sélectionnez l'objet à utiliser comme métadonnées.")
+            add_log(.tr("ℹ Aperçu .RData actif : sélectionnez l'objet à utiliser comme métadonnées."))
             return(NULL)
           }
           df <- as.data.frame(obj)
-          add_log(paste("✓ Métadonnées .RData chargées:", nrow(df), "échantillons ×", ncol(df), "variables"))
+          add_log(sprintf(.tr("✓ Métadonnées .RData chargées: %d échantillons × %d variables"), nrow(df), ncol(df)))
           return(df)
         }
-        add_log("📂 Lecture du fichier de métadonnées...")
+        add_log(.tr("📂 Lecture du fichier de métadonnées..."))
         df <- smart_read(input$metadata_file$datapath,
                          input$metadata_has_header, input$metadata_has_rownames)
-        add_log(paste("✓ Métadonnées chargées:", nrow(df), "échantillons ×", ncol(df), "variables"))
+        add_log(sprintf(.tr("✓ Métadonnées chargées: %d échantillons × %d variables"), nrow(df), ncol(df)))
         df
       }, error = function(e) {
-        add_log(paste("⚠️ Erreur lecture métadonnées:", e$message))
-        showNotification(paste("Erreur métadonnées:", e$message), type = "warning", duration = 10)
+        add_log(sprintf(.tr("⚠️ Erreur lecture métadonnées: %s"), e$message))
+        showNotification(sprintf(.tr("Erreur métadonnées: %s"), e$message), type = "warning", duration = 10)
         NULL
       })
     })
@@ -942,7 +946,7 @@ mod_import_bulk_server <- function(id, global_data) {
       # Le widget `counts_format` est honoré, exactement comme `counts_reactive()`.
       if (identical(shiny::isolate(input$counts_format), "cols")) {
         counts_df <- as.data.frame(t(counts_df))
-        add_log(" ↻ Matrice transposée (genes étaient en colonnes)")
+        add_log(.tr(" ↻ Matrice transposée (genes étaient en colonnes)"))
       }
 
       meta_df <- NULL
@@ -962,7 +966,7 @@ mod_import_bulk_server <- function(id, global_data) {
       min_counts <- shiny::isolate(input$min_counts) %||% 10
       project    <- shiny::isolate(input$project_name) %||% "Bulk"
 
-      add_log("🚀 Import piloté par l'agent (import_file)...")
+      add_log(.tr("🚀 Import piloté par l'agent (import_file)..."))
       bulk_obj <- tryCatch(
         assemble_bulk_obj(counts_df, meta_df, min_counts, project),
         error = function(e) e)
@@ -978,10 +982,10 @@ mod_import_bulk_server <- function(id, global_data) {
       .register_multi_dataset(global_data$bulk_obj)
       .warn_if_transformed_bulk(global_data$bulk_obj)  # O16 : bannière TPM/FPKM avant analyse
       .dataset_health_report(global_data$bulk_obj)  # N5 dataset-doctor : rapport unifié (warn, jamais bloquant — AC2.4)
-      add_log(paste("✅ Import (drive) réussi :", nrow(bulk_obj$counts), "gènes ×",
-                    ncol(bulk_obj$counts), "échantillons"))
-      showNotification(paste("✅ Import piloté réussi :", ncol(bulk_obj$counts),
-                             "échantillons,", nrow(bulk_obj$counts), "gènes"),
+      add_log(sprintf(.tr("✅ Import (drive) réussi : %d gènes × %d échantillons"), nrow(bulk_obj$counts),
+                    ncol(bulk_obj$counts)))
+      showNotification(sprintf(.tr("✅ Import piloté réussi : %d échantillons, %d gènes"), ncol(bulk_obj$counts),
+                             nrow(bulk_obj$counts)),
                        type = "message", duration = 5)
 
       list(ok = TRUE, status = "applied", errors = character(0),
@@ -1188,7 +1192,7 @@ mod_import_bulk_server <- function(id, global_data) {
       preview <- tryCatch(
         preview_metadata_split(colnames(counts_reactive()), delimiter = input$infer_delimiter),
         error = function(e) {
-          showNotification(paste("Erreur découpage:", conditionMessage(e)), type = "error", duration = 8)
+          showNotification(sprintf(.tr("Erreur découpage: %s"), conditionMessage(e)), type = "error", duration = 8)
           NULL
         })
       infer_preview_rv(preview)
@@ -1204,9 +1208,9 @@ mod_import_bulk_server <- function(id, global_data) {
         div(class = if (preview$n_seg_consistent) "alert alert-success" else "alert alert-warning",
             style = "font-size:0.78em;padding:6px;margin-top:6px;",
             if (preview$n_seg_consistent) {
-              sprintf("✓ Découpage cohérent : %d segment(s) par échantillon.", preview$n_seg[1])
+              sprintf(.tr("✓ Découpage cohérent : %d segment(s) par échantillon."), preview$n_seg[1])
             } else {
-              sprintf("⚠️ Nombre de segments incohérent (min=%d, max=%d).",
+              sprintf(.tr("⚠️ Nombre de segments incohérent (min=%d, max=%d)."),
                       min(preview$n_seg), max(preview$n_seg))
             }),
         renderTable(as.data.frame(seg_mat, stringsAsFactors = FALSE))()
@@ -1219,7 +1223,7 @@ mod_import_bulk_server <- function(id, global_data) {
       n_seg <- if (preview$n_seg_consistent) preview$n_seg[1] else min(preview$n_seg)
       default_names <- if (n_seg == 2) c("condition", "replicate") else paste0("segment_", seq_len(n_seg))
       tagList(
-        h6("Nom de chaque colonne:", style = "font-size:0.82em;font-weight:bold;margin-top:8px;"),
+        h6(.tr("Nom de chaque colonne:"), style = "font-size:0.82em;font-weight:bold;margin-top:8px;"),
         lapply(seq_len(n_seg), function(i) {
           textInput(ns(paste0("seg_name_", i)), NULL, value = default_names[i],
                     placeholder = paste("Segment", i), width = "100%")
@@ -1237,14 +1241,14 @@ mod_import_bulk_server <- function(id, global_data) {
         if (is.null(v) || !nzchar(trimws(v))) paste0("segment_", i) else trimws(v)
       }, character(1))
       if (length(unique(col_names)) != length(col_names)) {
-        showNotification("⚠️ Les noms de colonnes doivent être uniques.", type = "warning", duration = 6)
+        showNotification(.tr("⚠️ Les noms de colonnes doivent être uniques."), type = "warning", duration = 6)
         return()
       }
       result <- withCallingHandlers(
         tryCatch(
           infer_metadata_from_names(samples, delimiter = input$infer_delimiter, col_names = col_names),
           error = function(e) {
-            showNotification(paste("Erreur:", conditionMessage(e)), type = "error", duration = 8); NULL
+            showNotification(sprintf(.tr("Erreur: %s"), conditionMessage(e)), type = "error", duration = 8); NULL
           }),
         warning = function(w) {
           showNotification(paste("⚠️", conditionMessage(w)), type = "warning", duration = 8)
@@ -1252,8 +1256,8 @@ mod_import_bulk_server <- function(id, global_data) {
         })
       req(result)
       inferred_metadata(result)
-      add_log(paste("✓ Métadonnées inférées:", paste(col_names, collapse = ", ")))
-      showNotification("✓ Métadonnées inférées appliquées.", type = "message", duration = 5)
+      add_log(sprintf(.tr("✓ Métadonnées inférées: %s"), paste(col_names, collapse = ", ")))
+      showNotification(.tr("✓ Métadonnées inférées appliquées."), type = "message", duration = 5)
     })
     
     observeEvent(input$counts_file, {
@@ -1288,8 +1292,8 @@ mod_import_bulk_server <- function(id, global_data) {
       div(class = "alert alert-light",
           style = "font-size:0.78em;border-left:3px solid #F39C12;margin-top:6px;",
           bsicons::bs_icon("lightbulb"),
-          sprintf(" Identifiants détectés : %s. Convertissez-les via ", label),
-          tags$strong("'0. Mapping IDs'"), " dans le module d'analyse RNA Bulk.")
+          sprintf(.tr(" Identifiants détectés : %s. Convertissez-les via "), label),
+          tags$strong("'0. Mapping IDs'"), .tr(" dans le module d'analyse RNA Bulk."))
     })
     
     output$counts_preview <- renderTable({
@@ -1345,7 +1349,7 @@ mod_import_bulk_server <- function(id, global_data) {
           if (need_gene && length(x$detection$gene_candidates) > 0) {
             selectInput(
               ns(paste0("ps_gene_col_", x$file_index)),
-              "Colonne Gene ID",
+              .tr("Colonne Gene ID"),
               choices  = x$detection$gene_candidates,
               selected = x$detection$auto_gene %||% x$detection$gene_candidates[1]
             )
@@ -1353,7 +1357,7 @@ mod_import_bulk_server <- function(id, global_data) {
           if (need_count && length(x$detection$count_candidates) > 0) {
             selectInput(
               ns(paste0("ps_count_col_", x$file_index)),
-              "Colonne Count",
+              .tr("Colonne Count"),
               choices  = x$detection$count_candidates,
               selected = x$detection$auto_count %||% x$detection$count_candidates[1]
             )
@@ -1381,9 +1385,9 @@ mod_import_bulk_server <- function(id, global_data) {
         gene_col  <- input[[paste0("ps_gene_col_",  x$file_index)]] %||% x$detection$auto_gene
         count_col <- input[[paste0("ps_count_col_", x$file_index)]] %||% x$detection$auto_count
         
-        status <- if (is.null(x$df))               "Erreur de lecture"
-        else if (is.na(gene_col))         "Gene column non résolue"
-        else if (is.na(count_col))        "Count column non résolue"
+        status <- if (is.null(x$df))               .tr("Erreur de lecture")
+        else if (is.na(gene_col))         .tr("Gene column non résolue")
+        else if (is.na(count_col))        .tr("Count column non résolue")
         else                               "OK"
         
         id_type <- if (!is.null(x$df) && !is.na(gene_col) && gene_col %in% names(x$df))
@@ -1433,7 +1437,7 @@ mod_import_bulk_server <- function(id, global_data) {
         names(df) <- trimws(names(df))
         df
       }, error = function(e) {
-        showNotification(paste("Métadonnées illisibles :", conditionMessage(e)),
+        showNotification(sprintf(.tr("Métadonnées illisibles : %s"), conditionMessage(e)),
                          type = "error", duration = 8)
         NULL
       })
@@ -1450,8 +1454,8 @@ mod_import_bulk_server <- function(id, global_data) {
       if (is.null(up)) return(NULL)
       ch  <- names(up)
       sel <- if ("condition" %in% ch) "condition" else ""
-      selectInput(ns("ps_meta_condition_col"), "Colonne de condition (métadonnées)",
-                  choices = c("— choisir —" = "", stats::setNames(ch, ch)),
+      selectInput(ns("ps_meta_condition_col"), .tr("Colonne de condition (métadonnées)"),
+                  choices = c(setNames("", .tr("— choisir —")), stats::setNames(ch, ch)),
                   selected = sel)
     })
     
@@ -1551,7 +1555,7 @@ mod_import_bulk_server <- function(id, global_data) {
         bad_files <- prev$filename[prev$status != "OK" &
                                      !grepl("^OK", prev$status)]
         if (length(bad_files))
-          msgs <- c(msgs, paste("Fichiers rejetés:", paste(bad_files, collapse = ", ")))
+          msgs <- c(msgs, sprintf(.tr("Fichiers rejetés: %s"), paste(bad_files, collapse = ", ")))
 
         # P0 (mesuré 2026-10-21) : le renommage silencieux serait un changement
         # de PROVENANCE. La bannière est persistante (contrairement au toast de
@@ -1560,13 +1564,13 @@ mod_import_bulk_server <- function(id, global_data) {
         dup_names <- unique(prev$filename[duplicated(prev$filename)])
         if (length(dup_names)) {
           msgs <- c(msgs, sprintf(
-            "%d fichiers portent le même nom (%s) : sample_id suffixés (_1, _2, …). Éditez les colonnes sample_id et condition avant de charger.",
+            .tr("%d fichiers portent le même nom (%s) : sample_id suffixés (_1, _2, …). Éditez les colonnes sample_id et condition avant de charger."),
             sum(prev$filename %in% dup_names), paste(dup_names, collapse = ", ")))
         }
         
         id_types <- unique(prev$id_type[!is.na(prev$id_type) & prev$id_type != "mixed/unknown"])
         if (length(id_types) > 1)
-          msgs <- c(msgs, paste("Types d'identifiants mixtes:", paste(id_types, collapse = ", ")))
+          msgs <- c(msgs, sprintf(.tr("Types d'identifiants mixtes: %s"), paste(id_types, collapse = ", ")))
       }
       
       md <- rv_ps$metadata
@@ -1575,13 +1579,13 @@ mod_import_bulk_server <- function(id, global_data) {
         cond <- cond[!is.na(cond) & nzchar(trimws(cond))]
         tab  <- table(cond)
         if (length(tab) < 2)
-          msgs <- c(msgs, "1 seule condition : QC/PCA actifs, DE/pathway désactivés.")
+          msgs <- c(msgs, .tr("1 seule condition : QC/PCA actifs, DE/pathway désactivés."))
         else if (any(tab < 2))
-          msgs <- c(msgs, "Au moins 1 groupe avec < 2 réplicats : DE/pathway désactivés.")
+          msgs <- c(msgs, .tr("Au moins 1 groupe avec < 2 réplicats : DE/pathway désactivés."))
         if (!is.null(prev) && nrow(prev) > 0) {
           n_entrez <- sum(prev$id_type == "Entrez", na.rm = TRUE)
           if (n_entrez > 0)
-            msgs <- c(msgs, sprintf("%d fichier(s) avec IDs Entrez — conversion possible via '0. Mapping IDs'.",
+            msgs <- c(msgs, sprintf(.tr("%d fichier(s) avec IDs Entrez — conversion possible via '0. Mapping IDs'."),
                                     n_entrez))
         }
       }
@@ -1600,11 +1604,11 @@ mod_import_bulk_server <- function(id, global_data) {
         counts_ok <- !is.null(counts_reactive())
         meta_ok   <- !is.null(effective_metadata())
         div(style = "font-size:0.8em;",
-            if (counts_ok) span("✅ Counts chargés",     style = "color:#18BC9C;font-weight:bold;")
-            else           span("⚪ Counts manquants",    style = "color:#999;"),
+            if (counts_ok) span(.tr("✅ Counts chargés"),     style = "color:#18BC9C;font-weight:bold;")
+            else           span(.tr("⚪ Counts manquants"),    style = "color:#999;"),
             " · ",
-            if (meta_ok) span("✅ Métadonnées prêtes",   style = "color:#18BC9C;font-weight:bold;")
-            else         span("⚪ Métadonnées (optionnel)", style = "color:#999;"))
+            if (meta_ok) span(.tr("✅ Métadonnées prêtes"),   style = "color:#18BC9C;font-weight:bold;")
+            else         span(.tr("⚪ Métadonnées (optionnel)"), style = "color:#999;"))
       } else {
         files <- input$ps_files
         prev  <- rv_ps$preview
@@ -1615,19 +1619,19 @@ mod_import_bulk_server <- function(id, global_data) {
         # call a row-count mismatch "ready" (the file is ignored in that case).
         up <- ps_metadata_upload()
         meta_lbl <- if (is.null(rv_ps$metadata)) {
-          "⚪ Métadonnées"
+          .tr("⚪ Métadonnées")
         } else if (is.null(up)) {
-          "✅ Métadonnées prêtes"
+          .tr("✅ Métadonnées prêtes")
         } else if (nrow(up) == n_tot) {
-          sprintf("✅ Métadonnées fichier (%d lignes, par ordre)", nrow(up))
+          sprintf(.tr("✅ Métadonnées fichier (%d lignes, par ordre)"), nrow(up))
         } else {
-          sprintf("⚠️ Métadonnées ignorées : %d ligne(s) ≠ %d fichier(s)", nrow(up), n_tot)
+          sprintf(.tr("⚠️ Métadonnées ignorées : %d ligne(s) ≠ %d fichier(s)"), nrow(up), n_tot)
         }
         
         div(style = "font-size:0.8em;",
-            if (!is.null(files)) span(sprintf("✅ %d/%d fichiers OK", n_ok, n_tot),
+            if (!is.null(files)) span(sprintf(.tr("✅ %d/%d fichiers OK"), n_ok, n_tot),
                                       style = "color:#18BC9C;font-weight:bold;")
-            else span("⚪ Aucun fichier",       style = "color:#999;"),
+            else span(.tr("⚪ Aucun fichier"),       style = "color:#999;"),
             " · ",
             if (!is.null(rv_ps$metadata)) span(meta_lbl, style = "color:#18BC9C;font-weight:bold;")
             else                          span(meta_lbl, style = "color:#999;"))
@@ -1642,8 +1646,8 @@ mod_import_bulk_server <- function(id, global_data) {
       }
       shinyjs::toggleState("btn_load", condition = ready)
       shinyjs::html("btn_load",
-                    html = if (isTRUE(temp_data$is_loaded)) "🔄 Mettre à jour les Données"
-                    else "🚀 Charger les Données")
+                    html = if (isTRUE(temp_data$is_loaded)) .tr("🔄 Mettre à jour les Données")
+                    else .tr("🚀 Charger les Données"))
     })
     
     # =========================================================================
@@ -1669,8 +1673,8 @@ mod_import_bulk_server <- function(id, global_data) {
       # ── Branch merged_matrix (code original inchangé) ─────────────────
       if (input$bulk_import_mode == "merged_matrix") {
         req(counts_reactive())
-        add_log("🔄 Préparation de l'objet RNA Bulk...")
-        showNotification("Traitement des données...", type = "message", duration = NULL, id = ns("progress"))
+        add_log(.tr("🔄 Préparation de l'objet RNA Bulk..."))
+        showNotification(.tr("Traitement des données..."), type = "message", duration = NULL, id = ns("progress"))
         
         tryCatch({
           counts   <- counts_reactive()
@@ -1689,18 +1693,18 @@ mod_import_bulk_server <- function(id, global_data) {
           temp_data$is_loaded  <- TRUE
           .warn_if_transformed_bulk(global_data$bulk_obj)  # O16 : bannière TPM/FPKM avant analyse
           .dataset_health_report(global_data$bulk_obj)  # N5 dataset-doctor : rapport unifié (warn, jamais bloquant — AC2.4)
-          add_log(paste("✅ Import réussi!", nrow(bulk_obj$counts), "gènes ×",
-                        ncol(bulk_obj$counts), "échantillons"))
+          add_log(sprintf(.tr("✅ Import réussi! %d gènes × %d échantillons"), nrow(bulk_obj$counts),
+                        ncol(bulk_obj$counts)))
           .register_multi_dataset(global_data$bulk_obj)  # MD-1 (label optionnel)
           removeNotification(id = ns("progress"))
-          showNotification(paste("✅ Import réussi:", ncol(bulk_obj$counts),
-                                 "échantillons,", nrow(bulk_obj$counts), "gènes"),
+          showNotification(sprintf(.tr("✅ Import réussi: %d échantillons, %d gènes"), ncol(bulk_obj$counts),
+                                 nrow(bulk_obj$counts)),
                            type = "message", duration = 5)
           
         }, error = function(e) {
           removeNotification(id = ns("progress"))
-          add_log(paste("❌ Erreur lors du chargement:", e$message))
-          showNotification(paste("Erreur:", e$message), type = "error", duration = 10)
+          add_log(sprintf(.tr("❌ Erreur lors du chargement: %s"), e$message))
+          showNotification(sprintf(.tr("Erreur: %s"), e$message), type = "error", duration = 10)
           temp_data$is_loaded <- FALSE
         })
         
@@ -1714,12 +1718,12 @@ mod_import_bulk_server <- function(id, global_data) {
         req(length(parsed) > 0, nrow(prev) == length(parsed), nrow(metadata) == length(parsed))
         
         if (anyDuplicated(metadata$sample_id)) {
-          showNotification("❌ sample_id dupliqués dans la métadata.", type = "error")
+          showNotification(.tr("❌ sample_id dupliqués dans la métadata."), type = "error")
           return(NULL)
         }
         
-        add_log("🔄 Préparation import multi-fichiers bulk...")
-        showNotification("Traitement des données...", type = "message",
+        add_log(.tr("🔄 Préparation import multi-fichiers bulk..."))
+        showNotification(.tr("Traitement des données..."), type = "message",
                          duration = NULL, id = ns("progress"))
         
         result <- tryCatch({
@@ -1733,13 +1737,13 @@ mod_import_bulk_server <- function(id, global_data) {
             count_col <- prev$count_column[i]
             
             if (is.null(parsed[[i]]$df)) {
-              stop(errorCondition(sprintf("Fichier illisible : %s", parsed[[i]]$filename), class = "bulk_import_error"))
+              stop(errorCondition(sprintf(.tr("Fichier illisible : %s"), parsed[[i]]$filename), class = "bulk_import_error"))
             }
             if (is.na(gene_col) || !nzchar(gene_col)) {
-              stop(errorCondition(sprintf("Gene column non résolue : %s", parsed[[i]]$filename), class = "bulk_import_error"))
+              stop(errorCondition(sprintf(.tr("Gene column non résolue : %s"), parsed[[i]]$filename), class = "bulk_import_error"))
             }
             if (is.na(count_col) || !nzchar(count_col)) {
-              stop(errorCondition(sprintf("Count column non résolue : %s", parsed[[i]]$filename), class = "bulk_import_error"))
+              stop(errorCondition(sprintf(.tr("Count column non résolue : %s"), parsed[[i]]$filename), class = "bulk_import_error"))
             }
             
             res <- .prepare_one_sample(
@@ -1763,11 +1767,11 @@ mod_import_bulk_server <- function(id, global_data) {
           has_na     <- anyNA(merged[, count_cols, drop = FALSE])
           
           if (has_na && !isTRUE(input$ps_fill_zero)) {
-            stop(errorCondition("Valeurs manquantes après full join. Cochez la case de confirmation avant d'importer.", class = "bulk_import_error"))
+            stop(errorCondition(.tr("Valeurs manquantes après full join. Cochez la case de confirmation avant d'importer."), class = "bulk_import_error"))
           }
           if (has_na) {
             for (cc in count_cols) merged[[cc]][is.na(merged[[cc]])] <- 0L
-            add_log(" ⚠️ Counts manquants remplacés par 0 (full join)")
+            add_log(.tr(" ⚠️ Counts manquants remplacés par 0 (full join)"))
           }
           
           counts_mat <- as.matrix(merged[, count_cols, drop = FALSE])
@@ -1777,10 +1781,9 @@ mod_import_bulk_server <- function(id, global_data) {
           # Warn for non-integer (DESeq2 mode)
           if (!all(int_like_vec)) {
             bad_samples <- metadata$sample_id[!int_like_vec]
-            add_log(paste(" ⚠️ Counts non entiers :", paste(bad_samples, collapse = ", ")))
-            showNotification(paste("⚠️ Counts non entiers pour :",
-                                   paste(bad_samples, collapse = ", "),
-                                   "— DESeq2 nécessite des entiers."),
+            add_log(sprintf(.tr(" ⚠️ Counts non entiers : %s"), paste(bad_samples, collapse = ", ")))
+            showNotification(sprintf(.tr("⚠️ Counts non entiers pour : %s — DESeq2 nécessite des entiers."),
+                                   paste(bad_samples, collapse = ", ")),
                              type = "warning", duration = NULL)
           }
           
@@ -1788,7 +1791,7 @@ mod_import_bulk_server <- function(id, global_data) {
           unique_types <- unique(id_type_vec[!is.na(id_type_vec)])
           merged_id_type <- if (length(unique_types) == 1) unique_types else "mixed/unknown"
           if (length(unique_types) > 1)
-            showNotification(paste("⚠️ Types d'ID mixtes :", paste(unique_types, collapse = ", ")),
+            showNotification(sprintf(.tr("⚠️ Types d'ID mixtes : %s"), paste(unique_types, collapse = ", ")),
                              type = "warning", duration = NULL)
           
           # Validate design
@@ -1824,7 +1827,7 @@ mod_import_bulk_server <- function(id, global_data) {
         }, error = function(e) {
           removeNotification(id = ns("progress"))
           add_log(paste("❌", e$message))
-          showNotification(paste("Erreur:", e$message), type = "error", duration = NULL)
+          showNotification(sprintf(.tr("Erreur: %s"), e$message), type = "error", duration = NULL)
           NULL
         })
         
@@ -1850,17 +1853,16 @@ mod_import_bulk_server <- function(id, global_data) {
         removeNotification(id = ns("progress"))
         .warn_if_transformed_bulk(global_data$bulk_obj)  # O16 : bannière TPM/FPKM avant analyse
         .dataset_health_report(global_data$bulk_obj)  # N5 dataset-doctor : rapport unifié (warn, jamais bloquant — AC2.4)
-        add_log(paste("✅ Import multi-fichiers réussi —",
-                      nrow(result$counts_mat), "gènes ×",
-                      ncol(result$counts_mat), "échantillons"))
+        add_log(sprintf(.tr("✅ Import multi-fichiers réussi — %d gènes × %d échantillons"),
+                      nrow(result$counts_mat), ncol(result$counts_mat)))
         
         if (length(result$val_messages)) {
           showNotification(paste(result$val_messages, collapse = " | "),
                            type = "warning", duration = 8)
         } else {
           showNotification(
-            paste("✅ Import réussi:", ncol(result$counts_mat),
-                  "échantillons,", nrow(result$counts_mat), "gènes"),
+            sprintf(.tr("✅ Import réussi: %d échantillons, %d gènes"), ncol(result$counts_mat),
+                  nrow(result$counts_mat)),
             type = "message", duration = 5)
         }
       }
@@ -1882,8 +1884,8 @@ mod_import_bulk_server <- function(id, global_data) {
       else format_kpi_number(ncol(global_data$bulk_obj$metadata))
     })
     output$status_obj <- renderText({
-      if (is.null(global_data$bulk_obj)) "⚪ Inactif"
-      else paste("🟢 Chargé (", format(global_data$bulk_obj$timestamp, "%H:%M:%S"), ")")
+      if (is.null(global_data$bulk_obj)) .tr("⚪ Inactif")
+      else sprintf(.tr("🟢 Chargé (%s)"), format(global_data$bulk_obj$timestamp, "%H:%M:%S"))
     })
     output$console_log <- renderText({ logs() })
 
@@ -1900,11 +1902,11 @@ mod_import_bulk_server <- function(id, global_data) {
       conc <- bulk_concordance_summary(count_ids, meta_ids)
       if (isTRUE(conc$ok)) {
         div(class = "text-success",
-            sprintf("✓ Concordance counts ↔ métadonnées : %d/%d échantillons",
+            sprintf(.tr("✓ Concordance counts ↔ métadonnées : %d/%d échantillons"),
                     conc$n_common, length(count_ids)))
       } else {
         div(class = "text-danger",
-            sprintf("✗ Concordance counts ↔ métadonnées : %d commun(s), %d échantillon(s) sans métadonnée, %d métadonnée(s) orpheline(s)",
+            sprintf(.tr("✗ Concordance counts ↔ métadonnées : %d commun(s), %d échantillon(s) sans métadonnée, %d métadonnée(s) orpheline(s)"),
                     conc$n_common, length(conc$counts_only), length(conc$meta_only)))
       }
     })

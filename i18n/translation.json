@@ -5434,6 +5434,22 @@
       "en": "Waiting for velocity import..."
     },
     {
+      "fr": "Condition en préfixe — A_1 → condition A, réplicat 1",
+      "en": "Condition as prefix — A_1 → condition A, replicate 1"
+    },
+    {
+      "fr": "Condition en suffixe — 1a → condition a, réplicat 1",
+      "en": "Condition as suffix — 1a → condition a, replicate 1"
+    },
+    {
+      "fr": "En attente d'agregation...",
+      "en": "Waiting for aggregation..."
+    },
+    {
+      "fr": "En attente de l'analyse...",
+      "en": "Waiting for analysis..."
+    },
+    {
       "fr": "Validation velocity reussie.",
       "en": "Velocity validation successful."
     },
@@ -13304,6 +13320,466 @@
     {
       "fr": "Le chargement par lot (« Charger la sélection ») enregistre chaque dataset coché sous son identifiant de scan, indépendamment du label ci-dessus.",
       "en": "Batch loading (\"Load selection\") registers each checked dataset under its scan id, independently of the label above."
+    },
+    {
+      "fr": " Importez des données RNA-Seq en Bulk (matrice de counts + métadonnées).",
+      "en": " Import Bulk RNA-Seq data (count matrix + metadata)."
+    },
+    {
+      "fr": "Format attendu : Lignes = Gènes, Colonnes = Échantillons. ",
+      "en": "Expected format: Rows = Genes, Columns = Samples. "
+    },
+    {
+      "fr": "Un filtrage fin (par réplicat) est disponible à l'étape 1 du module d'analyse — ",
+      "en": "Fine filtering (per replicate) is available in step 1 of the analysis module — "
+    },
+    {
+      "fr": "le seuil ci-dessous (Options d'Import) n'est qu'un pré-nettoyage grossier.",
+      "en": "the threshold below (Import Options) is only a coarse pre-cleaning step."
+    },
+    {
+      "fr": "↻ Inverser lignes / colonnes",
+      "en": "↻ Swap rows / columns"
+    },
+    {
+      "fr": "Ex: 'Ctrl_1', 'Ctrl_2', 'KO_1', 'KO_2' → colonnes condition + réplicat. ",
+      "en": "E.g. 'Ctrl_1', 'Ctrl_2', 'KO_1', 'KO_2' → condition + replicate columns. "
+    },
+    {
+      "fr": "Ignoré si un fichier de métadonnées est fourni ci-dessus.",
+      "en": "Ignored if a metadata file is provided above."
+    },
+    {
+      "fr": "Métadonnées (CSV/TSV, optionnel — 1 ligne par fichier)",
+      "en": "Metadata (CSV/TSV, optional — 1 row per file)"
+    },
+    {
+      "fr": "Alignées par ORDRE des fichiers ci-dessus (ligne 1 ↔ 1er fichier). Si une colonne « sample_id » est présente, elle remplace les identifiants déduits du nom de fichier ; les autres colonnes sont ajoutées telles quelles. La colonne utilisée comme condition doit être choisie ci-dessous.",
+      "en": "Aligned by the ORDER of the files above (row 1 ↔ 1st file). If a « sample_id » column is present, it replaces the ids inferred from file names; the other columns are added as-is. The column used as condition must be selected below."
+    },
+    {
+      "fr": " ⚠️ Dataset non enregistré (multi-jeux) : %s",
+      "en": " ⚠️ Dataset not registered (multi-datasets): %s"
+    },
+    {
+      "fr": " 📦 Dataset enregistré pour la comparaison multi-jeux : %s",
+      "en": " 📦 Dataset registered for multi-dataset comparison: %s"
+    },
+    {
+      "fr": "Package 'readxl' nécessaire pour lire les fichiers .xlsx",
+      "en": "The 'readxl' package is required to read .xlsx files"
+    },
+    {
+      "fr": "Erreur de lecture: %s",
+      "en": "Read error: %s"
+    },
+    {
+      "fr": " → Gènes filtrés: %d retirés, %d conservés",
+      "en": " → Genes filtered: %d removed, %d kept"
+    },
+    {
+      "fr": " ✓ Métadonnées alignées: %d variables : %s",
+      "en": " ✓ Metadata aligned: %d variables: %s"
+    },
+    {
+      "fr": "✓ Objet .RData sélectionné comme comptages : %s",
+      "en": "✓ .RData object selected as counts: %s"
+    },
+    {
+      "fr": "✓ Objet .RData sélectionné comme métadonnées : %s",
+      "en": "✓ .RData object selected as metadata: %s"
+    },
+    {
+      "fr": "ℹ Aperçu .RData actif : sélectionnez l'objet à utiliser comme comptages.",
+      "en": "ℹ .RData preview active: select the object to use as counts."
+    },
+    {
+      "fr": "ℹ Aperçu .RData actif : sélectionnez l'objet à utiliser comme métadonnées.",
+      "en": "ℹ .RData preview active: select the object to use as metadata."
+    },
+    {
+      "fr": "✓ Matrice de counts .RData chargée: %d gènes × %d échantillons",
+      "en": "✓ .RData count matrix loaded: %d genes × %d samples"
+    },
+    {
+      "fr": "✓ Matrice de counts chargée: %d gènes × %d échantillons",
+      "en": "✓ Count matrix loaded: %d genes × %d samples"
+    },
+    {
+      "fr": "⚠️ Erreur lecture counts: %s",
+      "en": "⚠️ Counts read error: %s"
+    },
+    {
+      "fr": "↻ Inversion manuelle lignes / colonnes (pastille mise à jour)",
+      "en": "↻ Manual row / column swap (badge updated)"
+    },
+    {
+      "fr": "Matrice active : %d gènes (lignes) × %d échantillons (colonnes)",
+      "en": "Active matrix: %d genes (rows) × %d samples (columns)"
+    },
+    {
+      "fr": "✓ Métadonnées .RData chargées: %d échantillons × %d variables",
+      "en": "✓ .RData metadata loaded: %d samples × %d variables"
+    },
+    {
+      "fr": "✓ Métadonnées chargées: %d échantillons × %d variables",
+      "en": "✓ Metadata loaded: %d samples × %d variables"
+    },
+    {
+      "fr": "⚠️ Erreur lecture métadonnées: %s",
+      "en": "⚠️ Metadata read error: %s"
+    },
+    {
+      "fr": "Erreur métadonnées: %s",
+      "en": "Metadata error: %s"
+    },
+    {
+      "fr": "🚀 Import piloté par l'agent (import_file)...",
+      "en": "🚀 Agent-driven import (import_file)..."
+    },
+    {
+      "fr": "✅ Import (drive) réussi : %d gènes × %d échantillons",
+      "en": "✅ Import (drive) successful: %d genes × %d samples"
+    },
+    {
+      "fr": "✅ Import piloté réussi : %d échantillons, %d gènes",
+      "en": "✅ Agent-driven import successful: %d samples, %d genes"
+    },
+    {
+      "fr": "Erreur découpage: %s",
+      "en": "Split error: %s"
+    },
+    {
+      "fr": "✓ Découpage cohérent : %d segment(s) par échantillon.",
+      "en": "✓ Consistent split: %d segment(s) per sample."
+    },
+    {
+      "fr": "⚠️ Nombre de segments incohérent (min=%d, max=%d).",
+      "en": "⚠️ Inconsistent number of segments (min=%d, max=%d)."
+    },
+    {
+      "fr": "Erreur: %s",
+      "en": "Error: %s"
+    },
+    {
+      "fr": "✓ Métadonnées inférées: %s",
+      "en": "✓ Inferred metadata: %s"
+    },
+    {
+      "fr": " Identifiants détectés : %s. Convertissez-les via ",
+      "en": " Detected IDs: %s. Convert them via "
+    },
+    {
+      "fr": " dans le module d'analyse RNA Bulk.",
+      "en": " in the Bulk RNA analysis module."
+    },
+    {
+      "fr": "Métadonnées illisibles : %s",
+      "en": "Unreadable metadata: %s"
+    },
+    {
+      "fr": "Colonne de condition (métadonnées)",
+      "en": "Condition column (metadata)"
+    },
+    {
+      "fr": "— choisir —",
+      "en": "— choose —"
+    },
+    {
+      "fr": "Fichiers rejetés: %s",
+      "en": "Rejected files: %s"
+    },
+    {
+      "fr": "%d fichiers portent le même nom (%s) : sample_id suffixés (_1, _2, …). Éditez les colonnes sample_id et condition avant de charger.",
+      "en": "%d files share the same name (%s): sample_ids suffixed (_1, _2, …). Edit the sample_id and condition columns before loading."
+    },
+    {
+      "fr": "Types d'identifiants mixtes: %s",
+      "en": "Mixed ID types: %s"
+    },
+    {
+      "fr": "✅ Métadonnées fichier (%d lignes, par ordre)",
+      "en": "✅ Metadata file (%d rows, in order)"
+    },
+    {
+      "fr": "⚠️ Métadonnées ignorées : %d ligne(s) ≠ %d fichier(s)",
+      "en": "⚠️ Metadata ignored: %d row(s) ≠ %d file(s)"
+    },
+    {
+      "fr": "✅ %d/%d fichiers OK",
+      "en": "✅ %d/%d files OK"
+    },
+    {
+      "fr": "✅ Import réussi! %d gènes × %d échantillons",
+      "en": "✅ Import successful! %d genes × %d samples"
+    },
+    {
+      "fr": "✅ Import réussi: %d échantillons, %d gènes",
+      "en": "✅ Import successful: %d samples, %d genes"
+    },
+    {
+      "fr": "❌ Erreur lors du chargement: %s",
+      "en": "❌ Load error: %s"
+    },
+    {
+      "fr": "Fichier illisible : %s",
+      "en": "Unreadable file: %s"
+    },
+    {
+      "fr": "Gene column non résolue : %s",
+      "en": "Gene column unresolved: %s"
+    },
+    {
+      "fr": "Count column non résolue : %s",
+      "en": "Count column unresolved: %s"
+    },
+    {
+      "fr": " ⚠️ Counts non entiers : %s",
+      "en": " ⚠️ Non-integer counts: %s"
+    },
+    {
+      "fr": "⚠️ Counts non entiers pour : %s — DESeq2 nécessite des entiers.",
+      "en": "⚠️ Non-integer counts for: %s — DESeq2 requires integers."
+    },
+    {
+      "fr": "⚠️ Types d'ID mixtes : %s",
+      "en": "⚠️ Mixed ID types: %s"
+    },
+    {
+      "fr": "✅ Import multi-fichiers réussi — %d gènes × %d échantillons",
+      "en": "✅ Multi-file import successful — %d genes × %d samples"
+    },
+    {
+      "fr": "🟢 Chargé (%s)",
+      "en": "🟢 Loaded (%s)"
+    },
+    {
+      "fr": "✓ Concordance counts ↔ métadonnées : %d/%d échantillons",
+      "en": "✓ Counts ↔ metadata concordance: %d/%d samples"
+    },
+    {
+      "fr": "✗ Concordance counts ↔ métadonnées : %d commun(s), %d échantillon(s) sans métadonnée, %d métadonnée(s) orpheline(s)",
+      "en": "✗ Counts ↔ metadata concordance: %d common, %d sample(s) without metadata, %d orphan metadata row(s)"
+    },
+    {
+      "fr": "Métadonnées",
+      "en": "Metadata"
+    },
+    {
+      "fr": "Calcul CellChat en daemon — la session reste réactive pendant le calcul…",
+      "en": "CellChat running in a daemon — the session stays responsive during the computation…"
+    },
+    {
+      "fr": "État velocity restauré depuis la session sauvegardée — ni ré-inféré ni recalculé.",
+      "en": "Velocity state restored from the saved session — neither re-inferred nor recomputed."
+    },
+    {
+      "fr": "Inférence scVelo (opt-in) en daemon — la session reste réactive, comptez quelques dizaines de secondes…",
+      "en": "scVelo inference (opt-in) in a daemon — the session stays responsive, allow a few tens of seconds…"
+    },
+    {
+      "fr": "Inférence scVelo en cours (opt-in) — calcul Python en tâche de fond du moteur, comptez quelques dizaines de secondes…",
+      "en": "scVelo inference running (opt-in) — Python computation in an engine background task, allow a few tens of seconds…"
+    },
+    {
+      "fr": "Résultats restaurés depuis la session sauvegardée — ni ré-inférés ni recalculés.",
+      "en": "Results restored from the saved session — neither re-inferred nor recomputed."
+    },
+    {
+      "fr": "Validation des matrices velocity en cours — lecture spliced/unspliced et alignement…",
+      "en": "Velocity matrix validation in progress — reading spliced/unspliced and aligning…"
+    },
+    {
+      "fr": "Résultat CellChat déjà présent pour CES paramètres (même objet, identités, graine, permutations) — recalcul refusé. Changez la graine ou les permutations pour recalculer.",
+      "en": "A CellChat result is already shown for THESE parameters (same object, identities, seed, permutations) — recomputation refused. Change the seed or the permutations to recompute."
+    },
+    {
+      "fr": "Qu'est-ce qu'une niche spatiale ?",
+      "en": "What is a spatial niche?"
+    },
+    {
+      "fr": "Comment lire le z-score de co-occurrence ?",
+      "en": "How to read the co-occurrence z-score?"
+    },
+    {
+      "fr": "Qu'est-ce que l'etiquetage aleatoire (Ripley's K) ?",
+      "en": "What is label randomization (Ripley's K)?"
+    },
+    {
+      "fr": "⚙️ Paramètres",
+      "en": "⚙️ Settings"
+    },
+    {
+      "fr": "🧹 Purger les données chargées",
+      "en": "🧹 Purge loaded data"
+    },
+    {
+      "fr": "⚠️ Purger les données chargées ?",
+      "en": "⚠️ Purge loaded data?"
+    },
+    {
+      "fr": "Tous les jeux chargés (Single-Cell, Bulk, Spatial) et les résultats dérivés seront effacés. Les réglages (RAM, checkpoints, langue) sont conservés.",
+      "en": "All loaded datasets (Single-Cell, Bulk, Spatial) and derived results will be cleared. Settings (RAM, checkpoints, language) are preserved."
+    },
+    {
+      "fr": "Oui, tout purger",
+      "en": "Yes, purge everything"
+    },
+    {
+      "fr": "L'inverse du chargement : efface les jeux et les résultats dérivés — les réglages (RAM, checkpoints, langue) sont conservés.",
+      "en": "The reverse of loading: clears datasets and derived results — settings (RAM, checkpoints, language) are preserved."
+    },
+    {
+      "fr": "4a. Signatures cellulaires",
+      "en": "4a. Cellular signatures"
+    },
+    {
+      "fr": "4b. Réseau de co-expression (WGCNA)",
+      "en": "4b. Co-expression network (WGCNA)"
+    },
+    {
+      "fr": "4c. Survie & association clinique",
+      "en": "4c. Survival & clinical association"
+    },
+    {
+      "fr": "4d. Clustering de profils",
+      "en": "4d. Profile clustering"
+    },
+    {
+      "fr": "4e. Dose–réponse / time-course",
+      "en": "4e. Dose–response / time-course"
+    },
+    {
+      "fr": "5. Réseau PCSF (interactome)",
+      "en": "5. PCSF network (interactome)"
+    },
+    {
+      "fr": "6a. Multi-jeux — Datasets enregistrés",
+      "en": "6a. Multi-dataset — Registered datasets"
+    },
+    {
+      "fr": "6b. Multi-jeux — Fusion de jeux",
+      "en": "6b. Multi-dataset — Merge datasets"
+    },
+    {
+      "fr": "7. Livrables — Rapport & Script R",
+      "en": "7. Deliverables — Report & R script"
+    },
+    {
+      "fr": "Pipeline (QC → UMAP)",
+      "en": "Pipeline (QC → UMAP)"
+    },
+    {
+      "fr": "Métadonnées — condition / réplicat",
+      "en": "Metadata — condition / replicate"
+    },
+    {
+      "fr": "1a. Annotation",
+      "en": "1a. Annotation"
+    },
+    {
+      "fr": "1b. Rareté par population",
+      "en": "1b. Rarity per population"
+    },
+    {
+      "fr": "1c. Visualisation",
+      "en": "1c. Visualization"
+    },
+    {
+      "fr": "1d. Marqueurs",
+      "en": "1d. Markers"
+    },
+    {
+      "fr": "3a. Gene Correlation",
+      "en": "3a. Gene Correlation"
+    },
+    {
+      "fr": "3b. Pathway Enrichment",
+      "en": "3b. Pathway Enrichment"
+    },
+    {
+      "fr": "3c. Communication (import)",
+      "en": "3c. Communication (import)"
+    },
+    {
+      "fr": "4a. Trajectory Analysis",
+      "en": "4a. Trajectory Analysis"
+    },
+    {
+      "fr": "4b. Vélocité ARN — orientation des trajectoires",
+      "en": "4b. RNA velocity — trajectory orientation"
+    },
+    {
+      "fr": "2a. Pseudobulk — agrégation des cellules par échantillon",
+      "en": "2a. Pseudobulk — cell aggregation per sample"
+    },
+    {
+      "fr": "2b. Abondance différentielle — design, méthodes & vues croisées",
+      "en": "2b. Differential abundance — design, methods & cross views"
+    },
+    {
+      "fr": "5a. Rapport Complet",
+      "en": "5a. Complete Report"
+    },
+    {
+      "fr": "5b. Rapport consolidé (4F)",
+      "en": "5b. Consolidated report (4F)"
+    },
+    {
+      "fr": "1 · Exploration",
+      "en": "1 · Exploration"
+    },
+    {
+      "fr": "2 · Différentiel & DA",
+      "en": "2 · Differential & DA"
+    },
+    {
+      "fr": "3 · Réseaux & Signalisation",
+      "en": "3 · Networks & Signalling"
+    },
+    {
+      "fr": "4 · Dynamique",
+      "en": "4 · Dynamics"
+    },
+    {
+      "fr": "5 · Contrôle & Rapports",
+      "en": "5 · Control & Reports"
+    },
+    {
+      "fr": "⚠️ Lancez d'abord l'étape 1d (Marqueurs).",
+      "en": "⚠️ Run step 1d (Markers) first."
+    },
+    {
+      "fr": "⚠️ Lancez d'abord l'étape 3a (Corrélation).",
+      "en": "⚠️ Run step 3a (Correlation) first."
+    },
+    {
+      "fr": "Aucun résultat DE pseudobulk à envoyer — lancez d'abord l'analyse différentielle (étape 2b).",
+      "en": "No pseudobulk DE result to send — run the differential analysis first (step 2b)."
+    },
+    {
+      "fr": "Le modèle porte sur la paire de conditions choisie ; scCODA n'interprète pas les voisinages Milo — les deux méthodes restent des résultats distincts (vues croisées descriptives à l'étape 2b).",
+      "en": "The model targets the chosen condition pair; scCODA does not interpret Milo neighbourhoods — both methods remain distinct results (descriptive cross views in step 2b)."
+    },
+    {
+      "fr": "⚙️ Ouvrir les Métadonnées (condition / réplicat)",
+      "en": "⚙️ Open Metadata (condition / replicate)"
+    },
+    {
+      "fr": "Pipeline réinitialisé — relancez le Pipeline.",
+      "en": "Pipeline reset — re-run the Pipeline."
+    },
+    {
+      "fr": "✓ Mapping appliqué — relancez le Pipeline (Filtrage & VST) pour l'utiliser.",
+      "en": "✓ Mapping applied — re-run the Pipeline (Filtering & VST) to use it."
+    },
+    {
+      "fr": "Type d'identifiant NON reconnu (ex. trouvé dans vos données : {example}). Si ce ne sont PAS des identifiants de gènes (ex: comptages personnalisés, autre type de feature), ignorez cette étape facultative et passez directement au Pipeline.",
+      "en": "Unrecognised identifier type (e.g. found in your data: {example}). If these are NOT gene identifiers (e.g. custom counts, another feature type), skip this optional step and go straight to the Pipeline."
+    },
+    {
+      "fr": "À lancer AVANT le Pipeline :",
+      "en": "Run BEFORE the Pipeline:"
     },
     {
       "fr": "Affichage du workflow latéral :",
