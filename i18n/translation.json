@@ -13808,6 +13808,10 @@
     {
       "fr": "Attention : %d lignées Slingshot détectées — le mode « Toutes cellules » mélange les trajectoires.",
       "en": "Warning: %d Slingshot lineages detected — All cells mode mixes trajectories."
+    },
+    {
+      "fr": "Objet Seurat mis à jour (empreinte identique) — résultats velocity conservés.",
+      "en": "Seurat object updated (identical fingerprint) — velocity results preserved."
     }
   ]
 }

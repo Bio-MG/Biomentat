@@ -370,3 +370,45 @@ test_that("P1.5 testServer : velocity_strip_gene_version FALSE vs TRUE atteint v
     expect_match(velocity_status_rv() %||% "", "collisions : AC011043", fixed = TRUE)
   })
 })
+
+test_that("reassignment sc_obj a empreinte identique conserve velocity_state ; autre objet reinitialise", {
+  genes <- paste0("G", 1:4)
+  cells <- paste0("Cell", 1:6)
+  set.seed(2)
+  sp <- matrix(rpois(24, 5), nrow = 4, ncol = 6, dimnames = list(genes, cells))
+  un <- matrix(rpois(24, 2), nrow = 4, ncol = 6, dimnames = list(genes, cells))
+  seu1 <- suppressWarnings(Seurat::CreateSeuratObject(counts = sp))
+
+  rds_path <- tempfile(fileext = ".rds")
+  on.exit(unlink(rds_path), add = TRUE)
+  saveRDS(list(spliced = sp, unspliced = un), rds_path)
+
+  gd <- shiny::reactiveValues(sc_obj = seu1, language = "fr", i18n = NULL)
+  srv <- shiny::reactiveValues()
+  shiny::testServer(mod_sc_velocity_server, args = list(global_data = gd, shared_rv = srv), {
+    session$setInputs(
+      velocity_import_mode = "rds",
+      velocity_rds_file = data.frame(name = "vel.rds", datapath = rds_path, stringsAsFactors = FALSE),
+      velocity_orientation = "auto_strict",
+      velocity_strip_cell_suffix = FALSE,
+      velocity_strip_gene_version = FALSE,
+      velocity_allow_low_overlap = FALSE
+    )
+    session$setInputs(velocity_validate = 1L)
+    expect_false(is.null(velocity_state$result))
+    old_fp <- velocity_state$object_fingerprint
+
+    # Metadata update -> same cell/gene fingerprint -> bundle preserved
+    seu_meta <- seu1
+    seu_meta$cluster_tag <- "C1"
+    gd$sc_obj <- seu_meta
+    session$flushReact()
+    expect_false(is.null(velocity_state$result))
+    expect_identical(velocity_state$object_fingerprint, old_fp)
+
+    # Subsetted object -> different fingerprint -> reset (BUG 9)
+    gd$sc_obj <- subset(seu1, cells = cells[1:4])
+    session$flushReact()
+    expect_null(velocity_state$result)
+  })
+})

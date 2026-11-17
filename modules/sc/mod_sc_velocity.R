@@ -499,8 +499,18 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     }, ignoreInit = TRUE)
 
     # Reset when Seurat object changes (BUG 9) — no velocity state may
-    # survive from a previous Seurat object.
+    # survive from a previous Seurat object. If the new Seurat object has the
+    # exact same cell/gene fingerprint (e.g. metadata/annotation update), keep
+    # the validated velocity bundle intact instead of wiping it.
     observeEvent(global_data$sc_obj, {
+      new_fp <- if (is.null(global_data$sc_obj)) NULL else {
+        tryCatch(velocity_object_fingerprint(global_data$sc_obj), error = function(e) NULL)
+      }
+      if (!is.null(new_fp) && identical(new_fp, velocity_state$object_fingerprint) &&
+          !is.null(velocity_state$result)) {
+        .velocity_log(.tr("Objet Seurat mis à jour (empreinte identique) — résultats velocity conservés."))
+        return()
+      }
       velocity_state$inputs <- NULL
       velocity_state$validated <- NULL
       velocity_state$result <- NULL
