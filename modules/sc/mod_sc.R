@@ -781,7 +781,8 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
         ".sc-auto-log-wrap pre, #", ns("acc_workflow"), " pre, .bslib-card:has(#", ns("main_tabs"), ") pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }\n",
         ".bslib-card:has(#", ns("main_tabs"), ") > .tab-content > .tab-pane { overflow-y: auto; overflow-x: hidden; }\n",
         ".bslib-card:has(#", ns("main_tabs"), ") > .tab-content > .tab-pane .card { min-height: min-content; }\n",
-        ".ts-sc-step-sync-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.85rem; }"
+        ".ts-sc-step-sync-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.85rem; }",
+        paste0("#", ns("annotation"), "-annotation_out_tabs { flex-wrap: wrap; margin-left: 0 !important; max-width: 100%; }")
       ))),
       # LOT 1 (V1.x UX): paradigm badge — auto-pipeline exists, manual steps stay optional.
       div(class = "alert alert-success", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
