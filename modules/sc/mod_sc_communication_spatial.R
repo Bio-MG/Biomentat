@@ -59,7 +59,7 @@ mod_sc_communication_spatial_ui <- function(id) {
              fluidRow(
                column(6, downloadButton(ns("dl_spc_dist_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
                column(6, downloadButton(ns("dl_spc_dist_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary"))))),
-    DT::dataTableOutput(ns("spc_table"), height = "320px")
+    DT::dataTableOutput(ns("spc_table"), height = "auto", fill = FALSE)
   )
 }
 

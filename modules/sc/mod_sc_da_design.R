@@ -59,9 +59,9 @@ mod_sc_da_design_output_ui <- function(id) {
       nav_panel(i18n$t("Verdict"),
                 uiOutput(ns("da_verdict"))),
       nav_panel(i18n$t("Conditions"),
-                DT::dataTableOutput(ns("da_conditions"), height = "420px")),
+                DT::dataTableOutput(ns("da_conditions"), height = "auto", fill = FALSE)),
       nav_panel(i18n$t("Échantillons"),
-                DT::dataTableOutput(ns("da_samples"), height = "420px")),
+                DT::dataTableOutput(ns("da_samples"), height = "auto", fill = FALSE)),
       nav_panel(i18n$t("Conditions × Batch"),
                 uiOutput(ns("da_batch_ui"))),
       nav_panel(i18n$t("Couverture identités"),
@@ -290,7 +290,7 @@ mod_sc_da_design_server <- function(id, global_data, shared_rv = NULL) {
       tagList(
         div(class = "m-3 small text-muted",
             .tr("Comptage d'échantillons par condition × batch — une condition confinée à un seul batch bloquerait un modèle batch.")),
-        DT::dataTableOutput(session$ns("da_batch_table"), height = "380px")
+        DT::dataTableOutput(session$ns("da_batch_table"), height = "auto", fill = FALSE)
       )
     })
 
@@ -312,7 +312,7 @@ mod_sc_da_design_server <- function(id, global_data, shared_rv = NULL) {
       tagList(
         div(class = "m-3 small text-muted",
             .tr("Représentation de chaque identité par échantillon — les identités présentes dans moins de 2 échantillons ne seront pas interprétables par condition.")),
-        DT::dataTableOutput(session$ns("da_identity_table"), height = "380px")
+        DT::dataTableOutput(session$ns("da_identity_table"), height = "auto", fill = FALSE)
       )
     })
 

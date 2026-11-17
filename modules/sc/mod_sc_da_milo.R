@@ -96,7 +96,7 @@ mod_sc_da_milo_output_ui <- function(id) {
                     downloadButton(ns("dl_milo_compo_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_milo_compo_pdf"), "PDF", class = "btn-sm btn-outline-secondary"))),
       nav_panel(i18n$t("Table DA (voisinages)"), value = "milo_tab_table",
-                DT::dataTableOutput(ns("milo_table"), height = "460px")),
+                DT::dataTableOutput(ns("milo_table"), height = "auto", fill = FALSE)),
       nav_panel(i18n$t("Limites"), value = "milo_tab_limites",
                 div(class = "alert alert-danger m-3", style = "font-size:0.9em;",
                     i18n$t("Le signal Milo est NIVEAU VOISINAGE (région du graphe) : l'identité d'un voisinage (fraction ≥ 0.7) est descriptive et ne constitue PAS un DA par type cellulaire.")),

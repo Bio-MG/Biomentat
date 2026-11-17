@@ -63,7 +63,7 @@ mod_sc_da_cross_output_ui <- function(id) {
                 div(class = "m-1",
                     downloadButton(ns("dl_cross_concordance_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_cross_concordance_pdf"), "PDF", class = "btn-sm btn-outline-secondary")),
-                DT::dataTableOutput(ns("cross_table"), height = "300px")),
+                DT::dataTableOutput(ns("cross_table"), height = "auto", fill = FALSE)),
       nav_panel(i18n$t("Mappage voisinages → identités"), value = "cross_tab_map",
                 plotOutput(ns("cross_nhood_map"), height = "480px"),
                 div(class = "m-1",

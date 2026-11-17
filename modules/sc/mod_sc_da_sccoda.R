@@ -77,7 +77,7 @@ mod_sc_da_sccoda_output_ui <- function(id) {
                 div(class = "m-1",
                     downloadButton(ns("dl_sccoda_effects_png"), "PNG", class = "btn-sm btn-outline-secondary"),
                     downloadButton(ns("dl_sccoda_effects_pdf"), "PDF", class = "btn-sm btn-outline-secondary")),
-                DT::dataTableOutput(ns("sccoda_table"), height = "320px")),
+                DT::dataTableOutput(ns("sccoda_table"), height = "auto", fill = FALSE)),
       nav_panel(i18n$t("Composition échantillons"), value = "sccoda_tab_compo",
                 plotOutput(ns("sccoda_compo"), height = "480px"),
                 div(class = "m-1",

@@ -1741,12 +1741,19 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     output$comm_centrality <- DT::renderDataTable({
       req(comm_state$result)
       .check_fingerprint()
-      ts_datatable(
-        comm_centrality_df(),
+      df <- comm_centrality_df()
+      dt <- ts_datatable(
+        df,
         page_length = 15L,
         filename_base = "sc_comm_centrality",
-        filter = "none"
+        filter = "none",
+        extra_options = list(scrollX = TRUE)
       )
+      num_cols <- names(df)[vapply(df, is.numeric, logical(1))]
+      if (length(num_cols) > 0L) {
+        dt <- DT::formatRound(dt, columns = num_cols, digits = 3L)
+      }
+      dt
     })
 
     output$comm_centrality_plot <- renderPlot({

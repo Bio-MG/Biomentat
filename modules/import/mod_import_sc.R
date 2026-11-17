@@ -872,7 +872,7 @@ mod_import_sc_server <- function(id, global_data) {
         hr(),
         h6(.tr("Aperçu multi-échantillons — chaque échantillon est reconnu comme une entité distincte :"),
            style = "font-weight:bold;"),
-        DT::dataTableOutput(ns("multisample_summary"), height = "auto")
+        DT::dataTableOutput(ns("multisample_summary"), height = "auto", fill = FALSE)
       )
     })
 
