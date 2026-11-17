@@ -316,3 +316,25 @@ test_that("build_cellchat_input fails cleanly on a bad object or a missing colum
                  error = function(e) e)
   expect_identical(cellchat_input_error_state(e4), "invalid_species")
 })
+
+test_that("cellchat_input_from_matrix guards '0' cell labels forbidden by CellChat", {
+  mat <- .mk_counts()
+  # Numeric 0-indexed clusters (0, 1, 2) -> prefixed cluster_0, cluster_1, cluster_2
+  lbl_num <- rep(c("0", "1", "2"), length.out = ncol(mat))
+  res_num <- cellchat_input_from_matrix(mat, features = rownames(mat), labels = lbl_num,
+                                        species = "human", log_normalize = TRUE,
+                                        min_cells_per_group = 1L)
+  expect_false("0" %in% res_num$meta$labels)
+  expect_true(all(c("cluster_0", "cluster_1", "cluster_2") %in% res_num$meta$labels))
+  expect_true(any(grepl("'0'", res_num$warnings, fixed = TRUE)))
+
+  # Mixed labels containing "0" -> only "0" renamed without collision
+  lbl_mix <- rep(c("0", "T_cell", "cluster_0"), length.out = ncol(mat))
+  res_mix <- cellchat_input_from_matrix(mat, features = rownames(mat), labels = lbl_mix,
+                                        species = "human", log_normalize = TRUE,
+                                        min_cells_per_group = 1L)
+  expect_false("0" %in% res_mix$meta$labels)
+  expect_true("T_cell" %in% res_mix$meta$labels)
+  expect_true("cluster_0" %in% res_mix$meta$labels)
+  expect_true("cluster_0_" %in% res_mix$meta$labels)
+})

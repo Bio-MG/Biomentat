@@ -391,6 +391,27 @@ cellchat_input_from_matrix <- function(data, features, labels, species = NULL,
     )
   }
 
+  # CellChat::createCellChat() / setIdent() leve « The labels of cells cannot
+  # contain '0'! » sur les clusters Seurat 0-indexes. Prefixage deterministe
+  # sans perte de cellules.
+  if ("0" %in% labels) {
+    if (all(grepl("^[0-9]+$", unique(labels)))) {
+      labels <- paste0("cluster_", labels)
+      warnings_out <- c(warnings_out, paste0(
+        "Etiquettes numeriques contenant '0' (interdit par CellChat) : ",
+        "prefixees en 'cluster_*' sans perte de cellules."
+      ))
+    } else {
+      repl <- "cluster_0"
+      while (repl %in% labels) repl <- paste0(repl, "_")
+      labels[labels == "0"] <- repl
+      warnings_out <- c(warnings_out, sprintf(
+        "Etiquette '0' interdite par CellChat : renommee en '%s' sans perte de cellules.",
+        repl
+      ))
+    }
+  }
+
   # --- 3. Normalisation -----------------------------------------------------
   if (isTRUE(log_normalize)) {
     if (qc$counts_like) {

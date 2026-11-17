@@ -1809,6 +1809,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       comm_state$ccc_comparison <- res
       # Lane 3 : le dernier comparatif voyage dans le snapshot de session.
       shared_rv$communication_ccc_comparison <- res
+      if (length(res$warnings) > 0L) {
+        showNotification(paste(res$warnings, collapse = " | "),
+                         type = "warning", duration = 8)
+      }
       showNotification(.tr("Comparaison CCC terminée."), type = "message", duration = 4)
     })
 
@@ -1822,9 +1826,14 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       # Table comparative = flux d'information par voie calculé depuis
       # @netP$prob (substitution mesurée de la table rankNet vide en
       # CellChat 2.2.0.9001 — voir run_ccc_comparison).
-      ts_datatable(cmp$flow_table, page_length = 15L,
-                   filename_base = "sc_comm_ccc_ranknet",
-                   filter = "none", scroll_x = TRUE)
+      dt <- ts_datatable(cmp$flow_table, page_length = 15L,
+                         filename_base = "sc_comm_ccc_ranknet",
+                         filter = "none", scroll_x = TRUE)
+      num_cols <- names(cmp$flow_table)[vapply(cmp$flow_table, is.numeric, logical(1))]
+      if (length(num_cols) > 0L) {
+        dt <- DT::formatRound(dt, columns = num_cols, digits = 3L)
+      }
+      dt
     })
 
     output$ccc_comp_similarity <- DT::renderDataTable({
