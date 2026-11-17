@@ -13800,6 +13800,10 @@
     {
       "fr": "CSV (données du graphe)",
       "en": "CSV (plot data)"
+    },
+    {
+      "fr": "Afficher uniquement les paires affectées",
+      "en": "Show only affected pairs"
     }
   ]
 }

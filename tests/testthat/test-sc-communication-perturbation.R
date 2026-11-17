@@ -189,3 +189,21 @@ test_that("M3 : plus aucun token SYMBOLE non-ASCII dans le fichier", {
   non_ascii <- unique(syms$text[grepl("[^ -~]", syms$text, useBytes = TRUE)])
   expect_length(non_ascii, 0L)  # RED avant M3 : le symbole nu `Perturbé` (l. 436)
 })
+
+test_that("score_total_perturbed = 0 si score baseline présent et 0 interaction restante + filtre delta != 0", {
+  r <- .ccx_result()
+  ctx <- build_communication_perturbation(r, target = "ligand", value = "L1")
+  removed_rows <- ctx$delta_table[ctx$delta_table$n_interactions_perturbed == 0L, , drop = FALSE]
+  expect_true(nrow(removed_rows) >= 1L)
+  expect_true(all(!is.na(removed_rows$score_total_perturbed)))
+  expect_true(all(removed_rows$score_total_perturbed == 0))
+  g <- plot_communication_perturbation_delta(ctx)
+  expect_true(all(g$data$delta_score_total != 0))
+  # 0 paire avec delta != 0 -> état vide propre
+  ctx0 <- ctx
+  ctx0$delta_table$delta_score_total <- 0
+  g0 <- plot_communication_perturbation_delta(ctx0)
+  expect_s3_class(g0, "ggplot")
+  expect_true(is.null(nrow(g0$data)) || nrow(g0$data) == 0L)
+  expect_match(g0$layers[[1]]$aes_params$label, "Aucune paire affectée")
+})

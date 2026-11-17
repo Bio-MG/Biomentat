@@ -243,7 +243,11 @@ build_communication_perturbation <- function(communication_result,
     n_interactions_baseline = base_pairs$n_interactions,
     n_interactions_perturbed = ifelse(is.na(m), 0L, pert_pairs$n_interactions[m]),
     score_total_baseline = base_pairs$score_total,
-    score_total_perturbed = ifelse(is.na(m), NA_real_, pert_pairs$score_total[m]),
+    score_total_perturbed = ifelse(
+      is.na(m),
+      ifelse(is.na(base_pairs$score_total), NA_real_, 0),
+      pert_pairs$score_total[m]
+    ),
     stringsAsFactors = FALSE
   )
   # delta de score : NA si la paire n'a pas de scores importés (pas 0).
@@ -371,12 +375,19 @@ plot_communication_perturbation_delta <- function(context, top_n = 20L) {
   }
   pt <- context$delta_table
   pt$pair_label <- paste(pt$sender_node, pt$receiver_node, sep = " -> ")
-  pt <- pt[!is.na(pt$delta_score_total), , drop = FALSE]
+  has_any_score <- any(!is.na(pt$delta_score_total))
+  pt <- pt[!is.na(pt$delta_score_total) & pt$delta_score_total != 0, , drop = FALSE]
   if (nrow(pt) == 0L) {
+    empty_msg <- if (!has_any_score) {
+      "Aucun score importé : deltas de score non calculables (effectifs seuls — voir la table)."
+    } else {
+      "Aucune paire affectée par cette perturbation (delta = 0 pour toutes les paires)."
+    }
     return(ggplot2::ggplot() +
              ggplot2::annotate("text", x = 0.5, y = 0.5,
-                               label = "Aucun score importé : deltas de score non calculables (effectifs seuls — voir la table).",
-                               size = 4.5, colour = "grey40") +
+                               label = empty_msg,
+                               size = 4.2, colour = "grey40") +
+             ggplot2::labs(subtitle = paste(strwrap(.pert_banner(), width = 76), collapse = "\n")) +
              ggplot2::theme_void())
   }
   pt <- pt[order(-abs(pt$delta_score_total)), , drop = FALSE]
@@ -393,7 +404,7 @@ plot_communication_perturbation_delta <- function(context, top_n = 20L) {
       x = "Δ score total importé (baseline → perturbé)", y = NULL,
       title = sprintf("Effet de la perturbation [%s = %s, %s]",
                       context$target, context$value, context$mode),
-      subtitle = .pert_banner()
+      subtitle = paste(strwrap(.pert_banner(), width = 76), collapse = "\n")
     )
 }
 
@@ -417,9 +428,11 @@ plot_communication_perturbation_nodes <- function(context) {
   }
   nt$total_baseline <- .sum0(nt$out_score_total_baseline, nt$in_score_total_baseline)
   nt$total_perturbed <- .sum0(nt$out_score_total_perturbed, nt$in_score_total_perturbed)
+  nt$changed <- !is.na(nt$total_baseline) & !is.na(nt$total_perturbed) &
+    abs(nt$total_perturbed - nt$total_baseline) > 1e-12
   long <- rbind(
-    data.frame(node = nt$node, total = nt$total_baseline, state = "Baseline"),
-    data.frame(node = nt$node, total = nt$total_perturbed, state = "Perturbé")
+    data.frame(node = nt$node, total = nt$total_baseline, state = "Baseline", changed = nt$changed),
+    data.frame(node = nt$node, total = nt$total_perturbed, state = "Perturbé", changed = nt$changed)
   )
   long <- long[!is.na(long$total), , drop = FALSE]
   if (nrow(long) == 0L) {
@@ -430,9 +443,10 @@ plot_communication_perturbation_nodes <- function(context) {
              ggplot2::theme_void())
   }
   long$node <- factor(long$node, levels = unique(long$node[order(-long$total)]))
-  ggplot2::ggplot(long, ggplot2::aes(x = total, y = node, colour = state)) +
+  ggplot2::ggplot(long, ggplot2::aes(x = total, y = node, colour = state, alpha = changed)) +
     ggplot2::geom_line(ggplot2::aes(group = node), colour = "grey75") +
-    ggplot2::geom_point(size = 3, alpha = 0.9) +
+    ggplot2::geom_point(size = 3) +
+    ggplot2::scale_alpha_manual(values = c(`TRUE` = 0.95, `FALSE` = 0.3), guide = "none") +
     ggplot2::scale_colour_manual(values = c(Baseline = "grey55", "Perturbé" = "#D6604D"),
                                  name = NULL) +
     ggplot2::theme_classic() +
@@ -440,7 +454,7 @@ plot_communication_perturbation_nodes <- function(context) {
       x = "Total de score importé (sortant + entrant)", y = NULL,
       title = sprintf("Nœuds : baseline vs perturbé [%s = %s]",
                       context$target, context$value),
-      subtitle = .pert_banner()
+      subtitle = paste(strwrap(.pert_banner(), width = 76), collapse = "\n")
     )
 }
 

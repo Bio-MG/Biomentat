@@ -56,6 +56,7 @@ mod_sc_communication_perturbation_ui <- function(id) {
     fluidRow(
       column(6, downloadButton(ns("dl_pert_csv"), i18n$t("Exporter deltas (CSV)"), class = "btn-sm btn-info w-100")),
       column(6, verbatimTextOutput(ns("pert_recap")))),
+    checkboxInput(ns("pert_only_affected"), i18n$t("Afficher uniquement les paires affectées"), value = TRUE),
     DT::dataTableOutput(ns("pert_table"), height = "auto", fill = FALSE)
   )
 }
@@ -204,8 +205,21 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
       .ctx_tab_guard()
       ctx <- pert_ctx()
       req(ctx)
-      ts_datatable(ctx$delta_table, page_length = 15L,
-                   filename_base = "sc_comm_perturbation_delta", filter = "none")
+      df <- ctx$delta_table
+      if (isTRUE(input$pert_only_affected) && "affected" %in% names(df)) {
+        df <- df[!is.na(df$affected) & df$affected, , drop = FALSE]
+      }
+      dt <- ts_datatable(df, page_length = 15L,
+                         filename_base = "sc_comm_perturbation_delta", filter = "none")
+      num_cols <- intersect(
+        c("score_total_baseline", "score_total_perturbed",
+          "delta_score_total", "delta_fraction"),
+        names(df)
+      )
+      if (length(num_cols) > 0L) {
+        dt <- DT::formatRound(dt, columns = num_cols, digits = 4)
+      }
+      dt
     })
 
     output$pert_delta <- renderPlot({
