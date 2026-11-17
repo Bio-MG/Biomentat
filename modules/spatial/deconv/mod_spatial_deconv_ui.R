@@ -89,11 +89,12 @@ mod_spatial_deconv_controls_ui <- function(id) {
                         "RCTD/Label Transfer ci-dessous."))),
       selectInput(ns("ref_viz_reduction"), i18n$t("Reduction"), choices = c("UMAP" = "umap", "PCA" = "pca"), selected = "umap"),
       checkboxInput(ns("ref_viz_interactive"), i18n$t("Vue interactive (Plotly)"), value = TRUE),
-      bslib::input_task_button(ns("btn_ref_viz"), i18n$t("Calculer / afficher"), icon = icon("chart-line")),
+      bslib::input_task_button(ns("btn_ref_viz"), i18n$t("Calculer / afficher"),
+                               icon = icon("chart-line"), disabled = NA),
       verbatimTextOutput(ns("ref_viz_progress_text"), placeholder = TRUE),
 
       bslib::input_task_button(ns("btn_deconv"), i18n$t("2) Lancer la deconvolution"),
-                                icon = icon("puzzle-piece")),
+                                icon = icon("puzzle-piece"), disabled = NA),
       verbatimTextOutput(ns("deconv_progress_text"), placeholder = TRUE)
   )
 }

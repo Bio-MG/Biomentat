@@ -24,6 +24,16 @@
 # test-pipe-or-null-unification.R.
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
+# Sanitisation UTF-8 (repli Latin-1 -> UTF-8 pour messages systeme Windows FR)
+.sc_utf8 <- function(x) {
+  if (is.null(x) || !length(x)) return("")
+  s <- enc2utf8(paste(as.character(x), collapse = " "))
+  if (!isTRUE(all(validUTF8(s)))) {
+    s <- enc2utf8(iconv(s, from = "latin1", to = "UTF-8", sub = "?"))
+  }
+  s
+}
+
 # ── Helper: CellRanger v2 / single-column compat ────────────────────────────────────────────
 # Seurat::Read10X prefers genes.tsv whenever it exists (pre_ver_3 <- file.exists(genes.tsv))
 # and then evaluates feature.names[, gene.column] with gene.column = 2 — a 1-column
@@ -73,10 +83,10 @@
     if (grepl("\\.gz$", src)) {
       con <- gzfile(src, "rt"); on.exit(close(con)); readLines(con)
     } else readLines(src)
-  }, error = function(e) { log(paste("  ⚠ Lecture", basename(src), ":", e$message)); NULL })
+  }, error = function(e) { log(paste("  ⚠ Lecture", basename(src), ":", .sc_utf8(conditionMessage(e)))); NULL })
   gdf <- tryCatch(
     read.table(text = gdf, sep = "\t", header = FALSE, stringsAsFactors = FALSE, quote = ""),
-    error = function(e) { log(paste("  ⚠ Lecture", basename(src), ":", e$message)); NULL }
+    error = function(e) { log(paste("  ⚠ Lecture", basename(src), ":", .sc_utf8(conditionMessage(e)))); NULL }
   )
   if (is.null(gdf) || ncol(gdf) == 0) return(invisible(NULL))
 
@@ -89,7 +99,7 @@
     write.table(gdf, gz_con, sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
     close(gz_con)
     TRUE
-  }, error = function(e) { log(paste("  ⚠ Création features.tsv.gz:", e$message)); FALSE })
+  }, error = function(e) { log(paste("  ⚠ Création features.tsv.gz:", .sc_utf8(conditionMessage(e)))); FALSE })
   if (!wrote) return(invisible(NULL))
   log("  ✓ CellRanger v2: features.tsv.gz (id\tsymbol\ttype) généré automatiquement")
 
@@ -105,7 +115,7 @@
         write.table(gdf[, 1:2], gene_tsv, sep = "\t", col.names = FALSE,
                     row.names = FALSE, quote = FALSE)
         log("  ✓ genes.tsv à 1 colonne réécrit sur 2 colonnes (id\\tsymbol)")
-      }, error = function(e) log(paste("  ⚠ Désactivation genes.tsv:", e$message)))
+      }, error = function(e) log(paste("  ⚠ Désactivation genes.tsv:", .sc_utf8(conditionMessage(e)))))
     }
 
     # With genes.tsv gone Read10X takes its v3 branch, which expects the
@@ -118,7 +128,7 @@
           con_in <- file(plain, "rt"); lines <- readLines(con_in); close(con_in)
           con_out <- gzfile(gzf, "wt"); writeLines(lines, con_out); close(con_out)
           log(paste0("  ✓ ", nm, " compressé en ", basename(gzf), " (attendu par la branche v3 de Read10X)"))
-        }, error = function(e) log(paste("  ⚠ Compression", nm, ":", e$message)))
+        }, error = function(e) log(paste("  ⚠ Compression", nm, ":", .sc_utf8(conditionMessage(e)))))
       }
     }
   }
@@ -168,10 +178,51 @@
   list(ok = TRUE, msg = NULL)
 }
 
+#' Pure builder for SC « Datasets découverts » table rows.
+#'
+#' @param scan Named list as returned by `ts_sc_dataset_dir_scan()`.
+#' @param ns Module namespace function.
+#' @param tr Translator (server `.tr` / identity in tests).
+#' @return Named list of list(row =, button =, loadable =, btn_id =, id =).
+.sc_datasets_table_rows <- function(scan, ns, tr) {
+  out <- list()
+  ids <- names(scan)
+  for (i in seq_along(ids)) {
+    id <- ids[i]
+    e <- scan[[id]]
+    btn_id <- paste0("btn_load_ds_", i)
+    btn <- shiny::actionButton(
+      ns(btn_id),
+      label = tr("Charger"),
+      class = "btn-outline-primary btn-sm"
+    )
+    loadable <- identical(e$status, "valid")
+    if (!loadable) {
+      btn <- shiny::tagAppendAttributes(btn, disabled = NA)
+    }
+    fmt_txt <- if (is.null(e$format) || is.na(e$format)) "" else e$format
+    nsamp_txt <- if (is.null(e$n_samples) || length(e$n_samples) != 1L || is.na(e$n_samples)) "0" else as.character(e$n_samples)
+    st_txt <- if (is.null(e$status) || is.na(e$status)) "" else e$status
+    rsn_txt <- if (is.null(e$raison) || is.na(e$raison)) "" else e$raison
+    row <- shiny::tags$tr(
+      shiny::tags$td(.sc_utf8(id)),
+      shiny::tags$td(fmt_txt),
+      shiny::tags$td(nsamp_txt),
+      shiny::tags$td(st_txt),
+      shiny::tags$td(rsn_txt),
+      shiny::tags$td(btn)
+    )
+    out[[id]] <- list(row = row, button = btn, loadable = loadable,
+                      btn_id = btn_id, id = id)
+  }
+  out
+}
+
 # ── UI ────────────────────────────────────────────────────────────────────────────────────────
 mod_import_sc_ui <- function(id) {
   ns <- NS(id)
   tagList(
+    shinyjs::useShinyjs(),
     layout_sidebar(
       sidebar = sidebar(
         width = 400, title = i18n$t("Import Single-Cell"),
@@ -247,8 +298,10 @@ mod_import_sc_ui <- function(id) {
             # Roadmap 3.4 : annulation coopérative de la boucle d'import.
             actionButton(ns("btn_cancel_import_a"), i18n$t("⛔ Annuler l'import"),
                          class = "btn-outline-danger w-100 mb-1"),
-            actionButton(ns("btn_load_dir"), i18n$t("🚀 Charger Tous les Échantillons"),
-                         class = "btn-success w-100 mt-2", icon = icon("play"))
+            shinyjs::disabled(
+              actionButton(ns("btn_load_dir"), i18n$t("🚀 Charger Tous les Échantillons"),
+                           class = "btn-success w-100 mt-2", icon = icon("play"))
+            )
           ),
           accordion_panel(
             i18n$t("Option B: Fichiers Multiples (.rds, .h5, .h5ad)"),
@@ -304,6 +357,17 @@ mod_import_sc_ui <- function(id) {
                             .tr_plain("Mode 1 — analyses séparées, paramètres partagés"),
                             .tr_plain("Mode 2 — analyses séparées, paramètres distincts"))
                         ), selected = "standalone")
+          ),
+          accordion_panel(
+            i18n$t("Datasets découverts"),
+            value = "panel_datasets",
+            icon = icon("folder-open"),
+            helpText(i18n$t("Déposez des dossiers 10X (matrix.mtx + barcodes.tsv + features/genes.tsv) ou des fichiers SC (.rds, .h5, .h5ad, .loom) dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.")),
+            div(class = "d-flex align-items-center gap-2 mb-2",
+                actionButton(ns("btn_scan_datasets"), i18n$t("Scanner le répertoire"),
+                             class = "btn-outline-secondary btn-sm"),
+                uiOutput(ns("datasets_dir_txt"))),
+            uiOutput(ns("datasets_table_ui"))
           )
         )
       ),
@@ -376,7 +440,11 @@ mod_import_sc_server <- function(id, global_data) {
 
     logs <- reactiveVal("En attente d'import...")
     add_log <- function(msg) {
-      logs(paste0("[", format(Sys.time(),"%H:%M:%S"), "] ", msg, "\n", logs()))
+      msg_clean <- .sc_utf8(msg)
+      logs(paste0("[", format(Sys.time(), "%H:%M:%S"), "] ", msg_clean, "\n", .sc_utf8(logs())))
+    }
+    .notify_sc <- function(msg, type = "message", duration = 5) {
+      showNotification(.sc_utf8(msg), type = type, duration = duration)
     }
 
     # ── The ONE place a (directory, sample name) pair becomes a Seurat object ──
@@ -415,12 +483,20 @@ mod_import_sc_server <- function(id, global_data) {
                           producer = "import"),
         sc_multi_error = function(e) e)
       if (inherits(res, "sc_multi_error")) {
-        add_log(paste("⚠", res$message))
-        showNotification(res$message, type = "warning", duration = 10)
+        err_txt <- .sc_utf8(res$message)
+        add_log(paste("⚠", err_txt))
+        .notify_sc(err_txt, type = "warning", duration = 10)
         return(invisible(NULL))
       }
       global_data$sc_datasets <- res
       add_log(paste("🗄️", sprintf(.tr("Jeu SC « %s » enregistré dans sc_datasets (producteur import)."), trimws(lbl_raw))))
+    }
+
+    .commit_sc_loaded <- function(obj) {
+      global_data$sc_obj <- obj
+      global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
+      .register_sc_multi_dataset(obj)
+      invisible(obj)
     }
 
     # ── .rda/.RData "Inspect & Select" (composant mutualisé) ───────────────
@@ -442,8 +518,8 @@ mod_import_sc_server <- function(id, global_data) {
         if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("import_complete", obj_name)  # ASR-WIRING : point de pose (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §3.1)
         .register_sc_multi_dataset(prepared)
         add_log(paste(.tr("✅ Import réussi:"), ncol(prepared), .tr("cellules"), "—", obj_name))
-        showNotification(paste(.tr("✅ Import réussi:"), ncol(prepared), .tr("cellules")),
-                         type = "message", duration = 5)
+        .notify_sc(paste(.tr("✅ Import réussi:"), ncol(prepared), .tr("cellules")),
+                   type = "message", duration = 5)
       },
       expected  = .RDA_SC_EXPECTED,
       context   = "import single-cell (.RData)",
@@ -463,7 +539,7 @@ mod_import_sc_server <- function(id, global_data) {
       integrity <- .verify_upload_integrity(f$datapath, f$size)
       if (!integrity$ok) {
         add_log(paste("❌", integrity$msg))
-        showNotification(integrity$msg, type = "error", duration = 10)
+        .notify_sc(integrity$msg, type = "error", duration = 10)
         return()
       }
       rdata_file_rv(list(datapath = f$datapath, name = f$name, size = f$size))
@@ -527,13 +603,13 @@ mod_import_sc_server <- function(id, global_data) {
       }
       if (length(hits)) {
         add_log(paste("  ✓", length(hits), .tr("échantillon(s) détecté(s):"), paste(hits, collapse = ", ")))
-        showNotification(
+        .notify_sc(
           sprintf(.tr("⚡ %d échantillon(s) 10X détecté(s) et ajouté(s) : %s"),
                   length(hits), paste(hits, collapse = ", ")),
           type = "message", duration = 8)
       } else {
-        showNotification(.tr("Aucun sous-dossier contenant matrix.mtx(.gz) trouvé — utilisez « Ajouter un Dossier » manuellement."),
-                         type = "warning", duration = 8)
+        .notify_sc(.tr("Aucun sous-dossier contenant matrix.mtx(.gz) trouvé — utilisez « Ajouter un Dossier » manuellement."),
+                   type = "warning", duration = 8)
       }
     })
 
@@ -550,11 +626,11 @@ mod_import_sc_server <- function(id, global_data) {
     observeEvent(input$btn_add_sample, {
       req(dir_path(), input$sample_name)
       if (!nchar(trimws(input$sample_name))) {
-        showNotification(.tr("⚠️ Nom vide."), type = "warning"); return()
+        .notify_sc(.tr("⚠️ Nom vide."), type = "warning"); return()
       }
       cs <- sample_list()
       if (input$sample_name %in% names(cs)) {
-        showNotification(.tr("⚠️ Ce nom existe déjà."), type = "warning"); return()
+        .notify_sc(.tr("⚠️ Ce nom existe déjà."), type = "warning"); return()
       }
       cs[[input$sample_name]] <- dir_path(); sample_list(cs)
       add_log(paste(.tr("Échantillon ajouté:"), input$sample_name))
@@ -568,12 +644,16 @@ mod_import_sc_server <- function(id, global_data) {
 
     observeEvent(input$btn_clear_samples, { sample_list(list()); add_log(.tr("Liste effacée")) })
 
+    observe({
+      shinyjs::toggleState("btn_load_dir", condition = length(sample_list()) > 0L)
+    })
+
     # ── Option A ────────────────────────────────────────────────────────────
     observeEvent(input$btn_load_dir, {
       samples <- sample_list()
       if (is.null(samples) || length(samples) == 0L) {
-        showNotification(.tr("Ajoutez au moins un dossier d'échantillon avant de charger."),
-                         type = "warning", duration = 5)
+        .notify_sc(.tr("Ajoutez au moins un dossier d'échantillon avant de charger."),
+                   type = "warning", duration = 5)
         return()
       }
       add_log(paste(.tr("🔄 Import de"), length(samples), .tr("dossiers 10X...")))
@@ -585,7 +665,7 @@ mod_import_sc_server <- function(id, global_data) {
         for (i in seq_along(samples)) {
           if (import_cancel()) {
             add_log(.tr("⛔ Import annulé par l'utilisateur."))
-            showNotification(.tr("Import annulé."), type = "warning", duration = 6)
+            .notify_sc(.tr("Import annulé."), type = "warning", duration = 6)
             return()
           }
           sn <- names(samples)[i]; path <- samples[[i]]
@@ -630,10 +710,10 @@ mod_import_sc_server <- function(id, global_data) {
         global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
         .register_sc_multi_dataset(merged)
         add_log(paste("✅", ncol(merged), .tr("cellules,"), length(unique(merged$orig.ident)), .tr("échantillon(s)")))
-        showNotification(paste(.tr("✅ Import réussi:"), ncol(merged), .tr("cellules")), type = "message", duration = 5)
+        .notify_sc(paste(.tr("✅ Import réussi:"), ncol(merged), .tr("cellules")), type = "message", duration = 5)
       }, error = function(e) {
-        msg <- paste(.tr("❌ Erreur:"), conditionMessage(e))
-        add_log(msg); showNotification(msg, type = "error", duration = 10)
+        msg <- .sc_utf8(paste(.tr("❌ Erreur:"), .sc_utf8(conditionMessage(e))))
+        add_log(msg); .notify_sc(msg, type = "error", duration = 10)
       })
     })
 
@@ -743,8 +823,8 @@ mod_import_sc_server <- function(id, global_data) {
       selected <- if (is.null(input$file_select)) files$name else
         intersect(input$file_select, files$name)
       if (!length(selected)) {
-        showNotification(.tr("Aucun fichier sélectionné — cochez au moins un fichier."),
-                         type = "warning", duration = 6)
+        .notify_sc(.tr("Aucun fichier sélectionné — cochez au moins un fichier."),
+                   type = "warning", duration = 6)
         return()
       }
       add_log(paste(.tr("🔄 Import de"), length(selected), "/", nrow(files), "fichier(s)..."))
@@ -756,7 +836,7 @@ mod_import_sc_server <- function(id, global_data) {
         for (i in which(files$name %in% selected)) {
           if (import_cancel()) {
             add_log(.tr("⛔ Import annulé par l'utilisateur."))
-            showNotification(.tr("Import annulé."), type = "warning", duration = 6)
+            .notify_sc(.tr("Import annulé."), type = "warning", duration = 6)
             return()
           }
           fn <- tools::file_path_sans_ext(files$name[i])
@@ -806,10 +886,10 @@ mod_import_sc_server <- function(id, global_data) {
         global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
         .register_sc_multi_dataset(merged)
         add_log(paste("✅", ncol(merged), .tr("cellules")))
-        showNotification(paste(.tr("✅ Import réussi:"), ncol(merged), .tr("cellules")), type = "message", duration = 5)
+        .notify_sc(paste(.tr("✅ Import réussi:"), ncol(merged), .tr("cellules")), type = "message", duration = 5)
       }, error = function(e) {
-        msg <- paste(.tr("❌ Erreur:"), conditionMessage(e))
-        add_log(msg); showNotification(msg, type = "error", duration = 12)
+        msg <- .sc_utf8(paste(.tr("❌ Erreur:"), .sc_utf8(conditionMessage(e))))
+        add_log(msg); .notify_sc(msg, type = "error", duration = 12)
       })
     })
 
@@ -838,16 +918,131 @@ mod_import_sc_server <- function(id, global_data) {
 
           raw <- load_single_cell_data(input$single_file_upload$datapath, add_log)
           obj <- prepare_seurat_object(raw, "SingleSample")
-          global_data$sc_obj <- obj
-          global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
-          .register_sc_multi_dataset(obj)
+          .commit_sc_loaded(obj)
           add_log(paste(.tr("✅ Import réussi:"), ncol(obj), .tr("cellules")))
-          showNotification(.tr("✅ Import réussi:"), type = "message")
+          .notify_sc(.tr("✅ Import réussi:"), type = "message")
         }, error = function(e) {
-          msg <- paste(.tr("❌ Erreur:"), conditionMessage(e))
-          add_log(msg); showNotification(msg, type = "error", duration = 12)
+          msg <- .sc_utf8(paste(.tr("❌ Erreur:"), .sc_utf8(conditionMessage(e))))
+          add_log(msg); .notify_sc(msg, type = "error", duration = 12)
         })
       })
+    })
+
+    # ── Découverte à la demande (ts_datasets_dir(modality = "sc")) ─────────
+    ds_scan_rv <- shiny::reactiveVal(NULL)
+    ds_dir_rv <- shiny::reactiveVal(NULL)
+    ds_btn_map_rv <- shiny::reactiveVal(list())
+    ds_seen_btns <- shiny::reactiveVal(character(0))
+
+    .charger_sc_dataset <- function(id) {
+      sc <- shiny::isolate(ds_scan_rv())
+      entry <- if (is.null(sc)) NULL else sc[[id]]
+      if (is.null(entry)) return(invisible(list(ok = FALSE, status = "unknown")))
+      if (!identical(entry$status, "valid")) {
+        raison <- if (is.null(entry$raison) || is.na(entry$raison)) "?" else entry$raison
+        msg <- .sc_utf8(sprintf(.tr("Refusé : dataset « %s » non valide (raison : %s)."), id, raison))
+        add_log(paste("⛔", msg))
+        .notify_sc(msg, type = "warning", duration = 8)
+        return(invisible(list(ok = FALSE, status = "refused")))
+      }
+      add_log(.sc_utf8(paste0("📂 ", sprintf(.tr("Chargement du dataset « %s » depuis le répertoire..."), id))))
+      tryCatch({
+        loaded <- if (identical(entry$format, "10x_multi")) {
+          sdirs <- entry$paths$sample_dirs
+          objs <- lapply(sdirs, function(sd) {
+            sn <- basename(sd)
+            raw <- load_single_cell_data(sd, add_log)
+            o <- prepare_seurat_object(raw, sn)
+            o$orig.ident <- sn
+            .sc_surface_multiplets(o, sd, add_log)
+          })
+          if (length(objs) == 1L) objs[[1L]] else {
+            m <- merge(objs[[1L]], y = objs[-1L], add.cell.ids = basename(sdirs), project = id)
+            tryCatch({ m[["RNA"]] <- SeuratObject::JoinLayers(m[["RNA"]]); m }, error = function(e) m)
+          }
+        } else {
+          src_path <- if (!is.null(entry$paths$file) && !is.na(entry$paths$file)) entry$paths$file else entry$paths$dir
+          raw <- load_single_cell_data(src_path, add_log)
+          o <- prepare_seurat_object(raw, id)
+          oid <- tryCatch(unique(as.character(o$orig.ident)), error = function(e) character(0))
+          oid <- oid[!is.na(oid) & nzchar(oid)]
+          has_meaningful_ident <- inherits(raw, "Seurat") && !dir.exists(src_path) &&
+            length(oid) > 0L && (length(oid) > 1L || !identical(oid, "SeuratProject"))
+          if (!has_meaningful_ident) {
+            o$orig.ident <- id
+          }
+          if (dir.exists(src_path)) o <- .sc_surface_multiplets(o, src_path, add_log)
+          o
+        }
+        .commit_sc_loaded(loaded)
+        add_log(paste(.tr("✅ Import réussi:"), ncol(loaded), .tr("cellules")))
+        .notify_sc(sprintf(.tr("✓ Dataset « %s » chargé."), id), type = "message", duration = 5)
+        invisible(list(ok = TRUE, status = "loaded"))
+      }, error = function(e) {
+        msg <- .sc_utf8(paste(.tr("❌ Erreur:"), .sc_utf8(conditionMessage(e))))
+        add_log(msg)
+        .notify_sc(msg, type = "error", duration = 10)
+        invisible(list(ok = FALSE, status = "error", errors = msg))
+      })
+    }
+
+    observeEvent(input$btn_scan_datasets, {
+      sc_dir <- tryCatch(ts_datasets_dir(modality = "sc"), error = function(e) e)
+      if (inherits(sc_dir, "condition")) {
+        err_msg <- .sc_utf8(sprintf(.tr("Erreur scan du répertoire : %s"), .sc_utf8(conditionMessage(sc_dir))))
+        add_log(err_msg); .notify_sc(err_msg, type = "error", duration = 10)
+        return()
+      }
+      res <- tryCatch(ts_sc_dataset_dir_scan(datasets_dir = sc_dir), error = function(e) e)
+      if (inherits(res, "condition")) {
+        err_msg <- .sc_utf8(sprintf(.tr("Erreur scan du répertoire : %s"), .sc_utf8(conditionMessage(res))))
+        add_log(err_msg); .notify_sc(err_msg, type = "error", duration = 10)
+        return()
+      }
+      ds_dir_rv(sc_dir)
+      ds_scan_rv(res)
+      ids <- names(res) %||% character(0)
+      btn_ids <- if (length(ids)) paste0("btn_load_ds_", seq_along(ids)) else character(0)
+      ds_btn_map_rv(if (length(ids)) stats::setNames(as.list(ids), btn_ids) else list())
+      new_btns <- setdiff(btn_ids, shiny::isolate(ds_seen_btns()))
+      lapply(new_btns, function(bid) {
+        local({
+          b <- bid
+          observeEvent(input[[b]], {
+            mp <- shiny::isolate(ds_btn_map_rv())
+            ds_id <- mp[[b]]
+            if (!is.null(ds_id)) .charger_sc_dataset(ds_id)
+          }, ignoreInit = TRUE)
+        })
+      })
+      ds_seen_btns(c(shiny::isolate(ds_seen_btns()), new_btns))
+      add_log(sprintf(.tr("Scan du répertoire des datasets : %d dataset(s)."), length(res)))
+    })
+
+    output$datasets_dir_txt <- renderUI({
+      global_data$language
+      d <- ds_dir_rv()
+      if (is.null(d)) return(NULL)
+      tags$span(class = "text-muted small",
+                .sc_utf8(sprintf(.tr("Répertoire : %s"), d)))
+    })
+
+    output$datasets_table_ui <- renderUI({
+      global_data$language
+      sc <- ds_scan_rv()
+      if (is.null(sc)) return(NULL)
+      if (length(sc) == 0L) {
+        return(tags$div(class = "text-muted",
+                        .tr("Aucun dataset découvert — cliquez sur « Scanner le répertoire ».")))
+      }
+      rows <- .sc_datasets_table_rows(sc, ns, .tr)
+      tags$table(class = "table table-sm table-striped align-middle",
+        tags$thead(tags$tr(
+          lapply(c("Identifiant", "Format", "Échantillons", "État", "Raison", "Charger"),
+                 function(h) tags$th(.tr(h)))
+        )),
+        tags$tbody(lapply(rows, function(r) r$row))
+      )
     })
 
     # ── Outputs ──────────────────────────────────────────────────────────────
@@ -863,7 +1058,7 @@ mod_import_sc_server <- function(id, global_data) {
     output$console_log <- renderText({
       global_data$language
       txt <- logs()
-      if (identical(txt, "En attente d'import...")) .tr("En attente d'import...") else txt
+      if (identical(txt, "En attente d'import...")) .sc_utf8(.tr("En attente d'import...")) else .sc_utf8(txt)
     })
 
     # ── V1.x UX multi-échantillons : aperçu récapitulatif (≥ 2 orig.ident) ───
@@ -940,9 +1135,79 @@ mod_import_sc_server <- function(id, global_data) {
             class = "sc_import_error"))
         }
 
+        has_feat_gz  <- file.exists(file.path(path, "features.tsv.gz"))
+        has_feat_txt <- file.exists(file.path(path, "features.tsv"))
+        has_gene_gz  <- file.exists(file.path(path, "genes.tsv.gz"))
+        has_gene_txt <- file.exists(file.path(path, "genes.tsv"))
+        has_bc_gz    <- file.exists(file.path(path, "barcodes.tsv.gz"))
+        has_bc_txt   <- file.exists(file.path(path, "barcodes.tsv"))
+        has_mat_gz   <- file.exists(file.path(path, "matrix.mtx.gz"))
+        has_mat_txt  <- file.exists(file.path(path, "matrix.mtx"))
+
+        copy_to_gz <- function(src_file, dst_gz) {
+          in_con <- file(src_file, "rb")
+          on.exit(try(close(in_con), silent = TRUE), add = TRUE)
+          out_con <- gzfile(dst_gz, "wb")
+          on.exit(try(close(out_con), silent = TRUE), add = TRUE)
+          repeat {
+            buf <- readBin(in_con, what = "raw", n = 1048576L)
+            if (length(buf) == 0L) break
+            writeBin(buf, out_con)
+          }
+        }
+        copy_from_gz <- function(src_gz, dst_file) {
+          in_con <- gzfile(src_gz, "rb")
+          on.exit(try(close(in_con), silent = TRUE), add = TRUE)
+          out_con <- file(dst_file, "wb")
+          on.exit(try(close(out_con), silent = TRUE), add = TRUE)
+          repeat {
+            buf <- readBin(in_con, what = "raw", n = 1048576L)
+            if (length(buf) == 0L) break
+            writeBin(buf, out_con)
+          }
+        }
+
+        read_path <- path
+        is_v3_stage <- (has_feat_gz || has_feat_txt) && !has_gene_txt &&
+          !(has_feat_gz && has_bc_gz && has_mat_gz)
+        is_v2_stage <- (has_gene_gz || has_gene_txt) && !has_feat_gz && !has_feat_txt &&
+          (!has_gene_txt || !has_bc_txt || !has_mat_txt)
+
+        if (is_v3_stage) {
+          stage_dir <- tempfile("ts_10x_")
+          dir.create(stage_dir, recursive = TRUE, showWarnings = FALSE)
+          on.exit(unlink(stage_dir, recursive = TRUE, force = TRUE), add = TRUE)
+          for (nm in c("matrix.mtx", "barcodes.tsv", "features.tsv")) {
+            gz_src  <- file.path(path, paste0(nm, ".gz"))
+            txt_src <- file.path(path, nm)
+            gz_dst  <- file.path(stage_dir, paste0(nm, ".gz"))
+            if (file.exists(gz_src)) {
+              file.copy(gz_src, gz_dst, overwrite = TRUE)
+            } else if (file.exists(txt_src)) {
+              copy_to_gz(txt_src, gz_dst)
+            }
+          }
+          read_path <- stage_dir
+        } else if (is_v2_stage) {
+          stage_dir <- tempfile("ts_10x_")
+          dir.create(stage_dir, recursive = TRUE, showWarnings = FALSE)
+          on.exit(unlink(stage_dir, recursive = TRUE, force = TRUE), add = TRUE)
+          for (nm in c("matrix.mtx", "barcodes.tsv", "genes.tsv")) {
+            txt_src <- file.path(path, nm)
+            gz_src  <- file.path(path, paste0(nm, ".gz"))
+            txt_dst <- file.path(stage_dir, nm)
+            if (file.exists(txt_src)) {
+              file.copy(txt_src, txt_dst, overwrite = TRUE)
+            } else if (file.exists(gz_src)) {
+              copy_from_gz(gz_src, txt_dst)
+            }
+          }
+          read_path <- stage_dir
+        }
+
         # CellRanger v2 compat: create features.tsv.gz if only genes.tsv present
-        .ensure_10x_features(path, log_fn)
-        return(Read10X(path))
+        .ensure_10x_features(read_path, log_fn)
+        return(Read10X(read_path))
       }
 
       ext <- tolower(tools::file_ext(path))
@@ -991,8 +1256,9 @@ mod_import_sc_server <- function(id, global_data) {
                 BPCells::write_matrix_dir(mat=mat, dir=tmp)
                 return(BPCells::open_matrix_dir(dir=tmp)) },
                 error = function(e) {
-                  h5ad_errs <<- c(h5ad_errs, paste0("BPCells : ", conditionMessage(e)))
-                  log(paste("  ⚠ BPCells h5ad :", conditionMessage(e)))
+                  em <- .sc_utf8(conditionMessage(e))
+                  h5ad_errs <<- c(h5ad_errs, paste0("BPCells : ", em))
+                  log(paste("  ⚠ BPCells h5ad :", em))
                   NULL })
         }
         if (requireNamespace("zellkonverter", quietly=TRUE)) {
@@ -1001,8 +1267,9 @@ mod_import_sc_server <- function(id, global_data) {
                   SummarizedExperiment::assay(sce,"counts") <- SummarizedExperiment::assay(sce,SummarizedExperiment::assayNames(sce)[1])
                 return(Seurat::as.Seurat(sce, counts="counts", data=NULL)) },
                 error = function(e) {
-                  h5ad_errs <<- c(h5ad_errs, paste0("zellkonverter : ", conditionMessage(e)))
-                  log(paste("  ⚠ zellkonverter h5ad :", conditionMessage(e)))
+                  em <- .sc_utf8(conditionMessage(e))
+                  h5ad_errs <<- c(h5ad_errs, paste0("zellkonverter : ", em))
+                  log(paste("  ⚠ zellkonverter h5ad :", em))
                   NULL })
         }
         if (requireNamespace("sceasy", quietly=TRUE)) {
@@ -1010,8 +1277,9 @@ mod_import_sc_server <- function(id, global_data) {
                 sceasy::convertFormat(path, from="anndata", to="seurat", outFile=tmp_rds)
                 return(readRDS(tmp_rds)) },
                 error = function(e) {
-                  h5ad_errs <<- c(h5ad_errs, paste0("sceasy : ", conditionMessage(e)))
-                  log(paste("  ⚠ sceasy h5ad :", conditionMessage(e)))
+                  em <- .sc_utf8(conditionMessage(e))
+                  h5ad_errs <<- c(h5ad_errs, paste0("sceasy : ", em))
+                  log(paste("  ⚠ sceasy h5ad :", em))
                   NULL })
         }
         stop(errorCondition(paste0(

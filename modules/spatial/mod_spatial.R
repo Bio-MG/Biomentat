@@ -152,26 +152,28 @@ mod_spatial_ui <- function(id) {
                         mod_spatial_pipeline_ui(ns("pipeline"))),
 
         # LOT 5 (V1.x UX): tooltip demystifies "Moran" on the QC step.
-        accordion_panel(tagList(i18n$t("1. QC & Autocorrelation"), " ",
-                                bslib::tooltip(icon("circle-info"),
-                                               i18n$t("Autocorrélation spatiale (Moran) — gènes spatialement variables"))),
+        accordion_panel(uiOutput(ns("step_title_qc"), inline = TRUE),
                         icon = icon("filter"),
                         value = "panel_qc",
                         mod_spatial_qc_controls_ui(ns("qc"))),
 
-        accordion_panel(i18n$t("2. Clustering (BANKSY-lite)"), icon = icon("shapes"),
+        accordion_panel(uiOutput(ns("step_title_cluster"), inline = TRUE),
+                        icon = icon("shapes"),
                         value = "panel_cluster",
                         mod_spatial_cluster_controls_ui(ns("cluster"))),
 
-        accordion_panel(i18n$t("3. Deconvolution"), icon = icon("puzzle-piece"),
+        accordion_panel(uiOutput(ns("step_title_deconv"), inline = TRUE),
+                        icon = icon("puzzle-piece"),
                         value = "panel_deconv",
                         mod_spatial_deconv_controls_ui(ns("deconv"))),
 
-        accordion_panel(i18n$t("4. Visualisation"), icon = icon("eye"),
+        accordion_panel(uiOutput(ns("step_title_viz"), inline = TRUE),
+                        icon = icon("eye"),
                         value = "panel_viz",
                         mod_spatial_viz_controls_ui(ns("viz"))),
 
-        accordion_panel(i18n$t("5. Multi-echantillons"), icon = icon("layer-group"),
+        accordion_panel(uiOutput(ns("step_title_multi"), inline = TRUE),
+                        icon = icon("layer-group"),
                         value = "panel_multi",
                         mod_spatial_multi_controls_ui(ns("multi"))),
 
@@ -180,11 +182,13 @@ mod_spatial_ui <- function(id) {
         # autres étapes (le trou 6 dans la séquence 0-5-7 venait du label
         # non numéroté ; mod_spatial_pipeline.R:216 référençait déjà
         # « l'onglet "6. Niches spatiales" »).
-        accordion_panel(i18n$t("6. Niches spatiales — micro-environnements cellulaires"), icon = icon("diagram-project"),
+        accordion_panel(uiOutput(ns("step_title_niche"), inline = TRUE),
+                        icon = icon("diagram-project"),
                         value = "panel_niche",
                         mod_spatial_niche_controls_ui(ns("niche"))),
 
-        accordion_panel(i18n$t("7. Export & Rapport"), icon = icon("file-export"),
+        accordion_panel(uiOutput(ns("step_title_export"), inline = TRUE),
+                        icon = icon("file-export"),
                         value = "panel_export",
                         navset_pill(
                           id = ns("export_report_controls_tabs"),
@@ -495,6 +499,53 @@ mod_spatial_server <- function(id, global_data) {
     .results_to_step <- stats::setNames(.step_order, unname(.step_results))
     current_step_rv <- reactiveVal("panel_pipeline")
 
+    .step_lock_reason <- function(panel) {
+      if (identical(panel, "panel_pipeline")) return(NULL)
+      if (is.null(global_data$spatial_obj)) {
+        return("Importez d'abord un echantillon spatial.")
+      }
+      if (identical(panel, "panel_multi") && length(global_data$spatial_datasets) < 2L) {
+        return("Importez au moins 2 echantillons spatiaux (onglet Import > Spatial).")
+      }
+      NULL
+    }
+
+    .render_step_title <- function(panel, extra = NULL) {
+      global_data$language
+      lbl <- .tr(.step_labels[[panel]])
+      reason_key <- .step_lock_reason(panel)
+      if (is.null(reason_key)) {
+        if (is.null(extra)) return(lbl)
+        return(tagList(lbl, " ", extra))
+      }
+      title_span <- tags$span(style = "color:#8a8f98;", lbl)
+      lock_badge <- bslib::tooltip(tags$span("\U0001F512"), .tr(reason_key))
+      if (is.null(extra)) {
+        tagList(title_span, " ", lock_badge)
+      } else {
+        tagList(title_span, " ", extra, " ", lock_badge)
+      }
+    }
+
+    output$step_title_qc <- renderUI({
+      .render_step_title(
+        "panel_qc",
+        extra = bslib::tooltip(
+          icon("circle-info"),
+          .tr("Autocorrélation spatiale (Moran) — gènes spatialement variables")
+        )
+      )
+    })
+    output$step_title_cluster <- renderUI({ .render_step_title("panel_cluster") })
+    output$step_title_deconv  <- renderUI({ .render_step_title("panel_deconv") })
+    output$step_title_viz     <- renderUI({ .render_step_title("panel_viz") })
+    output$step_title_multi   <- renderUI({ .render_step_title("panel_multi") })
+    output$step_title_niche   <- renderUI({ .render_step_title("panel_niche") })
+    output$step_title_export  <- renderUI({ .render_step_title("panel_export") })
+    for (.st_nm in paste0("step_title_", c("qc", "cluster", "deconv", "viz", "multi", "niche", "export"))) {
+      outputOptions(output, .st_nm, suspendWhenHidden = FALSE)
+    }
+
     .activate_spatial_step <- function(panel, sync_accordion = TRUE, sync_results = TRUE) {
       if (is.null(panel) || !panel %in% .step_order) return(invisible(NULL))
       current_step_rv(panel)
@@ -586,13 +637,19 @@ mod_spatial_server <- function(id, global_data) {
       cur <- current_step_rv()
       idx <- match(cur, .step_order)
       if (is.na(idx)) idx <- 1L
-      lbl <- .tr(.step_labels[[.step_order[idx]]])
+      step_key <- .step_order[idx]
+      lbl <- .tr(.step_labels[[step_key]])
+      reason_key <- .step_lock_reason(step_key)
       div(
         class = "ts-spatial-step-bar",
         div(
           class = "d-flex align-items-center gap-2 text-truncate",
           span(class = "badge bg-primary", .tr("Workflow Spatial")),
-          span(class = "fw-semibold text-truncate", lbl)
+          span(class = "fw-semibold text-truncate", lbl),
+          if (!is.null(reason_key)) {
+            span(class = "badge bg-warning-subtle text-warning-emphasis border border-warning-subtle text-truncate",
+                 "\U0001F512 ", .tr(reason_key))
+          }
         ),
         div(
           class = "d-flex align-items-center gap-1 flex-shrink-0",

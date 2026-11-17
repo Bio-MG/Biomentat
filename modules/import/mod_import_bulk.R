@@ -196,6 +196,7 @@ mod_import_bulk_ui <- function(id) {
         ),
         
         accordion(
+          id = ns("acc_import"),
           # ── Panel 1 : counts (mode merged_matrix) ───────────────────────
           accordion_panel(
             i18n$t("1. Matrice de Counts"),
@@ -414,6 +415,7 @@ mod_import_bulk_ui <- function(id) {
             uiOutput(ns("dataset_health_ui"))
           )
         ),
+        uiOutput(ns("import_mode_style")),
 
         hr(),
         # ── Bouton persistant (inchangé) ───────────────────────────────────
@@ -615,6 +617,35 @@ mod_import_bulk_server <- function(id, global_data) {
         ),
         selected = isolate(input$counts_format) %||% "rows"
       )
+    }, ignoreInit = TRUE)
+
+    output$import_mode_style <- renderUI({
+      mode <- input$bulk_import_mode %||% "merged_matrix"
+      css <- if (identical(mode, "per_sample")) {
+        sprintf(
+          "#%1$s > .accordion-item[data-value='panel_counts'], #%1$s > .accordion-item[data-value='panel_metadata'] { display: none; }",
+          ns("acc_import")
+        )
+      } else {
+        sprintf(
+          "#%1$s > .accordion-item[data-value='panel_multi'] { display: none; }",
+          ns("acc_import")
+        )
+      }
+      tags$style(HTML(css))
+    })
+    outputOptions(output, "import_mode_style", suspendWhenHidden = FALSE)
+
+    observeEvent(input$bulk_import_mode, {
+      mode <- input$bulk_import_mode
+      if (!is.character(mode) || length(mode) != 1L ||
+          !(mode %in% c("merged_matrix", "per_sample"))) {
+        return(invisible(NULL))
+      }
+      target <- if (identical(mode, "per_sample")) "panel_multi" else "panel_counts"
+      try(bslib::accordion_panel_set(id = "acc_import", values = target,
+                                     session = session), silent = TRUE)
+      invisible(NULL)
     }, ignoreInit = TRUE)
 
     # ── Logger (B2-G : garde anti-spam ajoutée, le reste inchangé) ─────────
@@ -1043,14 +1074,15 @@ mod_import_bulk_server <- function(id, global_data) {
     }
 
     observeEvent(input$btn_scan_datasets, {
-      res <- tryCatch(ts_dataset_dir_scan(), error = function(e) e)
+      bulk_dir <- ts_datasets_dir(modality = "bulk")
+      res <- tryCatch(ts_dataset_dir_scan(datasets_dir = bulk_dir), error = function(e) e)
       if (inherits(res, "condition")) {
         showNotification(sprintf(.tr("Erreur scan du répertoire : %s"),
                                  conditionMessage(res)),
                          type = "error", duration = 10)
         return()
       }
-      ds_dir_rv(ts_datasets_dir())
+      ds_dir_rv(bulk_dir)
       ds_scan_rv(res)
       # Observateurs « Charger » par dataset (motif lapply + observeEvent
       # dynamique, mod_sc_communication.R:756-760) : les ids ne sont connus
@@ -1311,7 +1343,7 @@ mod_import_bulk_server <- function(id, global_data) {
     
     # ── Parse all uploaded files reactively ───────────────────────────────
     ps_raw <- reactive({
-      req(input$bulk_import_mode == "per_sample")
+      req(identical(input$bulk_import_mode, "per_sample"))
       files <- input$ps_files
       req(files)
       
@@ -1335,7 +1367,7 @@ mod_import_bulk_server <- function(id, global_data) {
     
     # ── Dynamic UI for ambiguous column resolution ─────────────────────────
     output$ps_resolve_ui <- renderUI({
-      req(input$bulk_import_mode == "per_sample")
+      req(identical(input$bulk_import_mode, "per_sample"))
       parsed <- ps_raw()
       
       blocks <- lapply(parsed, function(x) {
@@ -1370,7 +1402,7 @@ mod_import_bulk_server <- function(id, global_data) {
     
     # ── Preview table (one row per file) ───────────────────────────────────
     ps_preview <- reactive({
-      req(input$bulk_import_mode == "per_sample")
+      req(identical(input$bulk_import_mode, "per_sample"))
       parsed <- ps_raw()
 
       # P0 (mesuré 2026-10-21, GSE52778) : « un dossier = un échantillon »
@@ -1411,7 +1443,7 @@ mod_import_bulk_server <- function(id, global_data) {
     })
     
     output$ps_preview_table <- DT::renderDT({
-      req(input$bulk_import_mode == "per_sample")
+      req(identical(input$bulk_import_mode, "per_sample"))
       ts_datatable(
         ps_preview(),
         page_length = 8,
@@ -1428,7 +1460,7 @@ mod_import_bulk_server <- function(id, global_data) {
     # side by side, which is the verification step. A row-count mismatch is
     # reported in the banner and the file is IGNORED (never partially applied).
     ps_metadata_upload <- reactive({
-      req(input$bulk_import_mode == "per_sample")
+      req(identical(input$bulk_import_mode, "per_sample"))
       f <- input$ps_metadata_file
       if (is.null(f)) return(NULL)
       tryCatch({
@@ -1461,7 +1493,7 @@ mod_import_bulk_server <- function(id, global_data) {
     
     # ── Auto-generate editable metadata whenever preview changes ──────────
     observe({
-      req(input$bulk_import_mode == "per_sample")
+      req(identical(input$bulk_import_mode, "per_sample"))
       prev <- ps_preview()
       req(nrow(prev) > 0)
       
@@ -1547,7 +1579,7 @@ mod_import_bulk_server <- function(id, global_data) {
     
     # ── Status / warnings banner ───────────────────────────────────────────
     output$ps_status_banner <- renderUI({
-      req(input$bulk_import_mode == "per_sample")
+      req(identical(input$bulk_import_mode, "per_sample"))
       msgs <- character(0)
       
       prev <- rv_ps$preview
@@ -1600,7 +1632,7 @@ mod_import_bulk_server <- function(id, global_data) {
     # =========================================================================
     
     output$readiness_banner <- renderUI({
-      if (input$bulk_import_mode == "merged_matrix") {
+      if (identical(input$bulk_import_mode %||% "merged_matrix", "merged_matrix")) {
         counts_ok <- !is.null(counts_reactive())
         meta_ok   <- !is.null(effective_metadata())
         div(style = "font-size:0.8em;",
@@ -1639,7 +1671,7 @@ mod_import_bulk_server <- function(id, global_data) {
     })
     
     observe({
-      ready <- if (input$bulk_import_mode == "merged_matrix") {
+      ready <- if (identical(input$bulk_import_mode %||% "merged_matrix", "merged_matrix")) {
         !is.null(counts_reactive())
       } else {
         !is.null(input$ps_files) && !is.null(rv_ps$metadata) && nrow(rv_ps$metadata) > 0
@@ -1671,7 +1703,7 @@ mod_import_bulk_server <- function(id, global_data) {
       req(input$btn_load > 0 || shiny::isolate(drive_counter()) > 0)
       
       # ── Branch merged_matrix (code original inchangé) ─────────────────
-      if (input$bulk_import_mode == "merged_matrix") {
+      if (identical(input$bulk_import_mode %||% "merged_matrix", "merged_matrix")) {
         req(counts_reactive())
         add_log(.tr("🔄 Préparation de l'objet RNA Bulk..."))
         showNotification(.tr("Traitement des données..."), type = "message", duration = NULL, id = ns("progress"))

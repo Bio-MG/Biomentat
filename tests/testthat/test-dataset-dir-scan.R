@@ -402,3 +402,170 @@ test_that("T6 le scan est strictement lecture seule (AC2) : snapshot du réperto
                    info = paste0("aucun fichier créé/modifié/re-touché par le scan ",
                                  "(AC2 : strictement lecture seule)"))
 })
+
+# ── T7 -- W1.3 : ts_datasets_dir(modality = ...) & ts_sc_dataset_dir_scan() --
+
+test_that("T7 ts_datasets_dir() : paramétrage modality et ordre de précédence (AC2)", {
+  expect_true(.dds_present, info = .dds_red_info)
+  if (!.dds_present) return(invisible(NULL))
+
+  old_ds <- Sys.getenv("TRANSCRIPTO_DATASETS_DIR", unset = NA_character_)
+  old_dr <- Sys.getenv("TRANSCRIPTO_DRIVE_DATA_DIR", unset = NA_character_)
+  on.exit({
+    if (is.na(old_ds)) Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR") else Sys.setenv(TRANSCRIPTO_DATASETS_DIR = old_ds)
+    if (is.na(old_dr)) Sys.unsetenv("TRANSCRIPTO_DRIVE_DATA_DIR") else Sys.setenv(TRANSCRIPTO_DRIVE_DATA_DIR = old_dr)
+  }, add = TRUE)
+
+  Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR")
+  Sys.unsetenv("TRANSCRIPTO_DRIVE_DATA_DIR")
+
+  root_norm <- normalizePath(ts_project_root(), winslash = "/", mustWork = FALSE)
+  expect_identical(ts_datasets_dir(),
+                   normalizePath(file.path(root_norm, "data_sc", "datasets"), winslash = "/", mustWork = FALSE))
+  expect_identical(ts_datasets_dir(modality = "sc"),
+                   normalizePath(file.path(root_norm, "data_sc", "datasets"), winslash = "/", mustWork = FALSE))
+  expect_identical(ts_datasets_dir(modality = "bulk"),
+                   normalizePath(file.path(root_norm, "data_bulk", "datasets"), winslash = "/", mustWork = FALSE))
+  expect_identical(ts_datasets_dir(modality = "spatial"),
+                   normalizePath(file.path(root_norm, "data_spatial", "datasets"), winslash = "/", mustWork = FALSE))
+  expect_error(ts_datasets_dir(modality = "unknown_modality"))
+
+  # Precedence : explicit dir > TRANSCRIPTO_DATASETS_DIR > TRANSCRIPTO_DRIVE_DATA_DIR > modality
+  drive_dir <- tempfile("dds_drive_")
+  env_dir <- tempfile("dds_env_")
+  exp_dir <- tempfile("dds_exp_")
+  Sys.setenv(TRANSCRIPTO_DRIVE_DATA_DIR = drive_dir)
+  expect_identical(ts_datasets_dir(modality = "bulk"),
+                   normalizePath(file.path(drive_dir, "datasets"), winslash = "/", mustWork = FALSE))
+  Sys.setenv(TRANSCRIPTO_DATASETS_DIR = env_dir)
+  expect_identical(ts_datasets_dir(modality = "bulk"),
+                   normalizePath(env_dir, winslash = "/", mustWork = FALSE))
+  expect_identical(ts_datasets_dir(dir = exp_dir, modality = "bulk"),
+                   normalizePath(exp_dir, winslash = "/", mustWork = FALSE))
+})
+
+test_that("T8 ts_sc_dataset_dir_scan() : 10x_v3/v2/multi, rds/h5ad, bulk non_sc_format, lecture seule", {
+  expect_true(.dds_present, info = .dds_red_info)
+  if (!.dds_present) return(invisible(NULL))
+
+  missing <- file.path(tempdir(), paste0("sc_missing_", as.integer(Sys.time())))
+  expect_identical(ts_sc_dataset_dir_scan(missing), list())
+  expect_false(dir.exists(missing))
+
+  root <- .dds_root()
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  # 1. empty dir
+  dir.create(file.path(root, "01_empty"))
+
+  # 2. 10x_v3
+  d_v3 <- file.path(root, "02_v3")
+  dir.create(d_v3)
+  writeLines("%%MatrixMarket", file.path(d_v3, "matrix.mtx.gz"))
+  writeLines("AAAC-1", file.path(d_v3, "barcodes.tsv.gz"))
+  writeLines("G1\tG1\tGene Expression", file.path(d_v3, "features.tsv.gz"))
+
+  # 3. 10x_v2 (genes.tsv only -> must remain read-only, no features.tsv.gz created)
+  d_v2 <- file.path(root, "03_v2")
+  dir.create(d_v2)
+  writeLines("%%MatrixMarket", file.path(d_v2, "matrix.mtx"))
+  writeLines("AAAC-1", file.path(d_v2, "barcodes.tsv"))
+  writeLines("G1", file.path(d_v2, "genes.tsv"))
+
+  # 4. incomplete 10x
+  d_inc <- file.path(root, "04_incomplete")
+  dir.create(d_inc)
+  writeLines("%%MatrixMarket", file.path(d_inc, "matrix.mtx"))
+
+  # 5. 10x_multi (2 sample subdirs)
+  d_multi <- file.path(root, "05_multi")
+  for (sn in c("S1", "S2")) {
+    sd <- file.path(d_multi, sn)
+    dir.create(sd, recursive = TRUE)
+    writeLines("%%MatrixMarket", file.path(sd, "matrix.mtx"))
+    writeLines("AAAC-1", file.path(sd, "barcodes.tsv"))
+    writeLines("G1\tG1\tGene Expression", file.path(sd, "features.tsv"))
+  }
+
+  # 6. Bulk biomentat-exchange/v1 drop inside SC dir -> non_sc_format
+  .dds_write_drop(root, "06_bulk_drop")
+
+  # 7. Top-level SC files (.rds non-empty + 0-byte .h5ad)
+  saveRDS(list(ok = TRUE), file.path(root, "07_sample.rds"))
+  file.create(file.path(root, "08_empty.h5ad"))
+
+  before <- .dds_snapshot(root)
+  sc <- ts_sc_dataset_dir_scan(datasets_dir = root)
+  after <- .dds_snapshot(root)
+
+  expect_identical(after, before, info = "ts_sc_dataset_dir_scan est strictement lecture seule")
+  expect_false(file.exists(file.path(d_v2, "features.tsv.gz")),
+               info = "le scan ne doit pas réparer 10x_v2 sur disque")
+
+  expect_identical(sc[["01_empty"]]$status, "empty")
+  expect_identical(sc[["01_empty"]]$raison, "empty_directory")
+
+  expect_identical(sc[["02_v3"]]$status, "valid")
+  expect_identical(sc[["02_v3"]]$format, "10x_v3")
+  expect_identical(sc[["02_v3"]]$n_samples, 1L)
+
+  expect_identical(sc[["03_v2"]]$status, "valid")
+  expect_identical(sc[["03_v2"]]$format, "10x_v2")
+
+  expect_identical(sc[["04_incomplete"]]$status, "invalid")
+  expect_identical(sc[["04_incomplete"]]$raison, "incomplete_10x_triplet")
+
+  expect_identical(sc[["05_multi"]]$status, "valid")
+  expect_identical(sc[["05_multi"]]$format, "10x_multi")
+  expect_identical(sc[["05_multi"]]$n_samples, 2L)
+
+  expect_identical(sc[["06_bulk_drop"]]$status, "invalid")
+  expect_identical(sc[["06_bulk_drop"]]$raison, "non_sc_format")
+
+  expect_identical(sc[["07_sample.rds"]]$status, "valid")
+  expect_identical(sc[["07_sample.rds"]]$format, "rds")
+
+  expect_identical(sc[["08_empty.h5ad"]]$status, "invalid")
+  expect_identical(sc[["08_empty.h5ad"]]$raison, "empty_file")
+})
+
+test_that("T9 ts_datasets_dir() trimws et .ts_sc_scan_one_dir() fichiers 0-octet", {
+  expect_true(.dds_present, info = .dds_red_info)
+  if (!.dds_present) return(invisible(NULL))
+
+  old_ds <- Sys.getenv("TRANSCRIPTO_DATASETS_DIR", unset = NA_character_)
+  old_dr <- Sys.getenv("TRANSCRIPTO_DRIVE_DATA_DIR", unset = NA_character_)
+  on.exit({
+    if (is.na(old_ds)) Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR") else Sys.setenv(TRANSCRIPTO_DATASETS_DIR = old_ds)
+    if (is.na(old_dr)) Sys.unsetenv("TRANSCRIPTO_DRIVE_DATA_DIR") else Sys.setenv(TRANSCRIPTO_DRIVE_DATA_DIR = old_dr)
+  }, add = TRUE)
+
+  Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR")
+  Sys.unsetenv("TRANSCRIPTO_DRIVE_DATA_DIR")
+  expected_bulk <- normalizePath(file.path(ts_project_root(), "data_bulk", "datasets"),
+                                 winslash = "/", mustWork = FALSE)
+
+  expect_identical(ts_datasets_dir(dir = "   ", modality = "bulk"), expected_bulk)
+  Sys.setenv(TRANSCRIPTO_DATASETS_DIR = "   ")
+  expect_identical(ts_datasets_dir(modality = "bulk"), expected_bulk)
+  Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR")
+  Sys.setenv(TRANSCRIPTO_DRIVE_DATA_DIR = paste0("   ", .Platform$path.sep, tempdir()))
+  expect_identical(ts_datasets_dir(modality = "bulk"), expected_bulk)
+  Sys.unsetenv("TRANSCRIPTO_DRIVE_DATA_DIR")
+
+  root <- .dds_root()
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+  d_rds0 <- file.path(root, "01_rds_zero")
+  dir.create(d_rds0)
+  file.create(file.path(d_rds0, "zero.rds"))
+
+  d_h50 <- file.path(root, "02_h5_zero")
+  dir.create(d_h50)
+  file.create(file.path(d_h50, "filtered_feature_bc_matrix.h5"))
+
+  sc <- ts_sc_dataset_dir_scan(datasets_dir = root)
+  expect_identical(sc[["01_rds_zero"]]$status, "invalid")
+  expect_identical(sc[["01_rds_zero"]]$raison, "empty_file")
+  expect_identical(sc[["02_h5_zero"]]$status, "invalid")
+  expect_identical(sc[["02_h5_zero"]]$raison, "empty_file")
+})

@@ -57,31 +57,44 @@
 #' (3) PREMIÈRE entrée du knob opérateur existant `TRANSCRIPTO_DRIVE_DATA_DIR`
 #'     + "/datasets" (même lecture multi-chemins que le checkpoint,
 #'     session_checkpoint.R:128-135) ;
-#' (4) `<project root>/data_sc/datasets`, la racine projet résolue par la
-#'     MÊME remontée app.R que le checkpoint (`.sc_project_root()`,
-#'     session_checkpoint.R:96 — réutilisée, zéro duplication).
+#' (4) `<project root>/<data_folder>/datasets`, where `<data_folder>` depends on
+#'     `modality` (`"sc"` -> `"data_sc"`, `"bulk"` -> `"data_bulk"`,
+#'     `"spatial"` -> `"data_spatial"`), the project root resolved by the SAME
+#'     app.R ascent as the checkpoint (`.sc_project_root()`,
+#'     session_checkpoint.R:96 — reused, zero duplication).
 #' Le répertoire n'est PAS créé ici (appelant lecture-seule, AC2) — aucun
 #' effet de bord disque, jamais tempdir() seul.
 #'
 #' @param dir Racine explicite ; prioritaire quand non NULL/vide.
+#' @param modality Modalité cible (`"sc"`, `"bulk"`, `"spatial"` ; défaut `"sc"`).
 #' @return Chemin absolu (slashes avant), non créé.
-ts_datasets_dir <- function(dir = NULL) {
-  if (!is.null(.sc_scalar_text(dir))) {
-    return(normalizePath(dir, winslash = "/", mustWork = FALSE))
+ts_datasets_dir <- function(dir = NULL, modality = c("sc", "bulk", "spatial")) {
+  modality <- match.arg(modality)
+  d_arg <- .sc_scalar_text(dir)
+  if (!is.null(d_arg)) {
+    d_arg <- trimws(d_arg)
+    if (nzchar(d_arg)) {
+      return(normalizePath(d_arg, winslash = "/", mustWork = FALSE))
+    }
   }
-  env <- Sys.getenv("TRANSCRIPTO_DATASETS_DIR", "")
+  env <- trimws(Sys.getenv("TRANSCRIPTO_DATASETS_DIR", ""))
   if (nzchar(env)) {
     return(normalizePath(env, winslash = "/", mustWork = FALSE))
   }
   data_env <- Sys.getenv("TRANSCRIPTO_DRIVE_DATA_DIR", "")
-  if (nzchar(data_env)) {
-    first <- strsplit(data_env, .Platform$path.sep, fixed = TRUE)[[1]][1]
+  if (nzchar(trimws(data_env))) {
+    first <- trimws(strsplit(data_env, .Platform$path.sep, fixed = TRUE)[[1]][1])
     if (nzchar(first)) {
       return(normalizePath(file.path(first, "datasets"),
                            winslash = "/", mustWork = FALSE))
     }
   }
-  normalizePath(file.path(.sc_project_root(), "data_sc", "datasets"),
+  data_folder <- switch(modality,
+    sc      = "data_sc",
+    bulk    = "data_bulk",
+    spatial = "data_spatial"
+  )
+  normalizePath(file.path(.sc_project_root(), data_folder, "datasets"),
                 winslash = "/", mustWork = FALSE)
 }
 
@@ -258,6 +271,180 @@ ts_dataset_dir_scan <- function(datasets_dir = ts_datasets_dir(), validate = TRU
     key <- .sc_scalar_text(entry$manifest$dataset_id)
     if (is.null(key)) key <- basename(d)   # repli : basename du sous-répertoire
     out[[key]] <- entry
+  }
+  out
+}
+
+# ── Scanner passif Single-Cell (10X / .rds / .h5 / .h5ad / .loom) ───────────
+
+# Détecte un répertoire 10X direct (filtered_feature_bc_matrix.h5 ou triplet
+# matrix.mtx(.gz) + barcodes.tsv(.gz) + features.tsv(.gz)|genes.tsv(.gz)).
+# Lecture seule stricte (ne crée jamais features.tsv.gz). Retourne NULL si le
+# dossier ne contient ni h5 10x ni matrix.mtx(.gz).
+.ts_sc_classify_10x_dir <- function(d) {
+  h5 <- file.path(d, "filtered_feature_bc_matrix.h5")
+  if (file.exists(h5)) {
+    sz <- file.size(h5)
+    if (is.na(sz) || sz <= 0) {
+      return(list(valid = FALSE, format = NA_character_, raison = "empty_file"))
+    }
+    return(list(valid = TRUE, format = "10x_h5", raison = NA_character_))
+  }
+  has_mat <- any(file.exists(file.path(d, c("matrix.mtx", "matrix.mtx.gz"))))
+  if (!has_mat) return(NULL)
+  has_bc <- any(file.exists(file.path(d, c("barcodes.tsv", "barcodes.tsv.gz"))))
+  has_feat <- any(file.exists(file.path(d, c("features.tsv", "features.tsv.gz"))))
+  has_gene <- any(file.exists(file.path(d, c("genes.tsv", "genes.tsv.gz"))))
+  if (has_bc && (has_feat || has_gene)) {
+    fmt <- if (has_feat) "10x_v3" else "10x_v2"
+    return(list(valid = TRUE, format = fmt, raison = NA_character_))
+  }
+  list(valid = FALSE, format = NA_character_, raison = "incomplete_10x_triplet")
+}
+
+# Détecte un drop Bulk biomentat-exchange/v1 afin de l'isoler proprement comme
+# invalid (raison = "non_sc_format") lorsque data_sc/datasets en contient.
+.ts_sc_is_bulk_drop <- function(d) {
+  has_man <- file.exists(file.path(d, "manifest.json"))
+  has_cnt <- file.exists(file.path(d, "counts.tsv"))
+  has_sht <- file.exists(file.path(d, "samplesheet.tsv"))
+  if (has_man) {
+    man <- .ts_datasets_read_manifest(d)
+    sv <- if (is.list(man)) .sc_scalar_text(man$schema_version) else NULL
+    if (!is.null(sv) && grepl("biomentat-exchange", sv, fixed = TRUE)) {
+      return(TRUE)
+    }
+  }
+  isTRUE(has_cnt && has_sht)
+}
+
+.ts_sc_scan_one_dir <- function(d) {
+  d_norm <- .ts_datasets_path(d)
+  mt <- file.mtime(d_norm)
+  has_files <- length(list.files(d, all.files = FALSE, no.. = TRUE)) > 0L
+  kids <- sort(list.dirs(d, full.names = TRUE, recursive = FALSE))
+  if (!has_files && length(kids) == 0L) {
+    return(list(
+      status = "empty", raison = "empty_directory", format = NA_character_,
+      n_samples = 0L,
+      paths = list(dir = d_norm, file = NA_character_, sample_dirs = character(0)),
+      mtime = mt
+    ))
+  }
+
+  tenx <- .ts_sc_classify_10x_dir(d)
+  if (!is.null(tenx)) {
+    if (isTRUE(tenx$valid)) {
+      return(list(
+        status = "valid", raison = NA_character_, format = tenx$format,
+        n_samples = 1L,
+        paths = list(dir = d_norm, file = NA_character_, sample_dirs = d_norm),
+        mtime = mt
+      ))
+    }
+    return(list(
+      status = "invalid", raison = tenx$raison, format = NA_character_,
+      n_samples = 0L,
+      paths = list(dir = d_norm, file = NA_character_, sample_dirs = character(0)),
+      mtime = mt
+    ))
+  }
+
+  if (length(kids) > 0L) {
+    valid_kids <- character(0)
+    for (k in kids) {
+      k_cls <- .ts_sc_classify_10x_dir(k)
+      if (!is.null(k_cls) && isTRUE(k_cls$valid)) {
+        valid_kids <- c(valid_kids, .ts_datasets_path(k))
+      }
+    }
+    if (length(valid_kids) > 0L) {
+      return(list(
+        status = "valid", raison = NA_character_, format = "10x_multi",
+        n_samples = length(valid_kids),
+        paths = list(dir = d_norm, file = NA_character_, sample_dirs = valid_kids),
+        mtime = mt
+      ))
+    }
+  }
+
+  if (.ts_sc_is_bulk_drop(d)) {
+    return(list(
+      status = "invalid", raison = "non_sc_format", format = "bulk_exchange",
+      n_samples = 0L,
+      paths = list(dir = d_norm, file = NA_character_, sample_dirs = character(0)),
+      mtime = mt
+    ))
+  }
+
+  rds <- sort(list.files(d, pattern = "\\.rds$", ignore.case = TRUE, full.names = TRUE))
+  if (length(rds) == 1L && !dir.exists(rds[1L])) {
+    sz <- file.size(rds[1L])
+    if (is.na(sz) || sz <= 0) {
+      return(list(
+        status = "invalid", raison = "empty_file", format = NA_character_,
+        n_samples = 0L,
+        paths = list(dir = d_norm, file = .ts_datasets_path(rds[1L]), sample_dirs = character(0)),
+        mtime = mt
+      ))
+    }
+    return(list(
+      status = "valid", raison = NA_character_, format = "rds_dir",
+      n_samples = 1L,
+      paths = list(dir = d_norm, file = .ts_datasets_path(rds[1L]), sample_dirs = character(0)),
+      mtime = mt
+    ))
+  }
+
+  list(
+    status = "invalid", raison = "no_sc_data_found", format = NA_character_,
+    n_samples = 0L,
+    paths = list(dir = d_norm, file = NA_character_, sample_dirs = character(0)),
+    mtime = mt
+  )
+}
+
+#' Scan the Single-Cell datasets root directory (passive, strictly read-only).
+#'
+#' Lists ONE depth of subdirectories (10x_h5, 10x_v3, 10x_v2, 10x_multi, rds_dir,
+#' empty_directory, incomplete_10x_triplet, Bulk exchange non_sc_format, or
+#' no_sc_data_found) and top-level SC files (.rds, .h5, .h5ad, .loom).
+#' Missing or non-directory root yields `list()`, never creates directories or
+#' modifies files.
+#'
+#' @param datasets_dir Root to scan (default: `ts_datasets_dir(modality = "sc")`).
+#' @return Named list of discovered SC dataset entries.
+ts_sc_dataset_dir_scan <- function(datasets_dir = ts_datasets_dir(modality = "sc")) {
+  root <- .sc_scalar_text(datasets_dir)
+  if (is.null(root) || !dir.exists(root)) {
+    return(list())
+  }
+  old_coll <- Sys.setlocale("LC_COLLATE", "C")
+  on.exit(Sys.setlocale("LC_COLLATE", old_coll), add = TRUE)
+
+  subdirs <- sort(list.dirs(root, full.names = TRUE, recursive = FALSE))
+  top_files <- sort(list.files(root, full.names = TRUE, recursive = FALSE))
+  top_files <- top_files[!dir.exists(top_files) &
+                           grepl("\\.(rds|h5|h5ad|loom)$", basename(top_files),
+                                 ignore.case = TRUE)]
+
+  out <- list()
+  for (d in subdirs) {
+    out[[basename(d)]] <- .ts_sc_scan_one_dir(d)
+  }
+  for (f in top_files) {
+    f_norm <- .ts_datasets_path(f)
+    sz <- file.size(f)
+    ext <- tolower(tools::file_ext(f))
+    ok <- !is.na(sz) && sz > 0
+    out[[basename(f)]] <- list(
+      status = if (ok) "valid" else "invalid",
+      raison = if (ok) NA_character_ else "empty_file",
+      format = ext,
+      n_samples = if (ok) 1L else 0L,
+      paths = list(dir = NA_character_, file = f_norm, sample_dirs = character(0)),
+      mtime = file.mtime(f_norm)
+    )
   }
   out
 }

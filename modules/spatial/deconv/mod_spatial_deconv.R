@@ -81,6 +81,21 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
     # ── Sub-server 3: Result outputs (bar plot, DT, colocalisation) ───────
     .deconv_outputs_server(input, output, session, ns, global_data, shared_rv)
 
+    observe({
+      mode_val <- input$mode %||% "rctd"
+      needs_ref <- mode_val %in% c("rctd", "labeltransfer")
+      has_spatial <- !is.null(global_data$spatial_obj$bpcells_dir) &&
+        !is.null(global_data$spatial_obj$coords)
+      ref_ready <- isTRUE(ref$reference_is_ready())
+      has_local_viz_ref <- !is.null(ref$ref_state$obj) &&
+        !is.null(input$ref_celltype_col) && nzchar(input$ref_celltype_col)
+      can_ref_viz <- needs_ref && (isTRUE(ref$using_shared_ref()) || has_local_viz_ref)
+
+      shinyjs::toggleState("ref_file", condition = needs_ref)
+      shinyjs::toggleState("btn_ref_viz", condition = can_ref_viz)
+      shinyjs::toggleState("btn_deconv", condition = has_spatial && (!needs_ref || ref_ready))
+    })
+
     # ── Main deconvolution task (calls shared body) ───────────────────────
     deconv_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords, mode,
                                               ref_path, n_topics, n_top_od,

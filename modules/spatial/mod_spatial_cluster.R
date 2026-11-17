@@ -78,7 +78,7 @@ mod_spatial_cluster_controls_ui <- function(id) {
       numericInput(ns("logfc_threshold"), i18n$t("Seuil log2FC minimum"), 0.25, min = 0, max = 5, step = 0.05),
       numericInput(ns("min_pct"), i18n$t("% cellules exprimant le gene (min)"), 0.1, min = 0, max = 1, step = 0.05),
       bslib::input_task_button(ns("btn_find_markers"), i18n$t("Rechercher les marqueurs"),
-                                icon = icon("magnifying-glass-chart")),
+                                icon = icon("magnifying-glass-chart"), disabled = NA),
       verbatimTextOutput(ns("markers_progress_text"), placeholder = TRUE)
   )
 }
@@ -321,6 +321,14 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
       )
     })
     bslib::bind_task_button(markers_task, "btn_find_markers")
+
+    observe({
+      has_obj <- !is.null(global_data$spatial_obj$bpcells_dir) && !is.null(global_data$spatial_obj$coords)
+      shinyjs::toggleState("btn_cluster", condition = has_obj)
+      shinyjs::toggleState("btn_find_markers",
+                           condition = !is.null(global_data$spatial_obj$bpcells_dir) &&
+                             !is.null(shared_rv$cluster_labels))
+    })
 
     observeEvent(input$btn_find_markers, {
       req(global_data$spatial_obj$bpcells_dir, shared_rv$cluster_labels)

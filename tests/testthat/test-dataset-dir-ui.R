@@ -442,3 +442,85 @@ test_that("T6-8 lot honnête : un invalid coché est refusé (double garde), les
     expect_identical(colnames(obj$counts), paste0("w", seq_len(4L)))
   })
 })
+
+# ── T6-9 -- W1.3 : acc_import CSS mode hiding + modality = "bulk" ─────────────
+
+test_that("T6-9 W1.3 : mod_import_bulk utilise modality = 'bulk', acc_import et import_mode_style", {
+  expect_match(.mdd_src, 'ts_datasets_dir(modality = "bulk")', fixed = TRUE)
+  expect_match(.mdd_src, 'ts_dataset_dir_scan(datasets_dir = bulk_dir)', fixed = TRUE)
+  expect_match(.mdd_src, 'id = ns("acc_import")', fixed = TRUE)
+  expect_match(.mdd_src, 'uiOutput(ns("import_mode_style"))', fixed = TRUE)
+
+  old_i18n <- get0("i18n", envir = globalenv(), inherits = FALSE)
+  old_trp <- get0(".tr_plain", envir = globalenv(), inherits = FALSE)
+  old_i18n_p <- get0("i18n_plain", envir = globalenv(), inherits = FALSE)
+  suppressPackageStartupMessages(library(bslib))
+  on.exit({
+    if (is.null(old_i18n)) rm(list = intersect("i18n", ls(globalenv())), envir = globalenv()) else assign("i18n", old_i18n, envir = globalenv())
+    if (is.null(old_trp)) rm(list = intersect(".tr_plain", ls(globalenv())), envir = globalenv()) else assign(".tr_plain", old_trp, envir = globalenv())
+    if (is.null(old_i18n_p)) rm(list = intersect("i18n_plain", ls(globalenv())), envir = globalenv()) else assign("i18n_plain", old_i18n_p, envir = globalenv())
+  }, add = TRUE)
+  assign("i18n", list(t = function(x) x), envir = globalenv())
+  assign(".tr_plain", function(x) x, envir = globalenv())
+  assign("i18n_plain", function(x) x, envir = globalenv())
+
+  ui_html <- paste(as.character(mod_import_bulk_ui("import_bulk")), collapse = "\n")
+  expect_match(ui_html, 'id="import_bulk-acc_import"', fixed = TRUE)
+  expect_match(ui_html, 'id="import_bulk-import_mode_style"', fixed = TRUE)
+
+  old_ds <- Sys.getenv("TRANSCRIPTO_DATASETS_DIR", unset = NA_character_)
+  old_dr <- Sys.getenv("TRANSCRIPTO_DRIVE_DATA_DIR", unset = NA_character_)
+  on.exit({
+    if (is.na(old_ds)) Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR") else Sys.setenv(TRANSCRIPTO_DATASETS_DIR = old_ds)
+    if (is.na(old_dr)) Sys.unsetenv("TRANSCRIPTO_DRIVE_DATA_DIR") else Sys.setenv(TRANSCRIPTO_DRIVE_DATA_DIR = old_dr)
+  }, add = TRUE)
+  Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR")
+  Sys.unsetenv("TRANSCRIPTO_DRIVE_DATA_DIR")
+
+  gd <- .mdd_env()
+  shiny::testServer(mod_import_bulk_server, args = list(global_data = gd), expr = {
+    session$setInputs(bulk_import_mode = "merged_matrix", counts_format = "rows",
+                      counts_has_header = TRUE, counts_has_rownames = TRUE,
+                      min_counts = 10, project_name = "P")
+    session$flushReact()
+    css_merged <- paste(as.character(output$import_mode_style$html), collapse = "\n")
+    expect_match(css_merged, "data-value='panel_multi'", fixed = TRUE)
+    expect_false(grepl("data-value='panel_counts'", css_merged, fixed = TRUE))
+
+    session$setInputs(bulk_import_mode = "per_sample")
+    session$flushReact()
+    css_ps <- paste(as.character(output$import_mode_style$html), collapse = "\n")
+    expect_match(css_ps, "data-value='panel_counts'", fixed = TRUE)
+    expect_match(css_ps, "data-value='panel_metadata'", fixed = TRUE)
+    expect_false(grepl("data-value='panel_multi'", css_ps, fixed = TRUE))
+
+    session$setInputs(btn_scan_datasets = 1L)
+    session$flushReact()
+    expect_identical(shiny::isolate(ds_dir_rv()), ts_datasets_dir(modality = "bulk"))
+  })
+})
+
+test_that("T6-10 W1.3 : mod_import_bulk_server resiste a bulk_import_mode = NULL (cold flush et transition)", {
+  expect_true(.mdd_wired, info = .mdd_red_info)
+  if (!.mdd_wired) return(invisible(NULL))
+
+  gd <- .mdd_env()
+  shiny::testServer(mod_import_bulk_server, args = list(global_data = gd), expr = {
+    # Cold flush sans bulk_import_mode
+    session$flushReact()
+    expect_null(shiny::isolate(ds_scan_rv()))
+
+    # Transition depuis un mode valide vers NULL
+    session$setInputs(bulk_import_mode = "merged_matrix", counts_format = "rows",
+                      counts_has_header = TRUE, counts_has_rownames = TRUE,
+                      min_counts = 10, project_name = "P")
+    session$flushReact()
+    session$setInputs(bulk_import_mode = NULL)
+    session$flushReact()
+
+    expect_null(shiny::isolate(ds_scan_rv()))
+    css_fallback <- paste(as.character(output$import_mode_style$html), collapse = "\n")
+    expect_match(css_fallback, "data-value='panel_multi'", fixed = TRUE)
+    expect_match(output$status_obj, "Inactif", fixed = TRUE)
+  })
+})

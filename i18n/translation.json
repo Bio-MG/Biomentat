@@ -13900,6 +13900,14 @@
     {
       "fr": "Comparaison indisponible : au moins 2 runs CellChat (moteur) complets de cette session sont requis. Utilisez « Lancer CellChat par condition (CC-2) » sur un objet multi-conditions ou lancez le calcul sur deux objets.",
       "en": "Comparison unavailable: at least 2 complete CellChat (engine) runs in this session are required. Use 'Run CellChat by condition (CC-2)' on a multi-condition object or run CellChat on two separate objects."
+    },
+    {
+      "fr": "Déposez des dossiers 10X (matrix.mtx + barcodes.tsv + features/genes.tsv) ou des fichiers SC (.rds, .h5, .h5ad, .loom) dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.",
+      "en": "Drop 10X folders (matrix.mtx + barcodes.tsv + features/genes.tsv) or SC files (.rds, .h5, .h5ad, .loom) into the directory, then scan: nothing is read at startup and nothing is loaded without your click."
+    },
+    {
+      "fr": "Importez au moins 2 echantillons spatiaux (onglet Import > Spatial).",
+      "en": "Import at least 2 spatial samples (Import > Spatial tab)."
     }
   ]
 }
