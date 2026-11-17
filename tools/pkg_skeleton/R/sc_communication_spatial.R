@@ -518,14 +518,18 @@ plot_communication_spatial_distance_summary <- function(context) {
   }
   pt$pair_label <- paste(pt$sender_node, pt$receiver_node, sep = " -> ")
   lim <- range(c(pt$median_recv_to_sender_nn, pt$median_send_to_recv_nn), na.rm = TRUE)
+  span <- diff(lim)
+  if (!is.finite(span) || span <= 0) span <- 1
+  lim_pad <- c(lim[1L] - 0.04 * span, lim[2L] + 0.14 * span)
   ggplot2::ggplot(pt, ggplot2::aes(x = median_recv_to_sender_nn,
                                    y = median_send_to_recv_nn)) +
     ggplot2::geom_abline(slope = 1, intercept = 0, colour = "grey75", linetype = "dashed") +
     ggplot2::geom_point(colour = "#2166AC", size = 2.6, alpha = 0.9) +
     ggplot2::geom_text(ggplot2::aes(label = pair_label), size = 2.9,
                        vjust = -0.8, check_overlap = TRUE) +
-    ggplot2::coord_fixed(xlim = lim, ylim = lim) +
+    ggplot2::coord_fixed(xlim = lim_pad, ylim = lim_pad, clip = "off") +
     ggplot2::theme_classic() +
+    ggplot2::theme(plot.margin = ggplot2::margin(8, 28, 8, 8)) +
     ggplot2::labs(
       x = "NN médian receiver -> sender", y = "NN médian sender -> receiver",
       title = "Distances croisées plus-proche-voisin par paire",
