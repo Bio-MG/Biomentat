@@ -13796,6 +13796,10 @@
     {
       "fr": "Ajoutez au moins un dossier d'échantillon avant de charger.",
       "en": "Add at least one sample folder before loading."
+    },
+    {
+      "fr": "CSV (données du graphe)",
+      "en": "CSV (plot data)"
     }
   ]
 }

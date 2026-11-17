@@ -49,7 +49,7 @@ mod_sc_communication_spatial_ui <- function(id) {
     fluidRow(
       column(6, selectizeInput(ns("spc_pair"), i18n$t("Paire sender → receiver"),
                                choices = character(0), width = "100%")),
-      column(6, downloadButton(ns("dl_spc_csv"), i18n$t("CSV"), class = "btn-sm btn-outline-secondary mt-4"))),
+      column(6, downloadButton(ns("dl_spc_csv"), i18n$t("CSV (données du graphe)"), class = "btn-sm btn-outline-secondary mt-4"))),
     fluidRow(
       column(6, plotOutput(ns("spc_edges"), height = "360px"),
              fluidRow(

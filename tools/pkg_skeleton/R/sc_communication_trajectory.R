@@ -455,12 +455,14 @@ plot_communication_trajectory_curves <- function(context, sender_node,
       "Contexte trajectoire — paire sender-receiver", caption
     ))
   }
+  sel <- sel[order(sel$bin_mid), , drop = FALSE]
   long <- rbind(
     data.frame(bin_mid = sel$bin_mid, value = sel$mean_ligand_expression_senders,
                quantity = "Ligands (cellules sender)"),
     data.frame(bin_mid = sel$bin_mid, value = sel$mean_receptor_expression_receivers,
                quantity = "Récepteurs (cellules receiver)")
   )
+  long <- long[order(long$quantity, long$bin_mid), , drop = FALSE]
   n_na <- sum(is.na(long$value))
   ggplot2::ggplot(long, ggplot2::aes(x = bin_mid, y = value, colour = quantity)) +
     ggplot2::geom_line(na.rm = TRUE, linewidth = 0.9) +
