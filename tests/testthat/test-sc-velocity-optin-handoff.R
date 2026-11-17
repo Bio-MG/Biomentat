@@ -114,6 +114,21 @@ test_that("opt-in : AnnData X/layers/obs_names utilisent le meme sous-ensemble d
 })
 
 # ---------------------------------------------------------------------------
+# (A3) Boite de journal velocity (2026-11-17) : sortie BORNEE alimentee par
+#      les transitions de statut et le clic opt-in (zone vide sous les vues).
+# ---------------------------------------------------------------------------
+test_that("velocity : boite de journal presente et bornee (source)", {
+  src <- paste(readLines(file.path(ts_project_root(),
+                                   "modules/sc/mod_sc_velocity.R"),
+                         warn = FALSE), collapse = "\n")
+  expect_true(grepl('verbatimTextOutput(ns("velocity_log")', src, fixed = TRUE))
+  expect_true(grepl("output$velocity_log <- renderText", src, fixed = TRUE))
+  expect_true(grepl("observeEvent(velocity_status_rv()", src, fixed = TRUE))
+  # borne explicit : un journal non borne grandit sans limite en session longue
+  expect_true(grepl("utils::tail(", src, fixed = TRUE))
+})
+
+# ---------------------------------------------------------------------------
 # (B) Trace persistante de l'échec opt-in (moteur stubbé absent)
 # ---------------------------------------------------------------------------
 test_that("P0.4 lane1 : échec opt-in => optin_error persistant + statut avec raison", {

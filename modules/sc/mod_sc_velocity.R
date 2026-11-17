@@ -184,6 +184,14 @@ mod_sc_velocity_output_ui <- function(id) {
       nav_panel(i18n$t("QC alignement"), value = "velocity_tab_qc",
                 plotOutput(ns("velocity_qc_plot"), height = "450px"))
     ),
+    # Journal leger (2026-11-17) : occupe la zone vide sous les vues velocity.
+    # Borne cote serveur (50 lignes) — aucune donnee biologique, que des
+    # transitions de statut horodatees (validation / opt-in).
+    div(
+      class = "px-3 pb-3",
+      tags$strong(i18n$t("Console de Log")),
+      verbatimTextOutput(ns("velocity_log"), placeholder = TRUE)
+    ),
     # Tiroir offcanvas (DEUXIÈME enfant de la carte — motif comm_drawer /
     # milo_drawer / sccoda_drawer / cross_drawer) :
     tags$div(
@@ -379,6 +387,21 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     velocity_status_rv <- reactiveVal(.tr("En attente d'import velocity..."))
 
     output$velocity_status <- renderText({ velocity_status_rv() })
+
+    # Journal borne (2026-11-17) : 50 lignes max, horodatage local. Un seul
+    # observeEvent sur le statut capture TOUTES les transitions de validation
+    # et d'opt-in sans toucher aux 8 sites d'ecriture existants.
+    velocity_log_rv <- reactiveVal(character(0))
+    .velocity_log <- function(...) {
+      ligne <- sprintf("[%s] %s", format(Sys.time(), "%H:%M:%S"),
+                       paste0(..., collapse = ""))
+      velocity_log_rv(utils::tail(c(velocity_log_rv(), ligne), 50L))
+      invisible(NULL)
+    }
+    observeEvent(velocity_status_rv(), {
+      .velocity_log(velocity_status_rv())
+    }, ignoreInit = FALSE)
+    output$velocity_log <- renderText({ paste(velocity_log_rv(), collapse = "\n") })
 
     # ── CCC_NAV_DRAWER vague B jalon J3 (2026-11-12) : tiroir « Navigation » ──
     # Pattern 5f0a906 + bc9c09a, généralisé comme Milo/scCODA/Vues croisées.
