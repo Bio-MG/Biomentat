@@ -13804,6 +13804,10 @@
     {
       "fr": "Afficher uniquement les paires affectées",
       "en": "Show only affected pairs"
+    },
+    {
+      "fr": "Attention : %d lignées Slingshot détectées — le mode « Toutes cellules » mélange les trajectoires.",
+      "en": "Warning: %d Slingshot lineages detected — All cells mode mixes trajectories."
     }
   ]
 }

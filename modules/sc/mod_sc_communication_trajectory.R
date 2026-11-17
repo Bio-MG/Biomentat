@@ -53,11 +53,10 @@ mod_sc_communication_trajectory_ui <- function(id) {
                column(6, downloadButton(ns("dl_trj_curves_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
       column(6, plotOutput(ns("trj_heatmap"), height = "340px"),
              fluidRow(
-               column(6, downloadButton(ns("dl_trj_heat_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
-               column(6, downloadButton(ns("dl_trj_heat_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary"))))),
-    fluidRow(
-      column(6, DT::dataTableOutput(ns("trj_pair_summary"), height = "auto", fill = FALSE)),
-      column(6, downloadButton(ns("dl_trj_csv"), i18n$t("Exporter bins (CSV)"), class = "btn-sm btn-info w-100 mt-4")))
+               column(4, downloadButton(ns("dl_trj_heat_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
+               column(4, downloadButton(ns("dl_trj_heat_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")),
+               column(4, downloadButton(ns("dl_trj_csv"), i18n$t("Exporter bins (CSV)"), class = "btn-sm btn-info"))))),
+    DT::dataTableOutput(ns("trj_pair_summary"), height = "auto", fill = FALSE)
   )
 }
 mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, shared_rv) {
@@ -307,9 +306,21 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
       .ctx_tab_guard()
       ctx <- trj_ctx()
       req(ctx)
-      sprintf(.tr("Statut : %s — %d cellule(s) appariée(s) ; %d bins (effectif) ; %d combinaison(s) non calculable(s)."),
-              ctx$status, ctx$qc$n_cells_matched, ctx$qc$n_bins_effective,
-              ctx$qc$n_combinations_unmapped)
+      base_msg <- sprintf(
+        .tr("Statut : %s — %d cellule(s) appariée(s) ; %d bins (effectif) ; %d combinaison(s) non calculable(s)."),
+        ctx$status, ctx$qc$n_cells_matched, ctx$qc$n_bins_effective,
+        ctx$qc$n_combinations_unmapped
+      )
+      slingshot_cols <- grep("^pseudotime_slingshot_", .trj_meta_cols(), value = TRUE)
+      if (identical(input$trj_lineage_mode, "global") && length(slingshot_cols) > 1L) {
+        paste(
+          base_msg,
+          sprintf(.tr("Attention : %d lignées Slingshot détectées — le mode « Toutes cellules » mélange les trajectoires."),
+                  length(slingshot_cols))
+        )
+      } else {
+        base_msg
+      }
     })
 
     .selected_pair_lineage <- function() {
@@ -348,8 +359,39 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
       .ctx_tab_guard()
       ctx <- trj_ctx()
       req(ctx)
-      ts_datatable(ctx$pair_summary, page_length = 15L,
-                   filename_base = "sc_comm_trajectory_pair_summary", filter = "none")
+      df <- ctx$pair_summary
+      if ("lineage" %in% names(df) &&
+          all(is.na(df$lineage) | !nzchar(as.character(df$lineage)))) {
+        df$lineage <- NULL
+      }
+      lead_cols <- intersect(
+        c("sender_node", "receiver_node", "lineage", "mean_imported_score",
+          "n_sender_cells", "n_receiver_cells"),
+        names(df)
+      )
+      df <- df[, c(lead_cols, setdiff(names(df), lead_cols)), drop = FALSE]
+      .trunc_genes <- function(x, max_n = 5L) {
+        vapply(as.character(x), function(s) {
+          if (is.na(s) || !nzchar(s)) return(s)
+          parts <- trimws(strsplit(s, ",", fixed = TRUE)[[1L]])
+          if (length(parts) <= max_n) return(s)
+          paste0(paste(parts[seq_len(max_n)], collapse = ", "),
+                 sprintf(" (+%d)", length(parts) - max_n))
+        }, character(1L))
+      }
+      for (gcol in intersect(c("ligand_genes", "receptor_genes"), names(df))) {
+        df[[gcol]] <- .trunc_genes(df[[gcol]])
+      }
+      dt <- ts_datatable(df, page_length = 15L,
+                         filename_base = "sc_comm_trajectory_pair_summary", filter = "none")
+      num_cols <- intersect(
+        c("mean_imported_score", "ligand_mean_expr", "receptor_mean_expr"),
+        names(df)
+      )
+      if (length(num_cols) > 0L) {
+        dt <- DT::formatRound(dt, columns = num_cols, digits = 4)
+      }
+      dt
     })
 
     output$dl_trj_csv <- downloadHandler(
