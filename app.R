@@ -1625,6 +1625,11 @@ server <- function(input, output, session) {
       shared$communication_restore <- pay$communication_restore
     }
     if (!is.null(pay$provenance)) shared$provenance <- pay$provenance
+    # P4.1b (gap n°3) : panier de viz du rapport SC — ré-appliqué TEL QUEL.
+    # Affectation INCONDITIONNELLE : un snapshot antérieur sans panier le
+    # laisse VIDE (le bump d'epoch l'a déjà purgé — jamais de panier d'un
+    # ancien monde mélangé au monde restauré).
+    shared$report_viz_list <- pay$report_viz_list %||% list()
   })
 
   # Lane 3 (2026-11-14) : poids estimé du snapshot AVANT écriture — le panneau
@@ -1641,7 +1646,7 @@ server <- function(input, output, session) {
       shared$velocity_result, shared$communication_result,
       shared$communication_collection, shared$communication_ccc_registry,
       shared$communication_ccc_comparison, shared$communication_ctx_view,
-      shared$provenance) else list()
+      shared$report_viz_list, shared$provenance) else list()
     total_mb <- sum(vapply(c(parts, extra), function(x)
       if (is.null(x)) 0 else as.numeric(object.size(x)) / 1024^2, numeric(1)))
     has_results <- !is.null(shared) &&
@@ -1709,6 +1714,11 @@ server <- function(input, output, session) {
           # re-paramètrent et l'auto-calc recompose les contextes depuis les
           # résultats déjà embarqués. Jamais d'objet plot.
           communication_ctx_view      = shared$communication_ctx_view,
+          # P4.1b (gap n°3) : panier de viz du rapport SC — configs légères
+          # (mod_sc_viz « Ajouter au Rapport »), consommées par le rendu
+          # rapport (param saved_viz_list). Ré-appliqué par le payload
+          # pending ; purgé au bump d'epoch (world-scoped).
+          report_viz_list             = shared$report_viz_list,
           provenance                  = shared$provenance
         ) else NULL,
 
@@ -1724,7 +1734,7 @@ server <- function(input, output, session) {
       if (!is.na(sz)) {
         showNotification(
           sprintf(paste0("💾 Session sauvegardée (%.1f Mo). Résultats d'analyse inclus : ",
-                         "velocity %s · communication %s · registre CellChat %d run(s) · contextes CCC %s."),
+                         "velocity %s · communication %s · registre CellChat %d run(s) · contextes CCC %s · panier viz %d."),
                   sz / 1024^2,
                   if (is.null(session_snapshot$results) ||
                       is.null(session_snapshot$results$velocity_result)) "✗" else "✓",
@@ -1732,7 +1742,8 @@ server <- function(input, output, session) {
                       is.null(session_snapshot$results$communication_result)) "✗" else "✓",
                   length(session_snapshot$results$ccc_registry %||% list()),
                   if (is.null(session_snapshot$results) ||
-                      is.null(session_snapshot$results$communication_ctx_view)) "✗" else "✓"),
+                      is.null(session_snapshot$results$communication_ctx_view)) "✗" else "✓",
+                  length(session_snapshot$results$report_viz_list %||% list())),
           type = "message", duration = 8
         )
       }
@@ -1855,6 +1866,9 @@ server <- function(input, output, session) {
             # absent des snapshots antérieurs = NULL propre.
             ctx_view      = res$communication_ctx_view
           ) else NULL,
+          # P4.1b (gap n°3) : panier de viz du rapport SC — absent du snapshot
+          # (format antérieur) = NULL → ré-appliqué vide (dégradation honnête).
+          report_viz_list = res$report_viz_list,
           provenance = res$provenance
         )
         showNotification(
@@ -1871,6 +1885,8 @@ server <- function(input, output, session) {
                           " run(s) — Comparaison CC-2 disponible)"), ""),
             ifelse(is.null(res$communication_ctx_view), "",
                    " · contextes CCC (params de vue) ✓"),
+            ifelse(length(res$report_viz_list %||% list()) > 0,
+                   paste0(" · panier viz (", length(res$report_viz_list), ") ✓"), ""),
             " — rien n'est ré-inféré ni recalculé."),
           type = "message", duration = 8
         )

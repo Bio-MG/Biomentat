@@ -134,6 +134,18 @@ sc_purge_shared_results <- function(state) {
   }
   global_data$sc_obj_epoch   <- bump(global_data$sc_obj_epoch)   + 1L
   global_data$bulk_obj_epoch <- bump(global_data$bulk_obj_epoch) + 1L
+  # P4.1b (gap n°3 IDEATION_SAVE_PLOTS_2026-11-17) : le panier de viz du
+  # rapport SC (report_viz_list — configs légères, PAS des objets plots) est
+  # WORLD-SCOPED : il ne survit pas au monde qui l'a produit. La purge
+  # standard (sc_purge_shared_results) ne le couvre pas — il n'est pas un
+  # résultat dérivé mais un état d'affichage retenu. Les DEUX chemins
+  # destructifs (load_session_file / confirm_reset) passent par ici, et la
+  # ré-application depuis un snapshot le fait dans le MÊME flush par le
+  # payload pending de app.R (créé après mod_sc_server — purge d'abord,
+  # ré-application ensuite, ordre de création des observateurs).
+  if (!is.null(global_data$sc_shared)) {
+    global_data$sc_shared$report_viz_list <- list()
+  }
   invisible(global_data)
 }
 
