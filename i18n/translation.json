@@ -13792,6 +13792,10 @@
     {
       "fr": "Complet — toutes les étapes empilées",
       "en": "Full — all steps stacked"
+    },
+    {
+      "fr": "Ajoutez au moins un dossier d'échantillon avant de charger.",
+      "en": "Add at least one sample folder before loading."
     }
   ]
 }

@@ -221,14 +221,15 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
       reset_log(log_file)
       # v3 (export/script reproductible) : miroir des parametres UTILISES,
       # lu uniquement par mod_spatial_export.R -- purement additif.
+      res_val <- ts_parse_numeric_input(input$resolution, default = 0.8)
       shared_rv$cluster_params <- list(lambda = input$lambda, k_geom = input$k_geom,
-                                       npcs = input$npcs, resolution = input$resolution)
+                                       npcs = input$npcs, resolution = res_val)
       cluster_task$invoke(
         bpcells_dir = global_data$spatial_obj$bpcells_dir,
         pass_idx    = pass_idx,
         coords      = global_data$spatial_obj$coords,
         lambda      = input$lambda, k_geom = input$k_geom,
-        npcs        = input$npcs, resolution = input$resolution,
+        npcs        = input$npcs, resolution = res_val,
         log_file    = log_file
       )
     })
@@ -330,8 +331,8 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
         bpcells_dir     = global_data$spatial_obj$bpcells_dir,
         pass_idx        = pass_idx,
         cluster_labels  = shared_rv$cluster_labels,
-        logfc_threshold = input$logfc_threshold,
-        min_pct         = input$min_pct,
+        logfc_threshold = ts_parse_numeric_input(input$logfc_threshold, default = 0.25),
+        min_pct         = ts_parse_numeric_input(input$min_pct, default = 0.1),
         log_file        = markers_log_file
       )
     })

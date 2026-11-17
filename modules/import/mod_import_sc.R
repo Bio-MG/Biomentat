@@ -565,8 +565,12 @@ mod_import_sc_server <- function(id, global_data) {
 
     # ── Option A ────────────────────────────────────────────────────────────
     observeEvent(input$btn_load_dir, {
-      req(sample_list())
       samples <- sample_list()
+      if (is.null(samples) || length(samples) == 0L) {
+        showNotification(.tr("Ajoutez au moins un dossier d'échantillon avant de charger."),
+                         type = "warning", duration = 5)
+        return()
+      }
       add_log(paste(.tr("🔄 Import de"), length(samples), .tr("dossiers 10X...")))
       p <- shiny::Progress$new(); on.exit(p$close())
       p$set(message = .tr("Chargement..."), value = 0)

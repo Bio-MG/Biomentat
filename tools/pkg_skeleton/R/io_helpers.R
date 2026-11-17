@@ -1388,3 +1388,21 @@ strip_composite_gene_ids <- function(ids) {
     enc2utf8(out)
   }, character(1L), USE.NAMES = FALSE)
 }
+
+#' Parse numeric input values accepting both '.' and FR ',' decimal separators
+#'
+#' @param x Scalar numeric or character input value.
+#' @param default Fallback numeric value when `x` is NULL, empty, or non-finite.
+#' @return Numeric scalar.
+ts_parse_numeric_input <- function(x, default = NA_real_) {
+  if (is.null(x) || length(x) == 0L) return(default)
+  if (is.numeric(x)) {
+    val <- x[[1L]]
+    return(if (is.na(val) || !is.finite(val)) default else as.numeric(val))
+  }
+  s <- trimws(as.character(x[[1L]]))
+  if (!nzchar(s)) return(default)
+  s <- gsub(",", ".", s, fixed = TRUE)
+  val <- suppressWarnings(as.numeric(s))
+  if (is.na(val) || !is.finite(val)) default else val
+}
