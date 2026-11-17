@@ -1640,7 +1640,8 @@ server <- function(input, output, session) {
     extra <- if (!is.null(shared)) list(
       shared$velocity_result, shared$communication_result,
       shared$communication_collection, shared$communication_ccc_registry,
-      shared$communication_ccc_comparison, shared$provenance) else list()
+      shared$communication_ccc_comparison, shared$communication_ctx_view,
+      shared$provenance) else list()
     total_mb <- sum(vapply(c(parts, extra), function(x)
       if (is.null(x)) 0 else as.numeric(object.size(x)) / 1024^2, numeric(1)))
     has_results <- !is.null(shared) &&
@@ -1702,6 +1703,12 @@ server <- function(input, output, session) {
           active_communication_sample = shared$active_communication_sample,
           ccc_registry                = shared$communication_ccc_registry,
           ccc_comparison              = shared$communication_ccc_comparison,
+          # PAS 1 (idéation saves 2026-11-17) : état LÉGER des contextes CCC
+          # (params de vue + sélections de paire des tiroirs
+          # velocity/spatial/trajectory) — au restore, les tiroirs se
+          # re-paramètrent et l'auto-calc recompose les contextes depuis les
+          # résultats déjà embarqués. Jamais d'objet plot.
+          communication_ctx_view      = shared$communication_ctx_view,
           provenance                  = shared$provenance
         ) else NULL,
 
@@ -1717,13 +1724,15 @@ server <- function(input, output, session) {
       if (!is.na(sz)) {
         showNotification(
           sprintf(paste0("💾 Session sauvegardée (%.1f Mo). Résultats d'analyse inclus : ",
-                         "velocity %s · communication %s · registre CellChat %d run(s)."),
+                         "velocity %s · communication %s · registre CellChat %d run(s) · contextes CCC %s."),
                   sz / 1024^2,
                   if (is.null(session_snapshot$results) ||
                       is.null(session_snapshot$results$velocity_result)) "✗" else "✓",
                   if (is.null(session_snapshot$results) ||
                       is.null(session_snapshot$results$communication_result)) "✗" else "✓",
-                  length(session_snapshot$results$ccc_registry %||% list())),
+                  length(session_snapshot$results$ccc_registry %||% list()),
+                  if (is.null(session_snapshot$results) ||
+                      is.null(session_snapshot$results$communication_ctx_view)) "✗" else "✓"),
           type = "message", duration = 8
         )
       }
@@ -1841,7 +1850,10 @@ server <- function(input, output, session) {
             collection    = res$communication_collection,
             active_sample = res$active_communication_sample,
             ccc_registry  = res$ccc_registry,
-            ccc_comparison = res$ccc_comparison
+            ccc_comparison = res$ccc_comparison,
+            # PAS 1 (idéation saves 2026-11-17) : état léger des contextes —
+            # absent des snapshots antérieurs = NULL propre.
+            ctx_view      = res$communication_ctx_view
           ) else NULL,
           provenance = res$provenance
         )
@@ -1857,6 +1869,8 @@ server <- function(input, output, session) {
             ifelse(length(res$ccc_registry %||% list()) > 0,
                    paste0(" (registre CellChat : ", length(res$ccc_registry),
                           " run(s) — Comparaison CC-2 disponible)"), ""),
+            ifelse(is.null(res$communication_ctx_view), "",
+                   " · contextes CCC (params de vue) ✓"),
             " — rien n'est ré-inféré ni recalculé."),
           type = "message", duration = 8
         )

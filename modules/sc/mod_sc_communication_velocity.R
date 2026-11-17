@@ -56,6 +56,30 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
     # PÉRIMÉS (voir l'observateur reset ci-dessous).
     vel_src <- reactiveVal(NULL)
 
+    # PAS 1 (idéation saves 2026-11-17) : publication de l'état léger de ce
+    # tiroir dans comm_state$ctx_view (miroir snapshot par le parent).
+    # ⚠️ JUMELLE de la même aide dans mod_sc_communication_spatial.R et
+    # _trajectory.R — affectation imbriquée NON utilisée (rv$a$b <- x sur un
+    # champ NULL n'est pas garantie par reactiveValues) : read-modify-write
+    # explicite, une seule clé top-level = invalidation propre des observateurs.
+    .ctx_view_set <- function(drawer, fields) {
+      cur <- comm_state$ctx_view
+      if (!is.list(cur)) cur <- list()
+      cur[[drawer]] <- fields
+      comm_state$ctx_view <- cur
+    }
+
+    # PAS 1 : restauration — ré-application des params de vue sauvegardés
+    # (snapshot PAS 1). Numérique simple : mise à jour directe si elle diffère.
+    observeEvent(comm_state$ctx_view$velocity, {
+      v <- comm_state$ctx_view$velocity
+      if (!is.list(v)) return()
+      mo <- v$min_overlap
+      if (!is.null(mo) && !is.na(mo) && !identical(mo, input$vel_min_overlap)) {
+        shiny::updateNumericInput(session, "vel_min_overlap", value = mo)
+      }
+    }, ignoreNULL = TRUE, ignoreInit = FALSE)
+
     # R-3bis (idiome repo, cf. mod_bulk.R fix 2026-11-06 ; mesuré aussi ici
     # sur l'achèvement async CellChat) : une sortie invalidée pendant que son
     # panneau est caché ne livre JAMAIS son payload ensuite. Les renders de ce
@@ -167,6 +191,10 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
         })
         vel_ctx(ctx)
         vel_src(comm_state$result)
+        # PAS 1 (idéation saves 2026-11-17) : les params qui ONT PRODUIT ce
+        # contexte sont publiés pour le snapshot — au restore, l'auto-calcul
+        # (Lane 3b) recompose le MÊME contexte avec ces params.
+        .ctx_view_set("velocity", list(min_overlap = input$vel_min_overlap %||% NA_real_))
         if (!is.null(shared_rv)) provenance_append(shared_rv, ctx$provenance)
         if (identical(ctx$status, "valid")) {
           showNotification(

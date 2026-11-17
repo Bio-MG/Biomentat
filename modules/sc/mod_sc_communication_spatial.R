@@ -77,6 +77,16 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
         ggplot2::theme_void()
     }
     spc_ctx <- reactiveVal(NULL)
+    # PAS 1 (idéation saves 2026-11-17) : aide de publication de l'état léger.
+    # ⚠️ JUMELLE de la même aide dans mod_sc_communication_velocity.R et
+    # _trajectory.R — read-modify-write explicite (affectation imbriquée
+    # rv$a$b <- x sur champ NULL non garantie par reactiveValues).
+    .ctx_view_set <- function(drawer, fields) {
+      cur <- comm_state$ctx_view
+      if (!is.list(cur)) cur <- list()
+      cur[[drawer]] <- fields
+      comm_state$ctx_view <- cur
+    }
 
     # R-3bis (idiome repo, cf. mod_bulk.R fix 2026-11-06) : une sortie
     # invalidée pendant que son panneau est caché ne livre JAMAIS son payload.
@@ -115,17 +125,67 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
       spc_src(NULL)
     }, ignoreInit = TRUE)
 
-    # Redutions 2D disponibles (>= 2 colonnes), defaut umap.
-    observeEvent(global_data$sc_obj, {
+    # Redutions 2D disponibles (>= 2 colonnes), defaut umap — PAS 1 : la même
+    # aide sert à l'observateur d'objet (peuplement) et à l'observateur de
+    # restauration (garde de validité de la réduction sauvegardée).
+    .spc_valid_reductions <- function() {
       obj <- global_data$sc_obj
       reds <- if (!is.null(obj)) names(obj@reductions) else character(0)
-      reds2 <- reds[vapply(reds, function(rd) {
+      reds[vapply(reds, function(rd) {
         em <- tryCatch(SeuratObject::Embeddings(obj, rd), error = function(e) NULL)
         !is.null(em) && ncol(em) >= 2L
       }, logical(1))]
+    }
+    observeEvent(global_data$sc_obj, {
+      reds2 <- .spc_valid_reductions()
       updateSelectInput(session, "spc_reduction", choices = reds2,
                         selected = if ("umap" %in% reds2) "umap" else reds2[1])
     }, ignoreInit = FALSE)
+
+    # PAS 1 (idéation saves 2026-11-17) : restauration des params de vue du
+    # tiroir spatial — radio/numériques en direct ; la réduction n'est
+    # ré-appliquée que si elle reste VALIDE sur l'objet courant (même garde
+    # que le peuplement). Un champ absent du snapshot = inchangé.
+    observeEvent(comm_state$ctx_view$spatial, {
+      v <- comm_state$ctx_view$spatial
+      if (!is.list(v)) return()
+      if (!is.null(v$source) && !identical(v$source, input$spc_source)) {
+        shiny::updateRadioButtons(session, "spc_source", selected = v$source)
+      }
+      if (!is.null(v$radius) && !is.na(v$radius) &&
+          !identical(v$radius, input$spc_radius)) {
+        shiny::updateNumericInput(session, "spc_radius", value = v$radius)
+      }
+      if (!is.null(v$nperm) && !identical(v$nperm, input$spc_nperm)) {
+        shiny::updateNumericInput(session, "spc_nperm", value = v$nperm)
+      }
+      red <- v$reduction
+      if (!is.null(red) && !identical(red, input$spc_reduction) &&
+          red %in% .spc_valid_reductions()) {
+        updateSelectInput(session, "spc_reduction", selected = red)
+      }
+    }, ignoreNULL = TRUE, ignoreInit = FALSE)
+
+    # PAS 1 : publication de l'état léger — les params courants du tiroir.
+    # Garde : un contexte établi (au calcul, ou après l'auto-calc Lane 3b qui
+    # re-compose le contexte restauré). Sans contexte, RIEN n'est publié :
+    # au restore, les observateurs d'entrée déclenchés par la ré-application
+    # ne peuvent pas écraser l'état restauré.
+    .spc_publish_view <- function() {
+      if (is.null(spc_ctx())) return()
+      .ctx_view_set("spatial", list(
+        source    = input$spc_source,
+        reduction = input$spc_reduction,
+        radius    = input$spc_radius %||% NA_real_,
+        nperm     = as.integer(input$spc_nperm %||% 0L),
+        pair      = input$spc_pair %||% character(0)
+      ))
+    }
+    observeEvent(input$spc_source,    .spc_publish_view(), ignoreInit = TRUE)
+    observeEvent(input$spc_reduction, .spc_publish_view(), ignoreInit = TRUE)
+    observeEvent(input$spc_radius,    .spc_publish_view(), ignoreInit = TRUE)
+    observeEvent(input$spc_nperm,     .spc_publish_view(), ignoreInit = TRUE)
+    observeEvent(input$spc_pair,      .spc_publish_view(), ignoreInit = TRUE)
 
     output$spc_spatial_info <- renderText({
       b <- global_data$spatial_obj
@@ -201,12 +261,29 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
         )
         spc_ctx(ctx)
         spc_src(comm_state$result)
+        # PAS 1 (idéation saves 2026-11-17) : params qui ONT PRODUIT ce
+        # contexte publiés pour le snapshot (la paire suivra au round-trip
+        # client via l'observateur input$spc_pair).
+        .ctx_view_set("spatial", list(
+          source    = input$spc_source,
+          reduction = input$spc_reduction,
+          radius    = input$spc_radius %||% NA_real_,
+          nperm     = as.integer(input$spc_nperm %||% 0L)
+        ))
         # Provenance PRODUITE au calcul (regle 7) — appended, jamais reconstruite.
         if (!is.null(shared_rv)) provenance_append(shared_rv, ctx$provenance)
         pairs <- paste(ctx$pair_table$sender_node, ctx$pair_table$receiver_node, sep = "\u2192")
+        # PAS 1 : la paire sauvegardée est honorée si elle existe toujours
+        # (restauration = même vue qu'avant la sauvegarde) ; sinon le défaut
+        # historique (première paire, espace des libellés — inchangé).
+        pair_vals <- paste(ctx$pair_table$sender_node, ctx$pair_table$receiver_node, sep = "\r")
+        saved_pair <- if (is.list(comm_state$ctx_view$spatial)) comm_state$ctx_view$spatial$pair else NULL
+        sel <- if (length(pair_vals) && length(saved_pair) && saved_pair %in% pair_vals) {
+          saved_pair
+        } else if (length(pairs)) pairs[1] else character(0)
         updateSelectizeInput(session, "spc_pair", choices = setNames(
           paste(ctx$pair_table$sender_node, ctx$pair_table$receiver_node, sep = "\r"), pairs
-        ), selected = if (length(pairs)) pairs[1] else character(0))
+        ), selected = sel)
         showNotification(
           sprintf(.tr("Contexte spatial : %d paire(s) cartographiée(s) sur %d."),
                   ctx$qc$n_pairs_mapped, ctx$qc$n_pairs_total),

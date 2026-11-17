@@ -78,6 +78,67 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
     # PÉRIMÉS (voir l'observateur reset ci-dessous).
     trj_src <- reactiveVal(NULL)
 
+    # PAS 1 (idéation saves 2026-11-17) : aide de publication de l'état léger.
+    # ⚠️ JUMELLE de la même aide dans mod_sc_communication_velocity.R et
+    # _spatial.R — read-modify-write explicite (affectation imbriquée
+    # rv$a$b <- x sur champ NULL non garantie par reactiveValues).
+    .ctx_view_set <- function(drawer, fields) {
+      cur <- comm_state$ctx_view
+      if (!is.list(cur)) cur <- list()
+      cur[[drawer]] <- fields
+      comm_state$ctx_view <- cur
+    }
+
+    # PAS 1 : restauration des params de vue du tiroir trajectoire —
+    # radio/numérique en direct ; colonnes d'objet (pseudo-temps/assay)
+    # ré-appliquées seulement si VALIDES sur l'objet courant (mêmes gardes
+    # que le peuplement ci-dessous). Champ absent du snapshot = inchangé.
+    observeEvent(comm_state$ctx_view$trajectory, {
+      v <- comm_state$ctx_view$trajectory
+      if (!is.list(v)) return()
+      if (!is.null(v$lineage_mode) && !identical(v$lineage_mode, input$trj_lineage_mode)) {
+        updateRadioButtons(session, "trj_lineage_mode", selected = v$lineage_mode)
+      }
+      if (!is.null(v$nbins) && !identical(v$nbins, input$trj_nbins)) {
+        shiny::updateNumericInput(session, "trj_nbins", value = v$nbins)
+      }
+      obj <- global_data$sc_obj
+      if (!is.null(obj)) {
+        pt <- v$pt_col
+        pt_cols <- colnames(obj@meta.data)[grepl("^pseudotime", colnames(obj@meta.data))]
+        if (!is.null(pt) && !identical(pt, input$trj_pt_col) && pt %in% pt_cols) {
+          updateSelectInput(session, "trj_pt_col", selected = pt)
+        }
+        asy <- v$assay
+        if (!is.null(asy) && !identical(asy, input$trj_assay) &&
+            asy %in% names(obj@assays)) {
+          updateSelectInput(session, "trj_assay", selected = asy)
+        }
+      }
+    }, ignoreNULL = TRUE, ignoreInit = FALSE)
+
+    # PAS 1 : publication de l'état léger — garde identique au tiroir spatial :
+    # un contexte établi seulement (au calcul, ou après l'auto-calc Lane 3b).
+    # Sans contexte, RIEN n'est publié — au restore, les observateurs
+    # déclenchés par la ré-application ne peuvent pas écraser l'état restauré.
+    .trj_publish_view <- function() {
+      if (is.null(trj_ctx())) return()
+      .ctx_view_set("trajectory", list(
+        pt_col       = input$trj_pt_col,
+        assay        = input$trj_assay,
+        lineage_mode = input$trj_lineage_mode,
+        nbins        = as.integer(input$trj_nbins %||% 10L),
+        pair         = input$trj_pair %||% character(0),
+        lineage_pick = input$trj_lineage_pick %||% character(0)
+      ))
+    }
+    observeEvent(input$trj_pt_col,       .trj_publish_view(), ignoreInit = TRUE)
+    observeEvent(input$trj_assay,        .trj_publish_view(), ignoreInit = TRUE)
+    observeEvent(input$trj_lineage_mode, .trj_publish_view(), ignoreInit = TRUE)
+    observeEvent(input$trj_nbins,        .trj_publish_view(), ignoreInit = TRUE)
+    observeEvent(input$trj_pair,         .trj_publish_view(), ignoreInit = TRUE)
+    observeEvent(input$trj_lineage_pick, .trj_publish_view(), ignoreInit = TRUE)
+
     # R-3bis (idiome repo, cf. mod_bulk.R fix 2026-11-06) : une sortie
     # invalidée pendant que son panneau est caché ne livre JAMAIS son payload.
     # Les renders consomment le miroir de feuille active du drawer (publié par
@@ -254,17 +315,38 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
         })
         trj_ctx(ctx)
         trj_src(comm_state$result)
+        # PAS 1 (idéation saves 2026-11-17) : params qui ONT PRODUIT ce
+        # contexte publiés pour le snapshot (paire/lignée suivent au
+        # round-trip client via les observateurs d'entrée).
+        .ctx_view_set("trajectory", list(
+          pt_col       = input$trj_pt_col,
+          assay        = input$trj_assay,
+          lineage_mode = input$trj_lineage_mode,
+          nbins        = as.integer(input$trj_nbins %||% 10L)
+        ))
         if (!is.null(shared_rv)) provenance_append(shared_rv, ctx$provenance)
         pairs <- paste(ctx$pair_bin_table$sender_node, ctx$pair_bin_table$receiver_node, sep = "\r")
         pair_labels <- ifelse(is.na(ctx$pair_bin_table$lineage), pairs,
                               paste0(pairs, " [", ctx$pair_bin_table$lineage, "]"))
         uniq <- !duplicated(pair_labels)
+        # PAS 1 : paire/lignée sauvegardées honorées si toujours présentes
+        # (restauration = même vue) ; sinon premiers choix (comportement inchangé).
+        saved_view <- if (is.list(comm_state$ctx_view$trajectory)) comm_state$ctx_view$trajectory else list()
+        saved_pair <- saved_view$pair %||% character(0)
+        saved_lin  <- saved_view$lineage_pick %||% character(0)
+        pair_pool <- pair_labels[uniq]
+        sel_pair <- if (any(uniq) && length(saved_pair) && saved_pair %in% pair_pool) {
+          saved_pair
+        } else if (any(uniq)) pair_pool[1] else character(0)
         updateSelectizeInput(session, "trj_pair",
-                             choices = setNames(pair_labels[uniq], gsub("\r", " → ", pair_labels[uniq])),
-                             selected = if (any(uniq)) pair_labels[uniq][1] else character(0))
+                             choices = setNames(pair_pool, gsub("\r", " → ", pair_pool)),
+                             selected = sel_pair)
         lins <- sort(unique(stats::na.omit(ctx$pair_bin_table$lineage)))
+        sel_lin <- if (length(lins) && length(saved_lin) && saved_lin %in% lins) {
+          saved_lin
+        } else if (length(lins)) lins[1] else character(0)
         updateSelectizeInput(session, "trj_lineage_pick", choices = lins,
-                             selected = if (length(lins)) lins[1] else character(0))
+                             selected = sel_lin)
         showNotification(
           sprintf(.tr("Contexte trajectoire : %d combinaison(s) paire/lignée calculée(s) sur %d."),
                   ctx$qc$n_combinations_mapped, ctx$qc$n_combinations_total),

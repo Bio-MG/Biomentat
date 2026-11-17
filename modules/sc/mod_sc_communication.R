@@ -588,7 +588,16 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       # un libellé affichable ; + le dernier résultat comparatif (rankNet/
       # similarité). Session-scoped : purgés avec l'état de résultat.
       ccc_registry = NULL,
-      ccc_comparison = NULL
+      ccc_comparison = NULL,
+      # PAS 1 (idéation saves 2026-11-17) : état LÉGER des contextes CCC —
+      # paramètres de vue + sélections de paire des tiroirs
+      # velocity/spatial/trajectory, écrits par chaque tiroir au calcul du
+      # contexte (les params qui ONT PRODUIT le contexte affiché). JAMAIS
+      # d'objet plot ni de résultat ici : au restore, les tiroirs se
+      # re-paramètrent et les contextes se recalculent depuis les résultats
+      # déjà sauvegardés (auto-calc Lane 3b). Miroir snapshot :
+      # shared_rv$communication_ctx_view (observeEvent ci-dessous).
+      ctx_view = NULL
     )
     comm_status_rv <- reactiveVal(.tr("En attente d'import de resultats de communication..."))
 
@@ -761,12 +770,18 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       # avec le reste, jamais conservé au-delà du contexte.
       comm_state$ccc_registry <- NULL
       comm_state$ccc_comparison <- NULL
+      # PAS 1 (idéation saves 2026-11-17) : l'état léger des contextes vit
+      # avec le résultat qu'il paramètre — purgé avec lui, et son miroir
+      # snapshot avec (un nouveau jeu repart à vide, jamais de params d'un
+      # ancien monde ré-appliqués à un nouveau résultat).
+      comm_state$ctx_view <- NULL
       shared_rv$communication_result <- NULL
       shared_rv$communication_collection <- NULL
       shared_rv$active_communication_sample <- NULL
       # Lane 3 : purger AUSSI les miroirs snapshot (registre + comparatif).
       shared_rv$communication_ccc_registry <- NULL
       shared_rv$communication_ccc_comparison <- NULL
+      shared_rv$communication_ctx_view <- NULL
       updateNumericInput(session, "comm_f_score_min", value = NA)
       updateNumericInput(session, "comm_f_pmax", value = NA)
       updateNumericInput(session, "comm_f_rank_max", value = NA)
@@ -1050,6 +1065,13 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       comm_state$active_sample <- rs$active_sample
       comm_state$ccc_registry <- rs$ccc_registry
       comm_state$ccc_comparison <- rs$ccc_comparison
+      # PAS 1 (idéation saves 2026-11-17) : l'état léger des contextes voyage
+      # avec le résultat — les tiroirs (observateurs sur comm_state$ctx_view)
+      # re-paramètrent leurs entrées ; absent des snapshots antérieurs =
+      # NULL propre (dégradation honnête, rien n'est ré-inféré). Payload
+      # non-liste (snapshot corrompu) = NULL aussi, jamais de junk propagée.
+      comm_state$ctx_view <- if (is.list(rs$ctx_view)) rs$ctx_view else NULL
+      if (!is.list(rs$ctx_view)) shared_rv$communication_ctx_view <- NULL
       shared_rv$communication_result <- rs$result
       shared_rv$communication_collection <- rs$collection
       shared_rv$active_communication_sample <- rs$active_sample
@@ -1057,6 +1079,15 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       shared_rv$communication_ccc_comparison <- rs$ccc_comparison
       .refresh_display_filters(rs$result)
       comm_status_rv(.tr("Résultats restaurés depuis la session sauvegardée — ni ré-inférés ni recalculés."))
+    }, ignoreNULL = TRUE)
+
+    # PAS 1 (idéation saves 2026-11-17) : miroir snapshot de l'état léger des
+    # contextes — UNE source (comm_state$ctx_view, écrite par les tiroirs au
+    # calcul du contexte), UN canal (shared_rv$communication_ctx_view, lu par
+    # app.R save_session_btn). La purge du miroir se fait dans
+    # .clear_result_state (le observeEvent ignore le NULL, convention repo).
+    observeEvent(comm_state$ctx_view, {
+      shared_rv$communication_ctx_view <- comm_state$ctx_view
     }, ignoreNULL = TRUE)
 
     # ── Import + validation (orchestration uniquement) ─────────────────────
