@@ -907,6 +907,18 @@ ts_session_checkpoint_validate <- function(id, dir = NULL,
     suppressWarnings(try(unlink(file.path(store, df$id[i]), recursive = TRUE, force = TRUE),
                          silent = TRUE))
   }
+  # Sweep orphaned .building_* staging directories older than 1 hour (3600 s).
+  staging_dirs <- list.dirs(store, full.names = TRUE, recursive = FALSE)
+  staging_dirs <- staging_dirs[grepl("^\\.building_", basename(staging_dirs))]
+  if (length(staging_dirs) > 0L) {
+    cutoff <- Sys.time() - 3600
+    for (sd in staging_dirs) {
+      mt <- suppressWarnings(file.info(sd)$mtime)
+      if (!is.na(mt) && mt < cutoff) {
+        suppressWarnings(try(unlink(sd, recursive = TRUE, force = TRUE), silent = TRUE))
+      }
+    }
+  }
   list(removed = df$id[gone], kept = df$id[keep],
        cap_satisfied = cap_satisfied, bytes_total = total)
 }

@@ -572,3 +572,15 @@ test_that("Lead I : la vérification compare par empreinte en flux (plus de read
   lines <- readLines(.engine_file, warn = FALSE)
   expect_true(any(grepl("digest(file = path", lines, fixed = TRUE)))
 })
+
+test_that("Lead J : .building_* > 1h est purgé par la rétention, .building_* récent préservé", {
+  store <- .scratch_store()
+  ts_session_checkpoint_write(.tiny_layers(), dir = store, trigger = "manual")
+  old_b <- file.path(store, ".building_stale_test")
+  new_b <- file.path(store, ".building_fresh_test")
+  dir.create(old_b); dir.create(new_b)
+  Sys.setFileTime(old_b, Sys.time() - 7200)
+  ts_session_checkpoint_retention(dir = store, n = 3)
+  expect_false(dir.exists(old_b))
+  expect_true(dir.exists(new_b))
+})
