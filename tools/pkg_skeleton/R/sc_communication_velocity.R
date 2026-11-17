@@ -312,11 +312,11 @@ build_communication_velocity_context <- function(communication_result,
 #' @param context Contexte vélocité (build_communication_velocity_context()).
 #' @return ggplot.
 #' @export
-plot_communication_velocity_context <- function(context) {
+plot_communication_velocity_context <- function(context, top_n = 25L) {
   if (!is.list(context) || !identical(context$type %||% NULL, "ccc_velocity_context")) {
     .vel_ctx_stop("plot_communication_velocity_context() : contexte vélocité requis (build_communication_velocity_context()).")
   }
-  caption <- .vctx_caption(context)
+  caption <- paste(strwrap(.vctx_caption(context), width = 76), collapse = "\n")
   if (!identical(context$status, "valid") ||
       is.null(context$pair_table) || nrow(context$pair_table) == 0L) {
     return(.vctx_stub_plot(
@@ -326,26 +326,31 @@ plot_communication_velocity_context <- function(context) {
   }
   pt <- context$pair_table
   pt$pair_label <- paste(pt$sender_node, pt$receiver_node, sep = " -> ")
+  delta_mag <- abs(pt$receiver_velocity_mean - pt$sender_velocity_mean)
+  score_ord <- if ("mean_imported_score" %in% names(pt)) pt$mean_imported_score else rep(0, nrow(pt))
+  pt <- pt[order(-delta_mag, -score_ord, na.last = TRUE), , drop = FALSE]
+  top_n <- max(1L, as.integer(top_n %||% 25L))
+  if (nrow(pt) > top_n) pt <- pt[seq_len(top_n), , drop = FALSE]
+  pt$pair_label <- factor(pt$pair_label, levels = rev(pt$pair_label))
   long <- rbind(
     data.frame(pair_label = pt$pair_label, role = "Sender",
                magnitude = pt$sender_velocity_mean),
     data.frame(pair_label = pt$pair_label, role = "Receiver",
                magnitude = pt$receiver_velocity_mean)
   )
-  ggplot2::ggplot(long, ggplot2::aes(x = pair_label, y = magnitude, colour = role)) +
+  ggplot2::ggplot(long, ggplot2::aes(x = magnitude, y = pair_label, colour = role)) +
     ggplot2::geom_segment(
       data = pt,
-      ggplot2::aes(x = pair_label, y = sender_velocity_mean,
-                   xend = pair_label, yend = receiver_velocity_mean),
+      ggplot2::aes(x = sender_velocity_mean, y = pair_label,
+                   xend = receiver_velocity_mean, yend = pair_label),
       inherit.aes = FALSE, colour = "grey75", linewidth = 0.8
     ) +
     ggplot2::geom_point(size = 3, alpha = 0.9) +
     ggplot2::scale_colour_manual(values = c(Sender = "#2166AC", Receiver = "#D6604D"), name = NULL) +
     ggplot2::theme_classic() +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
     ggplot2::labs(
-      x = NULL, y = "Magnitude moyenne des vecteurs (importés)",
-      title = "Contexte vélocité des populations par paire",
+      x = "Magnitude moyenne des vecteurs (importés)", y = NULL,
+      title = sprintf("Contexte vélocité des populations (top %d par |Δ|)", nrow(pt)),
       subtitle = caption
     )
 }

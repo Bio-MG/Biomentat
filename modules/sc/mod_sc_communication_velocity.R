@@ -34,12 +34,12 @@ mod_sc_communication_velocity_ui <- function(id) {
     # P0.4 harmonisation (2026-11-14, demande opérateur) : plot AU-DESSUS de la
     # table + k1 complétion — hauteur fixe < contenu paginé = débord du wrapper
     # DataTables sur le voisin (mesuré live : conteneur ~400 px vs 807 px).
-    plotOutput(ns("vel_plot"), height = "380px"),
-    DT::dataTableOutput(ns("vel_table"), height = "auto", fill = FALSE),
+    plotOutput(ns("vel_plot"), height = "420px"),
     fluidRow(
-      column(3, downloadButton(ns("dl_vel_csv"), i18n$t("CSV"), class = "btn-sm btn-outline-secondary")),
       column(3, downloadButton(ns("dl_vel_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
-      column(3, downloadButton(ns("dl_vel_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))
+      column(3, downloadButton(ns("dl_vel_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")),
+      column(3, downloadButton(ns("dl_vel_csv"), i18n$t("CSV"), class = "btn-sm btn-outline-secondary"))),
+    DT::dataTableOutput(ns("vel_table"), height = "auto", fill = FALSE)
   )
 }
 
@@ -220,8 +220,17 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
       .ctx_tab_guard()
       ctx <- vel_ctx()
       req(ctx)
-      ts_datatable(ctx$pair_table, page_length = 15L,
-                   filename_base = "sc_comm_velocity_pair_table", filter = "none")
+      dt <- ts_datatable(ctx$pair_table, page_length = 15L,
+                         filename_base = "sc_comm_velocity_pair_table", filter = "none")
+      num_cols <- intersect(
+        c("mean_imported_score", "sender_velocity_mean", "sender_velocity_median",
+          "receiver_velocity_mean", "receiver_velocity_median"),
+        names(ctx$pair_table)
+      )
+      if (length(num_cols) > 0L) {
+        dt <- DT::formatRound(dt, columns = num_cols, digits = 4)
+      }
+      dt
     })
 
     output$vel_plot <- renderPlot({
