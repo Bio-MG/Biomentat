@@ -384,7 +384,9 @@ detect_velocity_orientation <- function(
     )
 ) {
     orientation <- match.arg(orientation)
-    mat <- as.matrix(mat)
+    if (!is.matrix(mat) && !inherits(mat, "Matrix")) {
+        mat <- as.matrix(mat)
+    }
 
     if (is.null(rownames(mat)) || is.null(colnames(mat))) {
         .velocity_stop(
