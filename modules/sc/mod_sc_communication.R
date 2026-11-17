@@ -1775,16 +1775,75 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     # helper existant, aucune route drive nouvelle.
     output$ccc_comp_selector_ui <- renderUI({
       reg <- comm_state$ccc_registry
-      if (is.null(reg) || length(reg) < 2L) {
+      if (is.null(reg) || length(reg) == 0L) {
         return(div(class = "small text-muted m-2",
                    .tr("Comparaison indisponible : au moins 2 runs CellChat (moteur) complets de cette session sont requis. Lancez le calcul CellChat sur deux objets (ex: contrôle puis traité) — chaque run complet alimente le registre.")))
       }
       lbls <- names(reg)
-      shiny::selectInput(session$ns("ccc_comp_pick"),
-                         .tr("Objets à comparer (≥ 2)"),
-                         choices = lbls,
-                         selected = utils::tail(lbls, 2L),
-                         multiple = TRUE)
+      tagList(
+        if (length(reg) < 2L) {
+          div(class = "small text-muted mb-2",
+              .tr("Comparaison indisponible : au moins 2 runs CellChat (moteur) complets de cette session sont requis. Lancez le calcul CellChat sur deux objets (ex: contrôle puis traité) — chaque run complet alimente le registre."))
+        },
+        shiny::selectInput(session$ns("ccc_comp_pick"),
+                           .tr("Objets à comparer (≥ 2)"),
+                           choices = lbls,
+                           selected = utils::tail(lbls, min(2L, length(lbls))),
+                           multiple = TRUE),
+        fluidRow(
+          column(6, shiny::textInput(session$ns("ccc_reg_rename_val"), label = NULL,
+                                     placeholder = .tr("Nouveau nom du run sélectionné"))),
+          column(3, shiny::actionButton(session$ns("btn_ccc_rename"), .tr("Renommer"),
+                                        class = "btn-sm btn-outline-secondary w-100")),
+          column(3, shiny::actionButton(session$ns("btn_ccc_remove"), .tr("Supprimer"),
+                                        class = "btn-sm btn-outline-danger w-100"))
+        )
+      )
+    })
+
+    observeEvent(input$btn_ccc_rename, {
+      reg <- comm_state$ccc_registry
+      pick <- input$ccc_comp_pick %||% character(0)
+      new_lbl <- trimws(input$ccc_reg_rename_val %||% "")
+      if (is.null(reg) || length(pick) != 1L) {
+        showNotification(.tr("Sélectionnez exactement 1 run à renommer."),
+                         type = "warning", duration = 5)
+        return()
+      }
+      if (!nzchar(new_lbl)) {
+        showNotification(.tr("Saisissez un nouveau nom non vide."),
+                         type = "warning", duration = 5)
+        return()
+      }
+      old_lbl <- pick[1L]
+      if (new_lbl %in% setdiff(names(reg), old_lbl)) {
+        showNotification(.tr("Ce nom de run existe déjà dans le registre."),
+                         type = "warning", duration = 5)
+        return()
+      }
+      idx <- match(old_lbl, names(reg))
+      if (is.na(idx)) return()
+      reg[[idx]]$label <- new_lbl
+      names(reg)[idx] <- new_lbl
+      comm_state$ccc_registry <- reg
+      shared_rv$communication_ccc_registry <- reg
+      showNotification(sprintf(.tr("Run renommé en « %s »."), new_lbl),
+                       type = "message", duration = 4)
+    })
+
+    observeEvent(input$btn_ccc_remove, {
+      reg <- comm_state$ccc_registry
+      pick <- input$ccc_comp_pick %||% character(0)
+      if (is.null(reg) || length(pick) == 0L) {
+        showNotification(.tr("Sélectionnez au moins 1 run à supprimer du registre."),
+                         type = "warning", duration = 5)
+        return()
+      }
+      reg <- reg[setdiff(names(reg), pick)]
+      comm_state$ccc_registry <- if (length(reg) > 0L) reg else NULL
+      shared_rv$communication_ccc_registry <- comm_state$ccc_registry
+      showNotification(sprintf(.tr("%d run(s) retiré(s) du registre."), length(pick)),
+                       type = "message", duration = 4)
     })
 
     observeEvent(input$btn_ccc_compare, {

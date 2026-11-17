@@ -549,3 +549,44 @@ test_that("lane3 : mod_sc.R expose la référence partagée à l'app", {
                          warn = FALSE, encoding = "UTF-8"), collapse = "\n")
   expect_match(src, "global_data$sc_shared <- shared_rv", fixed = TRUE)
 })
+
+test_that("W1.2 : registre CC-2 renommage et suppression (btn_ccc_rename / btn_ccc_remove)", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "sc",
+                                   "mod_sc_communication.R"),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src, "observeEvent(input$btn_ccc_rename", fixed = TRUE)
+  expect_match(src, "observeEvent(input$btn_ccc_remove", fixed = TRUE)
+  expect_match(src, "ccc_reg_rename_val", fixed = TRUE)
+
+  mod_env <- new.env(parent = globalenv())
+  for (subf in c("mod_sc_communication_spatial.R",
+                 "mod_sc_communication_trajectory.R",
+                 "mod_sc_communication_velocity.R",
+                 "mod_sc_communication_perturbation.R",
+                 "mod_sc_communication.R")) {
+    sys.source(file.path(ts_project_root(), "modules", "sc", subf),
+               envir = mod_env)
+  }
+  gd <- shiny::reactiveValues(sc_obj = NULL, language = "fr", i18n = NULL)
+  srv <- shiny::reactiveValues()
+  shiny::testServer(mod_env$mod_sc_communication_server,
+                    args = list(global_data = gd, shared_rv = srv), {
+    reg <- list(
+      "Run 1 (12:00)" = list(label = "Run 1 (12:00)", object = list(a = 1)),
+      "Run 2 (12:05)" = list(label = "Run 2 (12:05)", object = list(a = 2))
+    )
+    comm_state$ccc_registry <- reg
+    srv$communication_ccc_registry <- reg
+    session$setInputs(ccc_comp_pick = "Run 1 (12:00)",
+                      ccc_reg_rename_val = "Controle")
+    session$setInputs(btn_ccc_rename = 1L)
+    expect_true("Controle" %in% names(comm_state$ccc_registry))
+    expect_false("Run 1 (12:00)" %in% names(comm_state$ccc_registry))
+    expect_identical(srv$communication_ccc_registry$Controle$label, "Controle")
+
+    session$setInputs(ccc_comp_pick = "Controle")
+    session$setInputs(btn_ccc_remove = 1L)
+    expect_identical(names(comm_state$ccc_registry), "Run 2 (12:05)")
+    expect_identical(names(srv$communication_ccc_registry), "Run 2 (12:05)")
+  })
+})

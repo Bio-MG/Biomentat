@@ -13812,6 +13812,42 @@
     {
       "fr": "Objet Seurat mis à jour (empreinte identique) — résultats velocity conservés.",
       "en": "Seurat object updated (identical fingerprint) — velocity results preserved."
+    },
+    {
+      "fr": "Nouveau nom du run sélectionné",
+      "en": "New name for selected run"
+    },
+    {
+      "fr": "Renommer",
+      "en": "Rename"
+    },
+    {
+      "fr": "Supprimer",
+      "en": "Delete"
+    },
+    {
+      "fr": "Sélectionnez exactement 1 run à renommer.",
+      "en": "Select exactly 1 run to rename."
+    },
+    {
+      "fr": "Saisissez un nouveau nom non vide.",
+      "en": "Enter a non-empty new name."
+    },
+    {
+      "fr": "Ce nom de run existe déjà dans le registre.",
+      "en": "This run name already exists in the registry."
+    },
+    {
+      "fr": "Run renommé en « %s ».",
+      "en": "Run renamed to '%s'."
+    },
+    {
+      "fr": "Sélectionnez au moins 1 run à supprimer du registre.",
+      "en": "Select at least 1 run to remove from the registry."
+    },
+    {
+      "fr": "%d run(s) retiré(s) du registre.",
+      "en": "%d run(s) removed from the registry."
     }
   ]
 }
