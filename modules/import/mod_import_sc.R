@@ -310,14 +310,19 @@ mod_import_sc_ui <- function(id) {
       card(
         card_header(i18n$t("Résumé de l'objet chargé")),
         layout_columns(
+          fill = FALSE,
           value_box(title = i18n$t("Cellules"), value = textOutput(ns("nb_cells")),
-                    showcase = bsicons::bs_icon("people"), theme = "primary"),
+                    showcase = bsicons::bs_icon("people"), theme = "primary",
+                    max_height = "120px", fill = FALSE),
           value_box(title = i18n$t("Gènes"), value = textOutput(ns("nb_genes")),
-                    showcase = bsicons::bs_icon("diagram-3"), theme = "secondary"),
+                    showcase = bsicons::bs_icon("diagram-3"), theme = "secondary",
+                    max_height = "120px", fill = FALSE),
           value_box(title = i18n$t("Échantillons"), value = textOutput(ns("nb_samples")),
-                    showcase = bsicons::bs_icon("collection"), theme = "info"),
+                    showcase = bsicons::bs_icon("collection"), theme = "info",
+                    max_height = "120px", fill = FALSE),
           value_box(title = i18n$t("Statut"), value = textOutput(ns("status_obj")),
-                    showcase = bsicons::bs_icon("check-circle"), theme = "light")
+                    showcase = bsicons::bs_icon("check-circle"), theme = "light",
+                    max_height = "120px", fill = FALSE)
         ),
         # V1.x UX multi-échantillons : confirmation visuelle immédiate que les
         # échantillons sont reconnus comme entités distinctes (>= 2 orig.ident).
