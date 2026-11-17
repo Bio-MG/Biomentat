@@ -241,6 +241,7 @@ test_that("the contract document exists and states the frozen rules", {
   txt <- paste(.ts_contract_readlines(doc, warn = FALSE), collapse = "\n")
   for (needle in c("database_version", "updateCellChatDB", "nboot",
                    "source_cell_identity_level", "run_cellchat",
+                   "run_cellchat_by_condition", "run_ccc_comparison",
                    "cellchat_analysis_identity")) {
     expect_true(grepl(needle, txt, fixed = TRUE),
                 label = paste("le contrat doit mentionner", needle))
@@ -446,4 +447,248 @@ test_that("parse_cellchat_object reads a REAL CellChat object (regression)", {
   expect_false(any(is.na(tab$pathway)))
   # p_adjusted reste NA sur les deux voies (jamais fabrique).
   expect_true(all(is.na(tab$p_adjusted)))
+})
+
+# ── W1.2 : run_cellchat_by_condition (validation + execution reelle) ────────
+test_that("run_cellchat_by_condition validates parameters before requiring CellChat", {
+  err_missing <- tryCatch(run_cellchat_by_condition(), error = function(e) e)
+  expect_s3_class(err_missing, "cellchat_engine_error")
+  expect_identical(cellchat_engine_error_state(err_missing), "invalid_parameters")
+
+  err_non_seurat <- tryCatch(
+    run_cellchat_by_condition("not_seurat", "cond", "grp", "human", seed = 1L),
+    error = function(e) e
+  )
+  expect_s3_class(err_non_seurat, "cellchat_engine_error")
+  expect_identical(cellchat_engine_error_state(err_non_seurat), "invalid_input")
+
+  skip_if_not_installed("SeuratObject")
+  mat <- matrix(rpois(60L, 4), nrow = 10L, ncol = 6L,
+                dimnames = list(paste0("G", 1:10), paste0("C", 1:6)))
+  meta <- data.frame(
+    cond = c("ctrl", "ctrl", "ctrl", "stim", "stim", "stim"),
+    grp = c("A", "B", "A", "A", "B", "B"),
+    one_cond = rep("only_one", 6L),
+    row.names = colnames(mat),
+    stringsAsFactors = FALSE
+  )
+  so <- SeuratObject::CreateSeuratObject(counts = mat, meta.data = meta)
+
+  err_prog <- tryCatch(
+    run_cellchat_by_condition(so, "cond", "grp", "human", seed = 1L, on_progress = "bad"),
+    error = function(e) e
+  )
+  expect_identical(cellchat_engine_error_state(err_prog), "invalid_parameters")
+
+  err_cond_col <- tryCatch(
+    run_cellchat_by_condition(so, "missing_col", "grp", "human", seed = 1L),
+    error = function(e) e
+  )
+  expect_identical(cellchat_engine_error_state(err_cond_col), "invalid_input")
+
+  err_grp_col <- tryCatch(
+    run_cellchat_by_condition(so, "cond", "missing_grp", "human", seed = 1L),
+    error = function(e) e
+  )
+  expect_identical(cellchat_engine_error_state(err_grp_col), "invalid_input")
+
+  err_one_cond <- tryCatch(
+    run_cellchat_by_condition(so, "one_cond", "grp", "human", seed = 1L),
+    error = function(e) e
+  )
+  expect_identical(cellchat_engine_error_state(err_one_cond), "invalid_input")
+
+  so_blank <- so
+  so_blank$cond_blank <- c("ctrl", "ctrl", "", NA, "ctrl", "ctrl")
+  expect_warning(
+    err_blank <- tryCatch(
+      run_cellchat_by_condition(so_blank, "cond_blank", "grp", "human", seed = 1L),
+      error = function(e) e
+    ),
+    "ignoree"
+  )
+  expect_identical(cellchat_engine_error_state(err_blank), "invalid_input")
+
+  err_sp <- tryCatch(
+    run_cellchat_by_condition(so, "cond", "grp", "zebrafish", seed = 1L),
+    error = function(e) e
+  )
+  expect_identical(cellchat_engine_error_state(err_sp), "invalid_input")
+
+  err_assay <- tryCatch(
+    run_cellchat_by_condition(so, "cond", "grp", "human", seed = 1L, assay = "NOPE"),
+    error = function(e) e
+  )
+  expect_identical(cellchat_engine_error_state(err_assay), "invalid_input")
+
+  for (bad_seed in list(NA_integer_, 1.5, "1", Inf)) {
+    err_s <- tryCatch(
+      run_cellchat_by_condition(so, "cond", "grp", "human", seed = bad_seed),
+      error = function(e) e
+    )
+    expect_identical(cellchat_engine_error_state(err_s), "invalid_parameters")
+  }
+
+  for (bad_nboot in list(0L, -1L, 2.5, NA_integer_)) {
+    err_nb <- tryCatch(
+      run_cellchat_by_condition(so, "cond", "grp", "human", seed = 1L, nboot = bad_nboot),
+      error = function(e) e
+    )
+    expect_identical(cellchat_engine_error_state(err_nb), "invalid_parameters")
+  }
+
+  err_mc <- tryCatch(
+    run_cellchat_by_condition(so, "cond", "grp", "human", seed = 1L, min_cells_per_group = 0L),
+    error = function(e) e
+  )
+  expect_identical(cellchat_engine_error_state(err_mc), "invalid_parameters")
+})
+
+test_that("run_cellchat_by_condition handles joined & split Assay5 objects, partial failures, and consistency warnings", {
+  skip_if_not(cellchat_engine_available(), "CellChat absent (dependance GitHub)")
+  skip_if_not_installed("Seurat")
+  skip_if_not_installed("SeuratObject")
+
+  set.seed(20261117)
+  cc_env <- new.env(parent = emptyenv())
+  utils::data(list = "CellChatDB.human", package = "CellChat", envir = cc_env)
+  cc_db <- get("CellChatDB.human", envir = cc_env)
+  cc_pw <- c("TGFb", "MIF", "MHC-I", "MHC-II", "GALECTIN", "CD99",
+             "ANNEXIN", "VISFATIN", "COMPLEMENT", "CXCL")
+  cc_sel <- cc_db$interaction[cc_db$interaction$pathway_name %in% cc_pw,
+                              c("ligand", "receptor")]
+  genes <- sort(unique(c(cc_sel$ligand, cc_sel$receptor)))
+  genes <- genes[nzchar(genes)]
+  feats <- c(genes, paste0("FILL", seq_len(60L)))
+  lig <- intersect(cc_sel$ligand, feats)
+  rec <- intersect(cc_sel$receptor, feats)
+
+  .mk_so <- function(tag, cond_val, cells = 240L, groups = c("A", "B", "C")) {
+    grp <- rep(groups, length.out = cells)
+    mat <- matrix(rpois(length(feats) * cells, 2), nrow = length(feats),
+                  dimnames = list(feats, paste0(tag, "_", seq_len(cells))))
+    iA <- which(grp == "A")
+    iB <- which(grp == "B")
+    mat[lig, iA] <- mat[lig, iA] + rpois(length(lig) * length(iA), 25)
+    mat[rec, iB] <- mat[rec, iB] + rpois(length(rec) * length(iB), 25)
+    so <- SeuratObject::CreateSeuratObject(
+      counts = mat,
+      meta.data = data.frame(
+        condition = rep(cond_val, cells),
+        celltype = grp,
+        row.names = colnames(mat),
+        stringsAsFactors = FALSE
+      )
+    )
+    Seurat::NormalizeData(so, verbose = FALSE)
+  }
+
+  so_ctrl <- .mk_so("c", "ctrl")
+  so_stim <- .mk_so("s", "stim")
+  so_merged <- merge(so_ctrl, so_stim)
+  so_joined <- tryCatch(SeuratObject::JoinLayers(so_merged), error = function(e) so_merged)
+
+  prog_msgs <- character(0)
+  res <- run_cellchat_by_condition(
+    so_joined,
+    condition_col = "condition",
+    group_by = "celltype",
+    species = "human",
+    seed = 1L,
+    nboot = 5L,
+    on_progress = function(m) prog_msgs <<- c(prog_msgs, m)
+  )
+  expect_identical(res$conditions, c("ctrl", "stim"))
+  expect_identical(names(res$results), c("ctrl", "stim"))
+  expect_identical(nrow(res$manifest), 2L)
+  expect_true(all(res$manifest$status == "valid"))
+  expect_true(all(res$manifest$has_cellchat_object))
+  expect_true(isTRUE(res$populations_consistent))
+  expect_true(length(prog_msgs) > 0L)
+  expect_identical(res$results$ctrl$condition, "ctrl")
+  expect_identical(res$results$stim$condition, "stim")
+
+  if (inherits(so_merged[["RNA"]], "Assay5")) {
+    res_split <- run_cellchat_by_condition(
+      so_merged,
+      condition_col = "condition",
+      group_by = "celltype",
+      species = "human",
+      seed = 1L,
+      nboot = 5L
+    )
+    expect_identical(res_split$conditions, c("ctrl", "stim"))
+    expect_true(all(res_split$manifest$has_cellchat_object))
+  }
+
+  # Partial failure: 3rd condition has only 1 population ("A")
+  so_one <- .mk_so("o", "one_pop", cells = 60L, groups = "A")
+  so_3 <- tryCatch(
+    SeuratObject::JoinLayers(merge(so_ctrl, list(so_stim, so_one))),
+    error = function(e) merge(so_ctrl, list(so_stim, so_one))
+  )
+  res_partial <- run_cellchat_by_condition(
+    so_3,
+    condition_col = "condition",
+    group_by = "celltype",
+    species = "human",
+    seed = 1L,
+    nboot = 5L
+  )
+  expect_identical(res_partial$conditions, c("ctrl", "stim"))
+  expect_identical(nrow(res_partial$manifest), 3L)
+  expect_identical(res_partial$manifest$status, c("valid", "valid", "failed"))
+  expect_true(any(grepl("one_pop", res_partial$warnings, fixed = TRUE)))
+
+  # Insufficient valid objects: 2 conditions where 1 fails
+  so_2fail <- tryCatch(
+    SeuratObject::JoinLayers(merge(so_ctrl, so_one)),
+    error = function(e) merge(so_ctrl, so_one)
+  )
+  err_insuff <- tryCatch(
+    run_cellchat_by_condition(so_2fail, "condition", "celltype", "human", seed = 1L, nboot = 5L),
+    error = function(e) e
+  )
+  expect_s3_class(err_insuff, "cellchat_engine_error")
+  expect_identical(cellchat_engine_error_state(err_insuff), "insufficient_objects")
+
+  # All no_interactions
+  toy_genes <- c("TGFB1", "TGFBR1", "TGFBR2", "CD74", "APP", "MIF", "CD44", paste0("G", 1:30))
+  toy_mat <- matrix(rpois(length(toy_genes) * 120L, 3), nrow = length(toy_genes),
+                    dimnames = list(toy_genes, paste0("t", seq_len(120L))))
+  so_toy <- SeuratObject::CreateSeuratObject(
+    counts = toy_mat,
+    meta.data = data.frame(
+      condition = rep(c("c1", "c2"), each = 60L),
+      celltype = rep(c("A", "B", "C"), length.out = 120L),
+      row.names = colnames(toy_mat),
+      stringsAsFactors = FALSE
+    )
+  )
+  so_toy <- Seurat::NormalizeData(so_toy, verbose = FALSE)
+  err_noint <- tryCatch(
+    run_cellchat_by_condition(so_toy, "condition", "celltype", "human", seed = 1L, nboot = 5L),
+    error = function(e) e
+  )
+  expect_s3_class(err_noint, "cellchat_engine_error")
+  expect_identical(cellchat_engine_error_state(err_noint), "no_interactions")
+
+  # Population mismatch warning across valid conditions (A/B/C vs A/B)
+  so_ab <- .mk_so("ab", "stim", cells = 180L, groups = c("A", "B"))
+  so_mismatch <- tryCatch(
+    SeuratObject::JoinLayers(merge(so_ctrl, so_ab)),
+    error = function(e) merge(so_ctrl, so_ab)
+  )
+  res_mm <- run_cellchat_by_condition(
+    so_mismatch,
+    condition_col = "condition",
+    group_by = "celltype",
+    species = "human",
+    seed = 1L,
+    nboot = 5L
+  )
+  expect_false(isTRUE(res_mm$populations_consistent))
+  expect_identical(res_mm$population_sets$ctrl, c("A", "B", "C"))
+  expect_identical(res_mm$population_sets$stim, c("A", "B"))
+  expect_true(any(grepl("identity_mismatch", res_mm$warnings, fixed = TRUE)))
 })

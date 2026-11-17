@@ -590,3 +590,94 @@ test_that("W1.2 : registre CC-2 renommage et suppression (btn_ccc_rename / btn_c
     expect_identical(names(srv$communication_ccc_registry), "Run 2 (12:05)")
   })
 })
+
+test_that("W1.2 : UI et serveur par condition (Sweep 1B, warnings persistants, validation)", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCC_UI_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src, 'selectInput(ns("comm_engine_condition_col")', fixed = TRUE)
+  expect_match(src, 'actionButton(ns("comm_compute_by_condition")', fixed = TRUE)
+  expect_match(src, 'uiOutput(ns("ccc_comp_warnings_ui"))', fixed = TRUE)
+  expect_match(src, "Flux d'information par voie (@netP$prob — équivalent rankNet)", fixed = TRUE)
+  expect_match(src, "Matrice de similarité des réseaux (opt-in TS_CCC_SIMILARITY=1)", fixed = TRUE)
+  expect_match(src, "Lancer CellChat par condition (CC-2)", fixed = TRUE)
+
+  mod_env <- new.env(parent = globalenv())
+  for (helper_f in c("tools/pkg_skeleton/R/defaults.R",
+                     "tools/pkg_skeleton/R/error_state.R",
+                     "tools/pkg_skeleton/R/validation.R",
+                     "tools/pkg_skeleton/R/datatable.R",
+                     "tools/pkg_skeleton/R/sc_communication.R",
+                     "tools/pkg_skeleton/R/sc_communication_input.R",
+                     "tools/pkg_skeleton/R/sc_communication_engine.R")) {
+    sys.source(file.path(ts_project_root(), helper_f), envir = mod_env)
+  }
+  for (subf in c("mod_sc_communication_spatial.R",
+                 "mod_sc_communication_trajectory.R",
+                 "mod_sc_communication_velocity.R",
+                 "mod_sc_communication_perturbation.R",
+                 "mod_sc_communication.R")) {
+    sys.source(file.path(ts_project_root(), "modules", "sc", subf),
+               envir = mod_env)
+  }
+
+  old_sn <- get0("showNotification", envir = globalenv(), inherits = FALSE)
+  assign("showNotification", function(...) invisible(NULL), envir = globalenv())
+  on.exit({
+    if (is.null(old_sn)) {
+      if (exists("showNotification", envir = globalenv(), inherits = FALSE)) {
+        rm("showNotification", envir = globalenv())
+      }
+    } else {
+      assign("showNotification", old_sn, envir = globalenv())
+    }
+  }, add = TRUE)
+
+  skip_if_not_installed("SeuratObject")
+  mat <- matrix(rpois(60L, 4), nrow = 10L, ncol = 6L,
+                dimnames = list(paste0("G", 1:10), paste0("C", 1:6)))
+  so <- SeuratObject::CreateSeuratObject(
+    counts = mat,
+    meta.data = data.frame(
+      seurat_clusters = c("0", "0", "1", "1", "0", "1"),
+      cond = c("ctrl", "ctrl", "ctrl", "stim", "stim", "stim"),
+      row.names = colnames(mat),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  gd <- shiny::reactiveValues(sc_obj = NULL, language = "fr", i18n = NULL)
+  srv <- shiny::reactiveValues()
+  shiny::testServer(mod_env$mod_sc_communication_server,
+                    args = list(global_data = gd, shared_rv = srv), {
+    # 1. ccc_comp_warnings_ui : NULL si pas de warnings, banniere border-warning sinon
+    expect_null(output$ccc_comp_warnings_ui)
+    comm_state$ccc_comparison <- list(
+      labels = c("ctrl", "stim"),
+      flow_table = data.frame(pathway = "MIF", ctrl = 1, stim = 2,
+                              rel_ctrl = 1, rel_stim = 1,
+                              stringsAsFactors = FALSE),
+      similarity = NULL,
+      warnings = c("computeNetSimilarityPairwise: sautée — opt-in TS_CCC_SIMILARITY=1")
+    )
+    session$flushReact()
+    w_ui <- output$ccc_comp_warnings_ui
+    w_html <- if (is.list(w_ui) && !is.null(w_ui$html)) as.character(w_ui$html) else as.character(w_ui)
+    expect_match(w_html, "border-warning", fixed = TRUE)
+    expect_false(grepl("alert alert-", w_html, fixed = TRUE))
+    expect_match(w_html, "TS_CCC_SIMILARITY=1", fixed = TRUE)
+
+    # 2. comm_compute_by_condition avec colonne de condition manquante : erreur tracee
+    #    SANS effacer les runs existants du registre CC-2
+    gd$sc_obj <- so
+    session$flushReact()
+    reg_keep <- list("Run 1 (12:00)" = list(label = "Run 1 (12:00)", object = list(a = 1)))
+    comm_state$ccc_registry <- reg_keep
+    srv$communication_ccc_registry <- reg_keep
+    session$setInputs(comm_identity_column = "seurat_clusters",
+                      comm_engine_condition_col = "",
+                      comm_engine_species = "human")
+    session$setInputs(comm_compute_by_condition = 1L)
+    expect_match(output$comm_status, "Erreur calcul CellChat par condition", fixed = TRUE)
+    expect_identical(names(comm_state$ccc_registry), "Run 1 (12:00)")
+  })
+})

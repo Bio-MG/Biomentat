@@ -189,3 +189,59 @@ test_that("CC-2 UI : jumelles drawer + onglet Comparaison + serveur épinglés",
   expect_true(grepl("result$cellchat_object <- ccc_object", eng_src, fixed = TRUE))
   expect_true(grepl("run_ccc_comparison <- function", eng_src, fixed = TRUE))
 })
+
+test_that("W1.2 intégration : run_cellchat_by_condition -> run_ccc_comparison sur Seurat fusionné", {
+  skip_if_not(cellchat_engine_available(), "CellChat absent (dependance GitHub)")
+  skip_if_not_installed("Seurat")
+  skip_if_not_installed("SeuratObject")
+
+  set.seed(20261117)
+  cc_env <- new.env(parent = emptyenv())
+  utils::data(list = "CellChatDB.human", package = "CellChat", envir = cc_env)
+  cc_db <- get("CellChatDB.human", envir = cc_env)
+  cc_pw <- c("TGFb", "MIF", "MHC-I", "MHC-II", "GALECTIN", "CD99",
+             "ANNEXIN", "VISFATIN", "COMPLEMENT", "CXCL")
+  cc_sel <- cc_db$interaction[cc_db$interaction$pathway_name %in% cc_pw,
+                              c("ligand", "receptor")]
+  genes <- sort(unique(c(cc_sel$ligand, cc_sel$receptor)))
+  genes <- genes[nzchar(genes)]
+  feats <- c(genes, paste0("FILL", seq_len(60L)))
+  lig <- intersect(cc_sel$ligand, feats)
+  rec <- intersect(cc_sel$receptor, feats)
+
+  .mk_cond <- function(tag, cond_val) {
+    cells <- 240L
+    grp <- rep(c("A", "B", "C"), length.out = cells)
+    mat <- matrix(rpois(length(feats) * cells, 2), nrow = length(feats),
+                  dimnames = list(feats, paste0(tag, "_", seq_len(cells))))
+    iA <- which(grp == "A"); iB <- which(grp == "B")
+    mat[lig, iA] <- mat[lig, iA] + rpois(length(lig) * length(iA), 25)
+    mat[rec, iB] <- mat[rec, iB] + rpois(length(rec) * length(iB), 25)
+    so <- SeuratObject::CreateSeuratObject(
+      counts = mat,
+      meta.data = data.frame(
+        condition = rep(cond_val, cells),
+        celltype = grp,
+        row.names = colnames(mat),
+        stringsAsFactors = FALSE
+      )
+    )
+    Seurat::NormalizeData(so, verbose = FALSE)
+  }
+
+  so_merged <- merge(.mk_cond("c", "ctrl"), .mk_cond("s", "stim"))
+  batch <- run_cellchat_by_condition(
+    so_merged,
+    condition_col = "condition",
+    group_by = "celltype",
+    species = "human",
+    seed = 1L,
+    nboot = 5L
+  )
+  expect_identical(batch$conditions, c("ctrl", "stim"))
+  objs <- lapply(batch$results, `[[`, "cellchat_object")
+  cmp <- run_ccc_comparison(objs, labels = batch$conditions)
+  expect_true(is.data.frame(cmp$flow_table))
+  expect_true(all(c("pathway", "ctrl", "stim", "rel_ctrl", "rel_stim") %in%
+                    colnames(cmp$flow_table)))
+})

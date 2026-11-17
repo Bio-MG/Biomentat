@@ -13848,6 +13848,58 @@
     {
       "fr": "%d run(s) retiré(s) du registre.",
       "en": "%d run(s) removed from the registry."
+    },
+    {
+      "fr": "Colonne de condition (CellChat par condition)",
+      "en": "Condition column (CellChat by condition)"
+    },
+    {
+      "fr": "Optionnel : sélectionnez une colonne de condition (≥ 2 modalités) pour calculer un objet CellChat par condition et alimenter la comparaison CC-2.",
+      "en": "Optional: select a condition column (≥ 2 levels) to compute one CellChat object per condition and populate CC-2 comparison."
+    },
+    {
+      "fr": "Lancer CellChat par condition (CC-2)",
+      "en": "Run CellChat by condition (CC-2)"
+    },
+    {
+      "fr": "Choisissez la colonne de condition pour le calcul CellChat par condition.",
+      "en": "Choose the condition column for per-condition CellChat computation."
+    },
+    {
+      "fr": "Calcul CellChat par condition en daemon — la session reste réactive pendant le calcul…",
+      "en": "Per-condition CellChat computation running in daemon — session stays responsive…"
+    },
+    {
+      "fr": "Calcul CellChat par condition en cours...",
+      "en": "Computing CellChat by condition..."
+    },
+    {
+      "fr": "Calcul CellChat par condition terminé : %d condition(s) ajoutée(s) au registre comparatif.",
+      "en": "Per-condition CellChat finished: %d condition(s) added to the comparison registry."
+    },
+    {
+      "fr": "Erreur calcul CellChat par condition :",
+      "en": "Per-condition CellChat error:"
+    },
+    {
+      "fr": "Flux d'information par voie (@netP$prob — équivalent rankNet)",
+      "en": "Pathway information flow (@netP$prob — rankNet equivalent)"
+    },
+    {
+      "fr": "Flux d'information par voie indisponible.",
+      "en": "Pathway information flow unavailable."
+    },
+    {
+      "fr": "Matrice de similarité des réseaux (opt-in TS_CCC_SIMILARITY=1)",
+      "en": "Network similarity matrix (opt-in TS_CCC_SIMILARITY=1)"
+    },
+    {
+      "fr": "Matrice de similarité désactivée par défaut (opt-in TS_CCC_SIMILARITY=1 — risque de blocage CellChat 2.2.0.9001).",
+      "en": "Similarity matrix skipped by default (opt-in TS_CCC_SIMILARITY=1 — CellChat 2.2.0.9001 hang risk)."
+    },
+    {
+      "fr": "Comparaison indisponible : au moins 2 runs CellChat (moteur) complets de cette session sont requis. Utilisez « Lancer CellChat par condition (CC-2) » sur un objet multi-conditions ou lancez le calcul sur deux objets.",
+      "en": "Comparison unavailable: at least 2 complete CellChat (engine) runs in this session are required. Use 'Run CellChat by condition (CC-2)' on a multi-condition object or run CellChat on two separate objects."
     }
   ]
 }

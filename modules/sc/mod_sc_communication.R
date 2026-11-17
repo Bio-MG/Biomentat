@@ -124,7 +124,12 @@ mod_sc_communication_ui <- function(id) {
       numericInput(ns("comm_engine_nboot"), i18n$t("Nombre de permutations"),
                    value = TS_CELLCHAT_NBOOT_DEFAULT, min = 1, step = 1, width = "100%"),
       div(class = "small text-muted mb-2",
-          i18n$t("Les p-values viennent d'une permutation : la graine est un parametre du calcul, elle est tracee dans la provenance. Plus de permutations = calcul plus long."))
+          i18n$t("Les p-values viennent d'une permutation : la graine est un parametre du calcul, elle est tracee dans la provenance. Plus de permutations = calcul plus long.")),
+      selectInput(ns("comm_engine_condition_col"),
+                  i18n$t("Colonne de condition (CellChat par condition)"),
+                  choices = character(0), selected = character(0), width = "100%"),
+      div(class = "small text-muted mb-2",
+          i18n$t("Optionnel : sélectionnez une colonne de condition (≥ 2 modalités) pour calculer un objet CellChat par condition et alimenter la comparaison CC-2."))
     ),
 
     conditionalPanel(
@@ -181,7 +186,11 @@ mod_sc_communication_ui <- function(id) {
     conditionalPanel(
       condition = "input.comm_source == 'cellchat_engine'", ns = ns,
       actionButton(ns("comm_compute"), i18n$t("Lancer le calcul CellChat"),
-                   class = "btn-primary w-100", icon = icon("cogs"))
+                   class = "btn-primary w-100", icon = icon("cogs")),
+      actionButton(ns("comm_compute_by_condition"),
+                   i18n$t("Lancer CellChat par condition (CC-2)"),
+                   class = "btn-outline-primary w-100 mt-2",
+                   icon = icon("layer-group"))
     ),
     div(class = "small text-muted mt-1", textOutput(ns("comm_status"))),
     hr(),
@@ -344,9 +353,10 @@ mod_sc_communication_output_ui <- function(id) {
                 uiOutput(ns("ccc_comp_selector_ui")),
                 actionButton(ns("btn_ccc_compare"), i18n$t("Lancer la comparaison"),
                              class = "btn-primary btn-sm m-2", icon = icon("scale-balanced")),
-                h6(i18n$t("Table rankNet — flux d'information relatif par voie"), class = "m-2 text-muted"),
+                uiOutput(ns("ccc_comp_warnings_ui")),
+                h6(i18n$t("Flux d'information par voie (@netP$prob — équivalent rankNet)"), class = "m-2 text-muted"),
                 DT::dataTableOutput(ns("ccc_comp_ranknet"), height = "auto", fill = FALSE),
-                h6(i18n$t("Matrice de similarité des réseaux (computeNetSimilarityPairwise)"), class = "m-2 text-muted"),
+                h6(i18n$t("Matrice de similarité des réseaux (opt-in TS_CCC_SIMILARITY=1)"), class = "m-2 text-muted"),
                 DT::dataTableOutput(ns("ccc_comp_similarity"), height = "auto", fill = FALSE))
       ),
       nav_menu(i18n$t("Contextes multi-modaux"),
@@ -654,6 +664,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                         selected = character(0))
       updateSelectInput(session, "comm_liana_condition_col", choices = character(0),
                         selected = character(0))
+      updateSelectInput(session, "comm_engine_condition_col", choices = character(0),
+                        selected = character(0))
       obj <- global_data$sc_obj
       if (is.null(obj)) return()
       meta_cols <- colnames(obj@meta.data)
@@ -674,6 +686,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       updateSelectInput(session, "comm_liana_sample_col", choices = meta_cols,
                         selected = character(0))
       updateSelectInput(session, "comm_liana_condition_col", choices = meta_cols,
+                        selected = character(0))
+      updateSelectInput(session, "comm_engine_condition_col", choices = meta_cols,
                         selected = character(0))
     }, ignoreInit = TRUE)
 
@@ -1305,6 +1319,47 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       showNotification(.tr("Calcul CellChat termine."), type = "message", duration = 4)
     }
 
+    .validate_cellchat_ui_common <- function() {
+      obj <- assert_seurat(global_data$sc_obj, context = "communication engine")
+      identity_col <- input$comm_identity_column
+      if (is.null(identity_col) || !nzchar(identity_col)) {
+        stop(errorCondition(
+          "Choisissez d'abord la colonne de metadonnees Seurat decrivant les identites des populations.",
+          class = c("cellchat_engine_error", "error", "condition"),
+          state = "invalid_input"
+        ))
+      }
+      if (!identity_col %in% colnames(obj@meta.data)) {
+        stop(errorCondition(
+          sprintf("Colonne d'identites absente : %s.", identity_col),
+          class = c("cellchat_engine_error", "error", "condition"),
+          state = "invalid_input"
+        ))
+      }
+      species <- input$comm_engine_species
+      if (is.null(species) || !nzchar(species)) {
+        stop(errorCondition(
+          paste0("Choisissez l'espece : la base ligand-recepteur en ",
+                 "decoule et ne se devine pas a partir des donnees."),
+          class = c("cellchat_engine_error", "error", "condition"),
+          state = "invalid_input"
+        ))
+      }
+      if (!cellchat_engine_available()) {
+        stop(errorCondition(
+          paste0(
+            "Le package 'CellChat' n'est pas installe : le calcul dans ",
+            "l'application est impossible. Il est distribue uniquement sur ",
+            "GitHub — remotes::install_github(\"jinworks/CellChat\"). L'import ",
+            "de resultats externes reste disponible sans cette dependance."
+          ),
+          class = c("cellchat_engine_error", "error", "condition"),
+          state = "missing_dependency"
+        ))
+      }
+      list(obj = obj, identity_col = identity_col, species = species)
+    }
+
     # ── CC-5 : calcul CellChat DANS l'application (Path B) ──────────────────
     # Meme depot, memes vues, memes exports que l'import : le resultat du
     # moteur EST un resultat canonique (regle des deux voies). Aucune vue ni
@@ -1314,49 +1369,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       # garde de ré-entrée (P1-6b) : un calcul déjà en vol ne relance pas
       if (!is.null(cellchat_task) && identical(cellchat_task$status(), "running")) return(invisible())
       tryCatch({
-        obj <- assert_seurat(global_data$sc_obj, context = "communication engine")
-
-        identity_col <- input$comm_identity_column
-        if (is.null(identity_col) || !nzchar(identity_col)) {
-          stop(errorCondition(
-            "Choisissez d'abord la colonne de metadonnees Seurat decrivant les identites des populations.",
-            class = c("cellchat_engine_error", "error", "condition"),
-            state = "invalid_input"
-          ))
-        }
-        if (!identity_col %in% colnames(obj@meta.data)) {
-          stop(errorCondition(
-            sprintf("Colonne d'identites absente : %s.", identity_col),
-            class = c("cellchat_engine_error", "error", "condition"),
-            state = "invalid_input"
-          ))
-        }
-
-        species <- input$comm_engine_species
-        if (is.null(species) || !nzchar(species)) {
-          stop(errorCondition(
-            paste0("Choisissez l'espece : la base ligand-recepteur en ",
-                   "decoule et ne se devine pas a partir des donnees."),
-            class = c("cellchat_engine_error", "error", "condition"),
-            state = "invalid_input"
-          ))
-        }
-
-        # Dependance PARESSeUSE : l'absence de CellChat est un etat PREVU. On
-        # garde la main sur le texte (avec le remede) plutot que de laisser
-        # l'erreur du moteur arriver telle quelle dans la notification.
-        if (!cellchat_engine_available()) {
-          stop(errorCondition(
-            paste0(
-              "Le package 'CellChat' n'est pas installe : le calcul dans ",
-              "l'application est impossible. Il est distribue uniquement sur ",
-              "GitHub — remotes::install_github(\"jinworks/CellChat\"). L'import ",
-              "de resultats externes reste disponible sans cette dependance."
-            ),
-            class = c("cellchat_engine_error", "error", "condition"),
-            state = "missing_dependency"
-          ))
-        }
+        common <- .validate_cellchat_ui_common()
+        obj <- common$obj
+        identity_col <- common$identity_col
+        species <- common$species
 
         cc_input <- build_cellchat_input(obj, group_by = identity_col,
                                          species = species)
@@ -1456,6 +1472,201 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
             paste0(detail, " [etat : ", stt, "]")
           comm_status_rv(paste(.tr("Erreur calcul communication :"), detail))
           showNotification(paste(.tr("Erreur calcul communication :"), detail),
+                           type = "error", duration = 10)
+        }
+      })
+    }
+
+    # ── CC-2 (W1.2) : CellChat par condition sur objet Seurat fusionne ──────
+    # Meme architecture ExtendedTask + mirai + repli synchrone trace que
+    # cellchat_task ; la signature de .apply_cellchat_result reste figee.
+    cellchat_batch_task <- if (!is.null(ext_task_cls_cellchat) && requireNamespace("mirai", quietly = TRUE)) {
+      t <- ext_task_cls_cellchat$new(function(obj, args, deps = cellchat_core_deps) {
+        ensure_app_daemons()
+        mirai::mirai(
+          {
+            for (f in deps) if (file.exists(f)) source(f, local = FALSE)
+            run_cellchat_by_condition(
+              obj,
+              condition_col = args$condition_col,
+              group_by = args$identity_col,
+              species = args$species,
+              seed = args$seed,
+              nboot = args$nboot,
+              on_progress = function(msg) NULL
+            )
+          },
+          obj = obj, args = args, deps = cellchat_core_deps,
+          .timeout = TS_SC_AUTO_PIPELINE_TIMEOUT_S * 1000L
+        )
+      })
+      tryCatch(bslib::bind_task_button(t, "comm_compute_by_condition"), error = function(e) NULL)
+      t
+    } else {
+      NULL
+    }
+
+    .apply_cellchat_batch_result <- function(batch_res, obj) {
+      if (!is.list(batch_res) || is.null(batch_res$conditions) ||
+          length(batch_res$conditions) < 1L || is.null(batch_res$results)) {
+        stop(errorCondition(
+          "Resultat CellChat par condition invalide ou vide.",
+          class = c("cellchat_engine_error", "error", "condition"),
+          state = "engine_failure"
+        ))
+      }
+      prev_reg <- comm_state$ccc_registry %||% list()
+      first_cond <- batch_res$conditions[[1L]]
+      first_res <- batch_res$results[[first_cond]]
+      .apply_cellchat_result(first_res, obj)
+
+      reg <- prev_reg
+      for (cond in batch_res$conditions) {
+        res_c <- batch_res$results[[cond]]
+        if (is.null(res_c) || is.null(res_c$cellchat_object)) next
+        base_lbl <- sprintf("%s — %s voies", cond,
+                            format(res_c$engine$n_pathways_significant %||% 0L))
+        lbl <- base_lbl
+        suffix <- 2L
+        while (lbl %in% names(reg)) {
+          lbl <- sprintf("%s (%d)", base_lbl, suffix)
+          suffix <- suffix + 1L
+        }
+        reg[[lbl]] <- list(label = lbl, object = res_c$cellchat_object, ts = Sys.time())
+      }
+      comm_state$ccc_registry <- reg
+      shared_rv$communication_ccc_registry <- reg
+
+      if (length(batch_res$conditions) > 1L) {
+        for (cond in batch_res$conditions[-1L]) {
+          res_c <- batch_res$results[[cond]]
+          if (!is.null(res_c) && !is.null(res_c$provenance)) {
+            provenance_append(
+              shared_rv,
+              res_c$provenance
+            )
+          }
+        }
+      }
+
+      msg <- sprintf(
+        .tr("Calcul CellChat par condition terminé : %d condition(s) ajoutée(s) au registre comparatif."),
+        length(batch_res$conditions)
+      )
+      comm_status_rv(paste0("[", .status_label(first_res$status), "]\n", msg))
+      if (length(batch_res$warnings) > 0L) {
+        showNotification(paste(batch_res$warnings, collapse = " | "),
+                         type = "warning", duration = 8)
+      }
+      invisible(batch_res)
+    }
+
+    observeEvent(input$comm_compute_by_condition, {
+      req(global_data$sc_obj)
+      if (!is.null(cellchat_batch_task) && identical(cellchat_batch_task$status(), "running")) {
+        return(invisible())
+      }
+      tryCatch({
+        common <- .validate_cellchat_ui_common()
+        obj <- common$obj
+        identity_col <- common$identity_col
+        species <- common$species
+
+        condition_col <- input$comm_engine_condition_col
+        if (is.null(condition_col) || !nzchar(condition_col)) {
+          stop(errorCondition(
+            .tr("Choisissez la colonne de condition pour le calcul CellChat par condition."),
+            class = c("cellchat_engine_error", "error", "condition"),
+            state = "invalid_input"
+          ))
+        }
+        if (!condition_col %in% colnames(obj@meta.data)) {
+          stop(errorCondition(
+            sprintf("Colonne de condition absente : %s.", condition_col),
+            class = c("cellchat_engine_error", "error", "condition"),
+            state = "invalid_input"
+          ))
+        }
+        cond_vals <- trimws(as.character(obj@meta.data[[condition_col]]))
+        cond_vals <- unique(cond_vals[!is.na(cond_vals) & nzchar(cond_vals)])
+        if (length(cond_vals) < 2L) {
+          stop(errorCondition(
+            sprintf("Au moins 2 conditions distinctes non vides requises dans '%s' (trouve : %d).",
+                    condition_col, length(cond_vals)),
+            class = c("cellchat_engine_error", "error", "condition"),
+            state = "invalid_input"
+          ))
+        }
+
+        args <- list(
+          condition_col = condition_col,
+          identity_col = identity_col,
+          species = species,
+          seed = as.integer(input$comm_engine_seed),
+          nboot = as.integer(input$comm_engine_nboot)
+        )
+
+        pool_ok <- isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE))
+        if (!is.null(cellchat_batch_task) && pool_ok) {
+          showNotification(
+            .tr("Calcul CellChat par condition en daemon — la session reste réactive pendant le calcul…"),
+            type = "message", duration = 6
+          )
+          cellchat_batch_task$invoke(obj, args)
+        } else {
+          showNotification(
+            .tr("Worker mirai indisponible — exécution synchrone : l'interface restera bloquée pendant le calcul."),
+            type = "warning", duration = 8
+          )
+          batch_res <- withProgress(
+            message = .tr("Calcul CellChat par condition en cours..."),
+            value = 0,
+            {
+              run_cellchat_by_condition(
+                obj,
+                condition_col = args$condition_col,
+                group_by = args$identity_col,
+                species = args$species,
+                seed = args$seed,
+                nboot = args$nboot,
+                on_progress = function(msg) incProgress(0, detail = msg)
+              )
+            }
+          )
+          .apply_cellchat_batch_result(batch_res, obj)
+        }
+      }, error = function(e) {
+        st <- cellchat_engine_error_state(e)
+        detail <- if (is.na(st)) conditionMessage(e) else
+          paste0(conditionMessage(e), " [etat : ", st, "]")
+        comm_status_rv(paste(.tr("Erreur calcul CellChat par condition :"), detail))
+        showNotification(paste(.tr("Erreur calcul CellChat par condition :"), detail),
+                         type = "error", duration = 10)
+      })
+    })
+
+    if (!is.null(cellchat_batch_task)) {
+      observeEvent(cellchat_batch_task$status(), {
+        st <- cellchat_batch_task$status()
+        if (identical(st, "success")) {
+          tryCatch({
+            .apply_cellchat_batch_result(cellchat_batch_task$result(), global_data$sc_obj)
+          }, error = function(e) {
+            stt <- cellchat_engine_error_state(e)
+            detail <- if (is.na(stt)) conditionMessage(e) else
+              paste0(conditionMessage(e), " [etat : ", stt, "]")
+            comm_status_rv(paste(.tr("Erreur calcul CellChat par condition :"), detail))
+            showNotification(paste(.tr("Erreur calcul CellChat par condition :"), detail),
+                             type = "error", duration = 10)
+          })
+        } else if (identical(st, "error")) {
+          err <- tryCatch(cellchat_batch_task$result(), error = function(e) e)
+          detail <- if (inherits(err, "error")) conditionMessage(err) else as.character(err)
+          stt <- if (inherits(err, "error")) cellchat_engine_error_state(err) else NA_character_
+          detail <- if (is.na(stt)) detail else
+            paste0(detail, " [etat : ", stt, "]")
+          comm_status_rv(paste(.tr("Erreur calcul CellChat par condition :"), detail))
+          showNotification(paste(.tr("Erreur calcul CellChat par condition :"), detail),
                            type = "error", duration = 10)
         }
       })
@@ -1777,13 +1988,13 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       reg <- comm_state$ccc_registry
       if (is.null(reg) || length(reg) == 0L) {
         return(div(class = "small text-muted m-2",
-                   .tr("Comparaison indisponible : au moins 2 runs CellChat (moteur) complets de cette session sont requis. Lancez le calcul CellChat sur deux objets (ex: contrôle puis traité) — chaque run complet alimente le registre.")))
+                   .tr("Comparaison indisponible : au moins 2 runs CellChat (moteur) complets de cette session sont requis. Utilisez « Lancer CellChat par condition (CC-2) » sur un objet multi-conditions ou lancez le calcul sur deux objets.")))
       }
       lbls <- names(reg)
       tagList(
         if (length(reg) < 2L) {
           div(class = "small text-muted mb-2",
-              .tr("Comparaison indisponible : au moins 2 runs CellChat (moteur) complets de cette session sont requis. Lancez le calcul CellChat sur deux objets (ex: contrôle puis traité) — chaque run complet alimente le registre."))
+              .tr("Comparaison indisponible : au moins 2 runs CellChat (moteur) complets de cette session sont requis. Utilisez « Lancer CellChat par condition (CC-2) » sur un objet multi-conditions ou lancez le calcul sur deux objets."))
         },
         shiny::selectInput(session$ns("ccc_comp_pick"),
                            .tr("Objets à comparer (≥ 2)"),
@@ -1875,10 +2086,19 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       showNotification(.tr("Comparaison CCC terminée."), type = "message", duration = 4)
     })
 
+    output$ccc_comp_warnings_ui <- renderUI({
+      cmp <- comm_state$ccc_comparison
+      if (is.null(cmp) || length(cmp$warnings) == 0L) return(NULL)
+      div(
+        class = "border border-warning rounded bg-warning-subtle text-dark small p-2 m-2",
+        tags$ul(class = "mb-0", lapply(cmp$warnings, tags$li))
+      )
+    })
+
     output$ccc_comp_ranknet <- DT::renderDataTable({
       cmp <- comm_state$ccc_comparison
       if (is.null(cmp) || is.null(cmp$flow_table)) {
-        return(ts_datatable(data.frame(info = .tr("Table rankNet indisponible.")),
+        return(ts_datatable(data.frame(info = .tr("Flux d'information par voie indisponible.")),
                             page_length = 10L,
                             filename_base = "sc_comm_ccc_ranknet", filter = "none"))
       }
@@ -1898,7 +2118,13 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     output$ccc_comp_similarity <- DT::renderDataTable({
       cmp <- comm_state$ccc_comparison
       if (is.null(cmp) || is.null(cmp$similarity)) {
-        return(ts_datatable(data.frame(info = .tr("Matrice de similarité indisponible (calcul refusé ou non exécuté).")),
+        msg <- if (!is.null(cmp) &&
+                   !identical(Sys.getenv("TS_CCC_SIMILARITY", unset = "0"), "1")) {
+          .tr("Matrice de similarité désactivée par défaut (opt-in TS_CCC_SIMILARITY=1 — risque de blocage CellChat 2.2.0.9001).")
+        } else {
+          .tr("Matrice de similarité indisponible (calcul refusé ou non exécuté).")
+        }
+        return(ts_datatable(data.frame(info = msg),
                             page_length = 10L,
                             filename_base = "sc_comm_ccc_similarity", filter = "none"))
       }

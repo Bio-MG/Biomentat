@@ -860,6 +860,373 @@ run_ccc_comparison <- function(object.list, labels = names(object.list)) {
   )
 }
 
+.cellchat_validate_scalar_text <- function(value, name, state = "invalid_input") {
+  if (is.null(value) || length(value) != 1L || !is.atomic(value) ||
+      is.na(value) || !nzchar(trimws(as.character(value)))) {
+    .cellchat_engine_stop(
+      state,
+      sprintf("%s doit etre une chaine non vide.", name)
+    )
+  }
+  trimws(as.character(value))
+}
+
+.cellchat_validate_int <- function(value, name, min_val = NULL,
+                                   state = "invalid_parameters") {
+  if (is.null(value) || length(value) != 1L || !is.numeric(value) ||
+      is.na(value) || !is.finite(value) || value != floor(value)) {
+    .cellchat_engine_stop(
+      state,
+      sprintf("%s doit etre un entier fini explicite.", name)
+    )
+  }
+  out <- suppressWarnings(as.integer(value))
+  if (length(out) != 1L || is.na(out) ||
+      (!is.null(min_val) && out < as.integer(min_val))) {
+    .cellchat_engine_stop(
+      state,
+      sprintf("%s invalide (entier%s attendu).", name,
+              if (is.null(min_val)) "" else sprintf(" >= %d", as.integer(min_val)))
+    )
+  }
+  out
+}
+
+.cellchat_join_subset_layers <- function(sub_obj, assay_use, layer_use) {
+  assay_obj <- tryCatch(sub_obj[[assay_use]], error = function(e) NULL)
+  if (!is.null(assay_obj) && inherits(assay_obj, "Assay5")) {
+    layers_now <- tryCatch(SeuratObject::Layers(assay_obj),
+                           error = function(e) character(0))
+    split_pat <- paste0("^", layer_use, "\\.")
+    if (!layer_use %in% layers_now || length(grep(split_pat, layers_now)) > 0L) {
+      joined <- tryCatch(SeuratObject::JoinLayers(assay_obj),
+                         error = function(e) NULL)
+      if (!is.null(joined)) {
+        sub_obj[[assay_use]] <- joined
+      }
+    }
+  }
+  sub_obj
+}
+
+.cellchat_validate_condition_params <- function(obj, condition_col, group_by,
+                                                species, seed, nboot,
+                                                assay, layer,
+                                                min_cells_per_group,
+                                                on_progress) {
+  if (!is.null(on_progress) && !is.function(on_progress)) {
+    .cellchat_engine_stop(
+      "invalid_parameters",
+      "on_progress doit etre une fonction ou NULL."
+    )
+  }
+  if (is.null(obj) || !inherits(obj, "Seurat")) {
+    .cellchat_engine_stop("invalid_input", "un objet Seurat est requis.")
+  }
+  meta <- tryCatch(as.data.frame(obj[[]], stringsAsFactors = FALSE),
+                   error = function(e) NULL)
+  if (!is.data.frame(meta) || ncol(obj) < 1L || nrow(meta) != ncol(obj)) {
+    .cellchat_engine_stop(
+      "invalid_input",
+      "les metadonnees de l'objet Seurat sont absentes ou desalignees."
+    )
+  }
+  condition_col <- .cellchat_validate_scalar_text(condition_col, "condition_col")
+  group_by <- .cellchat_validate_scalar_text(group_by, "group_by")
+  if (!condition_col %in% colnames(meta)) {
+    .cellchat_engine_stop(
+      "invalid_input",
+      sprintf("Colonne de condition '%s' absente des metadonnees.", condition_col)
+    )
+  }
+  if (!group_by %in% colnames(meta)) {
+    .cellchat_engine_stop(
+      "invalid_input",
+      sprintf("Colonne d'identites '%s' absente des metadonnees.", group_by)
+    )
+  }
+  cond_vec <- trimws(as.character(meta[[condition_col]]))
+  is_blank <- is.na(cond_vec) | !nzchar(cond_vec)
+  blank_warnings <- character(0)
+  if (any(is_blank)) {
+    w_msg <- sprintf(
+      "%d cellule(s) sans valeur dans la colonne de condition '%s' : ignoree(s).",
+      sum(is_blank), condition_col
+    )
+    warning(w_msg, call. = FALSE)
+    blank_warnings <- w_msg
+  }
+  conditions <- unique(cond_vec[!is_blank])
+  if (length(conditions) < 2L) {
+    .cellchat_engine_stop(
+      "invalid_input",
+      sprintf(
+        "Au moins 2 conditions distinctes non vides requises dans '%s' (trouve : %d).",
+        condition_col, length(conditions)
+      )
+    )
+  }
+  if (!exists("cellchat_database_for_species", mode = "function") ||
+      !exists("build_cellchat_input", mode = "function")) {
+    .cellchat_engine_stop(
+      "invalid_input",
+      "R/sc/sc_communication_input.R doit etre source avant ce fichier."
+    )
+  }
+  tryCatch(
+    cellchat_database_for_species(species),
+    error = function(e) .cellchat_engine_stop("invalid_input", conditionMessage(e))
+  )
+  assay_use <- if (is.null(assay)) {
+    tryCatch(SeuratObject::DefaultAssay(obj), error = function(e) NULL)
+  } else {
+    .cellchat_validate_scalar_text(assay, "assay")
+  }
+  avail_assays <- tryCatch(names(obj@assays), error = function(e) character(0))
+  if (is.null(assay_use) || !nzchar(trimws(as.character(assay_use))) ||
+      !assay_use %in% avail_assays) {
+    .cellchat_engine_stop(
+      "invalid_input",
+      sprintf("Assay '%s' absent de l'objet Seurat.", assay_use %||% "NULL")
+    )
+  }
+  layer_use <- .cellchat_validate_scalar_text(layer, "layer")
+  seed_int <- .cellchat_validate_int(seed, "seed")
+  nboot_int <- .cellchat_validate_int(nboot, "nboot", min_val = 1L)
+  min_cells_int <- .cellchat_validate_int(
+    min_cells_per_group, "min_cells_per_group", min_val = 1L
+  )
+  list(
+    obj = obj,
+    condition_col = condition_col,
+    group_by = group_by,
+    cond_vec = cond_vec,
+    is_blank = is_blank,
+    conditions = conditions,
+    species = tolower(trimws(as.character(species))),
+    assay = as.character(assay_use),
+    layer = layer_use,
+    seed = seed_int,
+    nboot = nboot_int,
+    min_cells_per_group = min_cells_int,
+    blank_warnings = blank_warnings
+  )
+}
+
+#' Executer CellChat par condition sur un objet Seurat fusionne (CC-2)
+#'
+#' Decoupe l'objet Seurat selon `condition_col`, prepare chaque sous-ensemble
+#' via `build_cellchat_input()` (avec jointure defensive des couches Assay5
+#' splittees) et delegue l'inference a `run_cellchat()`. Les echecs locaux
+#' d'une condition sont consignes dans `manifest` et `warnings` tant qu'au
+#' moins 2 conditions produisent un `cellchat_object` retenu.
+#'
+#' @param obj Objet Seurat multi-conditions.
+#' @param condition_col Colonne de metadonnees definissant les conditions (>= 2).
+#' @param group_by Colonne de metadonnees definissant les populations cellulaires.
+#' @param species "human" ou "mouse".
+#' @param seed Graine entiere explicite.
+#' @param nboot Nombre de permutations (>= 1).
+#' @param assay Assay Seurat (defaut : DefaultAssay(obj)).
+#' @param layer Couche d'expression (defaut : "data").
+#' @param min_cells_per_group Nombre minimal de cellules par groupe (>= 1).
+#' @param on_progress Callback optionnel `function(msg)`.
+#' @return Liste contenant `conditions`, `results`, `manifest`, `warnings`,
+#'   `condition_col`, `group_by`, `species`, `seed`, `nboot`,
+#'   `populations_consistent`, `population_sets`.
+run_cellchat_by_condition <- function(obj,
+                                      condition_col,
+                                      group_by,
+                                      species,
+                                      seed,
+                                      nboot = TS_CELLCHAT_NBOOT_DEFAULT,
+                                      assay = NULL,
+                                      layer = "data",
+                                      min_cells_per_group = 1L,
+                                      on_progress = NULL) {
+  if (missing(obj) || missing(condition_col) || missing(group_by) ||
+      missing(species) || missing(seed)) {
+    .cellchat_engine_stop(
+      "invalid_parameters",
+      "obj, condition_col, group_by, species et seed sont requis."
+    )
+  }
+  v <- .cellchat_validate_condition_params(
+    obj = obj, condition_col = condition_col, group_by = group_by,
+    species = species, seed = seed, nboot = nboot,
+    assay = assay, layer = layer,
+    min_cells_per_group = min_cells_per_group,
+    on_progress = on_progress
+  )
+  .cellchat_engine_require()
+
+  .progress <- function(msg) {
+    if (is.function(on_progress)) {
+      tryCatch(
+        on_progress(msg),
+        error = function(e) {
+          ts_log_swallow("sc_communication_engine.condition_progress", e)
+          NULL
+        }
+      )
+    }
+  }
+
+  results_all <- list()
+  manifest_rows <- vector("list", length(v$conditions))
+  warnings_all <- v$blank_warnings
+
+  for (i in seq_along(v$conditions)) {
+    cond <- v$conditions[[i]]
+    .progress(sprintf("[%d/%d] Condition '%s' : preparation des donnees",
+                      i, length(v$conditions), cond))
+    cells <- which(!v$is_blank & v$cond_vec == cond)
+    attempt <- tryCatch({
+      sub_obj <- v$obj[, cells, drop = FALSE]
+      sub_obj <- .cellchat_join_subset_layers(sub_obj, v$assay, v$layer)
+      cc_input <- build_cellchat_input(
+        sub_obj,
+        group_by = v$group_by,
+        assay = v$assay,
+        layer = v$layer,
+        species = v$species,
+        min_cells_per_group = v$min_cells_per_group
+      )
+      res <- run_cellchat(
+        cc_input,
+        seed = v$seed,
+        nboot = v$nboot,
+        seurat_obj = sub_obj,
+        on_progress = function(msg) {
+          .progress(sprintf("[%d/%d] %s : %s", i, length(v$conditions), cond, msg))
+        }
+      )
+      res$condition <- cond
+      res$engine$condition <- cond
+      res$provenance$condition <- cond
+      res$provenance$parameters$condition <- cond
+      res$provenance$parameters$condition_col <- v$condition_col
+      list(ok = TRUE, res = res, n_cells_used = as.integer(cc_input$qc$n_cells_used %||% length(cells)))
+    }, error = function(e) {
+      list(ok = FALSE, err = e)
+    })
+
+    if (isTRUE(attempt$ok)) {
+      res <- attempt$res
+      has_obj <- !is.null(res$cellchat_object)
+      if (!has_obj) {
+        warnings_all <- c(
+          warnings_all,
+          sprintf(
+            "Condition '%s' : calcul termine mais objet CellChat non retenu (netP/centralite absent) — exclue du registre comparatif.",
+            cond
+          )
+        )
+      }
+      if (length(res$warnings) > 0L) {
+        warnings_all <- c(warnings_all, paste0(cond, " : ", res$warnings))
+      }
+      results_all[[cond]] <- res
+      manifest_rows[[i]] <- data.frame(
+        condition = cond,
+        status = "valid",
+        n_cells_input = as.integer(length(cells)),
+        n_cells_used = as.integer(attempt$n_cells_used),
+        n_populations = as.integer(res$engine$n_populations %||% NA_integer_),
+        n_interactions = as.integer(res$engine$n_interactions %||% NA_integer_),
+        n_pathways_significant = as.integer(res$engine$n_pathways_significant %||% NA_integer_),
+        has_cellchat_object = isTRUE(has_obj),
+        error_state = NA_character_,
+        error_message = NA_character_,
+        stringsAsFactors = FALSE
+      )
+    } else {
+      err <- attempt$err
+      st <- ts_error_state(err)
+      if (is.na(st) || !nzchar(st)) st <- "engine_failure"
+      msg <- conditionMessage(err)
+      warnings_all <- c(warnings_all,
+                        sprintf("Condition '%s' echouee [%s] : %s", cond, st, msg))
+      manifest_rows[[i]] <- data.frame(
+        condition = cond,
+        status = "failed",
+        n_cells_input = as.integer(length(cells)),
+        n_cells_used = NA_integer_,
+        n_populations = NA_integer_,
+        n_interactions = NA_integer_,
+        n_pathways_significant = NA_integer_,
+        has_cellchat_object = FALSE,
+        error_state = as.character(st),
+        error_message = as.character(msg),
+        stringsAsFactors = FALSE
+      )
+    }
+    rm(list = intersect(c("sub_obj", "cc_input", "res", "attempt"), ls()),
+       envir = environment())
+  }
+
+  manifest_df <- do.call(rbind, manifest_rows)
+  rownames(manifest_df) <- NULL
+
+  valid_results <- results_all[vapply(results_all, function(r) {
+    !is.null(r) && !is.null(r$cellchat_object)
+  }, logical(1))]
+
+  if (length(valid_results) < 2L) {
+    failed_rows <- manifest_df[manifest_df$status == "failed", , drop = FALSE]
+    if (length(valid_results) == 0L && nrow(failed_rows) > 0L &&
+        all(failed_rows$error_state == "no_interactions")) {
+      .cellchat_engine_stop(
+        "no_interactions",
+        sprintf(
+          "CellChat par condition : aucune interaction detectee dans aucune des %d condition(s). Details : %s",
+          length(v$conditions), paste(unique(warnings_all), collapse = " | ")
+        )
+      )
+    }
+    .cellchat_engine_stop(
+      "insufficient_objects",
+      sprintf(
+        "CellChat par condition : %d condition(s) valide(s) avec objet retenu sur %d (au moins 2 requises pour comparer). Details : %s",
+        length(valid_results), length(v$conditions),
+        paste(unique(warnings_all), collapse = " | ")
+      )
+    )
+  }
+
+  pop_sets <- lapply(valid_results, function(r) {
+    sort(unique(as.character(methods::slot(r$cellchat_object, "meta")$labels)))
+  })
+  names(pop_sets) <- names(valid_results)
+  sigs <- vapply(pop_sets, paste, character(1), collapse = ",")
+  populations_consistent <- length(unique(sigs)) == 1L
+  if (!populations_consistent) {
+    warnings_all <- c(
+      warnings_all,
+      sprintf(
+        "Populations cellulaires differentes entre conditions (%s) : run_ccc_comparison() levera 'identity_mismatch' tant que liftCellChat n'est pas supporte (CC-3).",
+        paste(sprintf("%s=[%s]", names(pop_sets),
+                      vapply(pop_sets, paste, character(1), collapse = ",")),
+              collapse = " ; ")
+      )
+    )
+  }
+
+  list(
+    conditions             = names(valid_results),
+    results                = valid_results,
+    manifest               = manifest_df,
+    warnings               = unique(warnings_all),
+    condition_col          = v$condition_col,
+    group_by               = v$group_by,
+    species                = v$species,
+    seed                   = v$seed,
+    nboot                  = v$nboot,
+    populations_consistent = populations_consistent,
+    population_sets        = pop_sets
+  )
+}
+
 #' Resume court du run (affichage UI / rapport)
 cellchat_engine_summary <- function(result) {
   eng <- result$engine %||% list()
@@ -891,7 +1258,8 @@ cellchat_engine_public_api <- function() {
     "cellchat_engine_states", "cellchat_engine_summary",
     # CC-2 (O34/D3, re-basé 2026-11-09) : comparaison inter-conditions.
     "run_ccc_comparison",
-    "run_cellchat"
+    "run_cellchat",
+    "run_cellchat_by_condition"
   )
 }
 
