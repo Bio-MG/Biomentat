@@ -1322,6 +1322,8 @@ mod_sc_server <- function(id, global_data) {
                "#%3$s > .accordion-item:not([data-value='%4$s']) { display: none; }"),
         ns("acc_workflow"), info$group, ns(info$acc), step)))
     })
+    # P1-ÉTAPE 3 (MEASURÉ boot34c) : sortie de suspension (cf. mod_spatial.R).
+    outputOptions(output, "wf_mode_style", suspendWhenHidden = FALSE)
 
     # P1-ÉTAPE 3 : en SPÉCIALISÉ, l'onglet de résultats ouvre son groupe et
     # son étape (miroir de la synchro bidirectionnelle spatiale — sc_sync_

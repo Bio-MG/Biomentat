@@ -575,6 +575,11 @@ mod_spatial_server <- function(id, global_data) {
         "#%1$s > .accordion-item:not([data-value='%2$s']) { display: none; }",
         ns("steps"), open)))
     })
+    # P1-ÉTAPE 3 (MEASURÉ boot34c) : l'output reste EN RECALCULING pour
+    # toujours quand suspendu au boot (pane Spatial caché à la création de
+    # session) — il ne s'exécute JAMAIS, même après resume. Sortie de
+    # suspension : le style doit vivre à CHAQUE flush.
+    outputOptions(output, "wf_mode_style", suspendWhenHidden = FALSE)
 
     output$active_step_breadcrumb_ui <- renderUI({
       global_data$language

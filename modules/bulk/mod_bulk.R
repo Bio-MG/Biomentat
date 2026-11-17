@@ -320,6 +320,8 @@ mod_bulk_server <- function(id, global_data) {
         "#%1$s > .accordion-item:not([data-value='%2$s']) { display: none; }",
         session$ns("acc_bulk"), open)))
     })
+    # P1-ÉTAPE 3 (MEASURÉ boot34c) : sortie de suspension (cf. mod_spatial.R).
+    outputOptions(output, "wf_mode_style", suspendWhenHidden = FALSE)
 
     output$bulk_step_sync_bar <- renderUI({
       global_data$language
