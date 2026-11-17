@@ -66,7 +66,7 @@ mod_spatial_multi_controls_ui <- function(id) {
       numericInput(ns("npcs"), i18n$t("Composantes PCA"), 30, min = 5, max = 50, step = 5),
       numericInput(ns("resolution"), i18n$t("Resolution (Leiden)"), 0.8, min = 0.1, max = 3, step = 0.1),
       checkboxInput(ns("use_harmony"), i18n$t("Correction de batch (Harmony, groupe = echantillon)"), value = TRUE),
-      div(class = "alert alert-light", style = "font-size:0.72rem;",
+      div(class = "alert alert-light", style = "font-size:0.8rem;",
           i18n$t("Recommande pour comparer des echantillons/conditions differents. Desactivez si vos coupes proviennent du meme tissu/bloc (ex: 2 moities d'un meme cerveau) — comportement de la vignette Seurat par defaut, sans correction.")),
 
       bslib::input_task_button(ns("btn_integrate"), i18n$t("Lancer l'integration"),
@@ -81,7 +81,7 @@ mod_spatial_multi_controls_ui <- function(id) {
                    selected = "ncount"),
 
       hr(),
-      div(class = "alert alert-light", style = "font-size:0.72rem;",
+      div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("bar-chart-steps"),
           i18n$t(" Le test de composition differentielle (onglet \"Composition differentielle\") se recalcule automatiquement des qu'une integration conjointe est disponible ci-dessus — aucun bouton separe."))
   )

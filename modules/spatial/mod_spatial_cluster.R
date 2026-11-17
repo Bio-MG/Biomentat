@@ -62,7 +62,7 @@ mod_spatial_cluster_controls_ui <- function(id) {
       numericInput(ns("npcs"), i18n$t("Composantes PCA"), 30, min = 5, max = 100, step = 5),
       numericInput(ns("resolution"), i18n$t("Resolution (Leiden)"), 0.8, min = 0.1, max = 3, step = 0.1),
 
-      div(class = "alert alert-light", style = "font-size:0.75rem;",
+      div(class = "alert alert-light", style = "font-size:0.8rem;",
           i18n$t("Le clustering s'applique aux elements passant les seuils QC (onglet 1) — reimportez ou ajustez les seuils si necessaire.")),
 
       bslib::input_task_button(ns("btn_cluster"), i18n$t("Lancer Clustering Spatial"),
@@ -71,7 +71,7 @@ mod_spatial_cluster_controls_ui <- function(id) {
 
       hr(),
       h6(i18n$t("Marqueurs differentiels par cluster"), style = "font-weight:bold;"),
-      div(class = "alert alert-light", style = "font-size:0.75rem;",
+      div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("cpu"),
           " ",
           i18n$t("Equivalent de FindMarkers() applique a chaque cluster contre tous les autres (test de Wilcoxon) — necessite un clustering deja calcule ci-dessus. Asynchrone (mirai), sur les memes elements (QC-filtres) que le clustering.")),

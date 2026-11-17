@@ -61,7 +61,7 @@ mod_spatial_niche_controls_ui <- function(id) {
       # — contenu MOT POUR MOT inchangé, seul le conteneur change ; aucun
       # id de contrôle touché (garde-fou allowlist drive respecté).
       tags$details(
-        tags$summary(style = "cursor:pointer; font-size:0.75rem; color:#666;",
+        tags$summary(style = "cursor:pointer; font-size:0.8rem; color:#666;",
                      bsicons::bs_icon("info-circle"), " ",
                      i18n$t("Qu'est-ce qu'une niche spatiale ?")),
         div(class = "alert alert-light mt-1", style = "font-size:0.8rem;",
@@ -77,7 +77,7 @@ mod_spatial_niche_controls_ui <- function(id) {
       verbatimTextOutput(ns("niche_progress_text"), placeholder = TRUE),
 
       hr(),
-      div(class = "alert alert-light", style = "font-size:0.72rem;",
+      div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("eye"),
           " ",
           i18n$t("Une fois calculees, les niches sont disponibles comme option de coloration (\"Niche spatiale\") dans l'onglet \"4. Visualisation\" — fond histologique, export PNG/CSV et ROI fonctionnent avec, exactement comme pour un cluster.")),
@@ -85,10 +85,10 @@ mod_spatial_niche_controls_ui <- function(id) {
       hr(),
       h6(i18n$t("Enrichissement de voisinage (co-occurrence)"), style = "font-weight:bold;"),
       tags$details(
-        tags$summary(style = "cursor:pointer; font-size:0.72rem; color:#666;",
+        tags$summary(style = "cursor:pointer; font-size:0.8rem; color:#666;",
                      bsicons::bs_icon("hash"), " ",
                      i18n$t("Comment lire le z-score de co-occurrence ?")),
-        div(class = "alert alert-light mt-1", style = "font-size:0.75rem;",
+        div(class = "alert alert-light mt-1", style = "font-size:0.8rem;",
             i18n$t("Pour chaque paire de labels (cluster, type cellulaire dominant ou niche), compare le nombre de voisinages observes a une enveloppe nulle obtenue en melangeant les labels au hasard -- un z-score positif signale une co-occurrence spatiale (ex: interface tumeur/stroma), negatif une exclusion mutuelle."))),
       uiOutput(ns("group_by_enrich_ui")),
       numericInput(ns("k_neighbors_enrich"), i18n$t("Voisins spatiaux (k)"), 30, min = 5, max = 200, step = 5),
@@ -100,21 +100,21 @@ mod_spatial_niche_controls_ui <- function(id) {
       hr(),
       h6(i18n$t("Ripley's K (etiquetage aleatoire)"), style = "font-weight:bold;"),
       tags$details(
-        tags$summary(style = "cursor:pointer; font-size:0.72rem; color:#666;",
+        tags$summary(style = "cursor:pointer; font-size:0.8rem; color:#666;",
                      bsicons::bs_icon("bullseye"), " ",
                      i18n$t("Qu'est-ce que l'etiquetage aleatoire (Ripley's K) ?")),
-        div(class = "alert alert-light mt-1", style = "font-size:0.75rem;",
+        div(class = "alert alert-light mt-1", style = "font-size:0.8rem;",
             i18n$t("Pour UN label cible, compare son agregation spatiale observee a une enveloppe nulle obtenue en reshufflant QUI porte ce label parmi les memes positions (etiquetage aleatoire) -- adaptation usuelle en transcriptomique spatiale (le tissu entier est la fenetre, pas un processus de Poisson) plutot qu'un vrai test CSR/spatstat."))),
       uiOutput(ns("group_by_ripley_ui")),
       uiOutput(ns("ripley_target_ui")),
       tags$details(
-        tags$summary(style = "cursor:pointer; font-size:0.72rem; color:#666;",
+        tags$summary(style = "cursor:pointer; font-size:0.8rem; color:#666;",
                      i18n$t("Options avancees (permutations / sous-echantillonnage RAM)")),
         div(class = "mt-2",
             numericInput(ns("n_perm_ripley"), i18n$t("Permutations (enveloppe nulle)"), 199, min = 49, max = 499, step = 10),
             numericInput(ns("max_total_ripley"), i18n$t("Max elements consideres (RAM)"), 6000, min = 1000, max = 20000, step = 500),
             numericInput(ns("max_target_ripley"), i18n$t("Max points cible testes"), 2000, min = 500, max = 10000, step = 500),
-            div(class = "text-muted", style = "font-size:0.68rem;",
+            div(class = "text-muted", style = "font-size:0.8rem;",
                 i18n$t("Le calcul des distances par paires est en O(n^2) -- ces plafonds evitent une explosion RAM/temps sur un cluster tres majoritaire ou un gros jeu de donnees. Le titre du graphe indique si un sous-echantillonnage a ete applique."))
         )
       ),
@@ -324,7 +324,7 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
       global_data$language  # i18n: re-render on language switch
       choices <- .group_choices()
       if (length(choices) == 0) {
-        return(div(class = "alert alert-warning", style = "font-size:0.75rem;",
+        return(div(class = "alert alert-warning", style = "font-size:0.8rem;",
                     .tr("Calculez d'abord un clustering, une deconvolution ou des niches pour disposer d'un regroupement categoriel.")))
       }
       selectInput(ns("group_by_enrich"), .tr("Regroupement"), choices = choices)
@@ -416,7 +416,7 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
       global_data$language  # i18n: re-render on language switch
       choices <- .group_choices()
       if (length(choices) == 0) {
-        return(div(class = "alert alert-warning", style = "font-size:0.75rem;",
+        return(div(class = "alert alert-warning", style = "font-size:0.8rem;",
                     .tr("Calculez d'abord un clustering, une deconvolution ou des niches pour disposer d'un regroupement categoriel.")))
       }
       selectInput(ns("group_by_ripley"), .tr("Regroupement"), choices = choices)

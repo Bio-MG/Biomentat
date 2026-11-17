@@ -42,7 +42,7 @@ mod_spatial_deconv_controls_ui <- function(id) {
 
       conditionalPanel(
         condition = sprintf("input['%s'] == 'rctd'", ns("mode")),
-        div(class = "alert alert-light", style = "font-size:0.75rem;",
+        div(class = "alert alert-light", style = "font-size:0.8rem;",
             bsicons::bs_icon("info-circle"),
             " ",
             i18n$t(paste0("RCTD modelise l'expression par une loi de Poisson resolue par ",
@@ -51,7 +51,7 @@ mod_spatial_deconv_controls_ui <- function(id) {
                           "type dans la reference."))),
         numericInput(ns("rctd_n_hvg"), i18n$t("Max genes (HVG) avant RCTD (RAM/vitesse)"),
                      DECONV_DEFAULT_N_HVG, min = 200, max = 8000, step = 100),
-        div(class = "text-muted", style = "font-size:0.68rem;",
+        div(class = "text-muted", style = "font-size:0.8rem;",
             i18n$t(paste0("Reduit le panel aux genes les plus variables avant de construire ",
                           "la reference/le puck spatial — borne la RAM sur un gros Visium HD/",
                           "Slide-seq sans perdre les types cellulaires (Backlog #6).")))
@@ -68,7 +68,7 @@ mod_spatial_deconv_controls_ui <- function(id) {
           condition = sprintf("input['%s'] == 'sct'", ns("lt_norm_method")),
           numericInput(ns("lt_ncells"), i18n$t("Cellules pour l'apprentissage SCTransform (ncells)"),
                        3000, min = 500, max = 10000, step = 500),
-          div(class = "alert alert-warning", style = "font-size:0.75rem;",
+          div(class = "alert alert-warning", style = "font-size:0.8rem;",
               bsicons::bs_icon("exclamation-triangle"),
               " ",
               i18n$t(paste0("Installez 'glmGamPoi' (BiocManager::install('glmGamPoi')) pour accelerer, ",
@@ -84,7 +84,7 @@ mod_spatial_deconv_controls_ui <- function(id) {
 
       hr(),
       h6(i18n$t("Aperçu de la reference (UMAP/PCA)"), style = "font-weight:bold;"),
-      div(class = "alert alert-light", style = "font-size:0.75rem;",
+      div(class = "alert alert-light", style = "font-size:0.8rem;",
           i18n$t(paste0("Verifiez visuellement que les types cellulaires sont bien separes avant de lancer ",
                         "RCTD/Label Transfer ci-dessous."))),
       selectInput(ns("ref_viz_reduction"), i18n$t("Reduction"), choices = c("UMAP" = "umap", "PCA" = "pca"), selected = "umap"),

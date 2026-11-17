@@ -367,17 +367,17 @@ mod_spatial_qc_controls_ui <- function(id) {
                    selected = "moransi"),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'markvariogram'", ns("svg_method")),
-        div(class = "alert alert-warning", style = "font-size:0.72rem;",
+        div(class = "alert alert-warning", style = "font-size:0.8rem;",
             bsicons::bs_icon("exclamation-triangle"),
             " ",
             i18n$t("Methode alternative -- le nom des colonnes internes de Seurat differe de 'moransi' et n'est pas garanti stable entre versions ; le score affiche est detecte de facon defensive (generique) plutot que suppose. En cas de doute, preferez l'indice de Moran (par defaut)."))
       ),
 
       tags$details(
-        tags$summary(style = "cursor:pointer; font-size:0.75rem; color:#666;",
+        tags$summary(style = "cursor:pointer; font-size:0.8rem; color:#666;",
                      i18n$t("Options avancees (gros jeux de donnees : Visium HD, Slide-seq)")),
         div(class = "mt-2",
-            div(class = "text-muted", style = "font-size:0.7rem;",
+            div(class = "text-muted", style = "font-size:0.8rem;",
                 i18n$t("Regroupe les elements sur une grille avant le calcul de Moran's I — accelere fortement le calcul sur un puck Slide-seq (dizaines de milliers de beads) ou du Visium HD, au prix d'une resolution spatiale legerement reduite. Laissez a 0 pour le comportement standard (calcul point-par-point, adapte a Visium classique).")),
             numericInput(ns("moran_x_cuts"), i18n$t("x.cuts (0 = desactive)"), 0, min = 0, max = 500, step = 10),
             numericInput(ns("moran_y_cuts"), i18n$t("y.cuts (0 = desactive)"), 0, min = 0, max = 500, step = 10)
@@ -390,7 +390,7 @@ mod_spatial_qc_controls_ui <- function(id) {
 
       hr(),
       h6(i18n$t("Hotspots locaux (Getis-Ord Gi*)"), style = "font-weight:bold;"),
-      div(class = "alert alert-light", style = "font-size:0.78rem;",
+      div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("fire"),
           " ",
           i18n$t("Detecte les regions ou une metrique est significativement plus ELEVEE (hotspot, rouge) ou plus BASSE (coldspot, bleu) que la moyenne globale, en tenant compte du voisinage spatial. Calcul rapide (pas de permutation), synchrone -- pas de barre de progression necessaire.")),
@@ -445,7 +445,7 @@ mod_spatial_qc_ui <- function(id) {
                      plotOutput(ns("qc_scatter_plot"), height = "480px"))),
 
       nav_panel(i18n$t("Gènes spatialement variables (Moran's I)"), value = "moran",
-                div(class = "alert alert-light", style = "font-size:0.78rem;",
+                div(class = "alert alert-light", style = "font-size:0.8rem;",
                     i18n$t("Grille des genes les plus spatialement structures (rang Moran's I) — necessite l'autocorrelation ci-contre (calculee au moins une fois).")),
                 fluidRow(
                   column(6, numericInput(ns("n_top_svg"), i18n$t("Nombre de genes (grille)"), 9, min = 4, max = 30, step = 1)),
@@ -1026,7 +1026,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       req(shared_rv$hotspot_result)
       n_hot <- sum(shared_rv$hotspot_result$hotspot == "Hotspot (chaud)")
       n_cold <- sum(shared_rv$hotspot_result$hotspot == "Coldspot (froid)")
-      div(class = "alert alert-success", style = "font-size:0.75rem;",
+      div(class = "alert alert-success", style = "font-size:0.8rem;",
           .t_fmt(.tr("{hot} hotspot(s), {cold} coldspot(s) sur {total} elements (p < 0.05)."),
                  hot = n_hot, cold = n_cold, total = nrow(shared_rv$hotspot_result)))
     })

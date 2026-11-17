@@ -131,7 +131,7 @@ mod_spatial_ui <- function(id) {
       # SPATIAL-SIDEBAR-A : enrobés pour sticky (cf. tags$style ci-dessus).
       div(class = "ts-spatial-side-head",
           # LOT 1 (V1.x UX): paradigm badge — async auto-pipeline (mirai).
-          div(class = "alert alert-success", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
+          div(class = "alert alert-success", style = "font-size:0.8rem;padding:5px;margin-bottom:5px;",
               icon("bolt"), " ", i18n$t("Pipeline automatique asynchrone (mirai) — le statut reste visible ci-dessous")),
           uiOutput(ns("active_dataset_ui")),
           uiOutput(ns("daemon_status_ui")),
@@ -345,7 +345,7 @@ mod_spatial_server <- function(id, global_data) {
         tags$span(class = paste("small", css_class), style = "align-self:center;", label),
         if (identical(status, "degraded")) {
           tags$details(
-            style = "font-size:0.68rem; margin-top:2px;",
+            style = "font-size:0.8rem; margin-top:2px;",
             tags$summary("Diagnostic"),
             tags$pre(style = "white-space:pre-wrap; max-width:260px;",
                      tryCatch(spatial_daemon_diagnostics_text(), error = function(e) conditionMessage(e)))

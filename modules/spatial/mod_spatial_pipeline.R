@@ -241,7 +241,7 @@ mod_spatial_pipeline_ui <- function(id) {
                    class = "btn-primary w-100", icon = icon("bolt")),
       div(class = "mt-2", uiOutput(ns("pipeline_status_ui"))),
       div(class = "bg-light border rounded p-2 mt-2",
-          style = "max-height:220px; overflow-y:auto; white-space:pre-wrap; font-family:monospace; font-size:0.72rem;",
+          style = "max-height:220px; overflow-y:auto; white-space:pre-wrap; font-family:monospace; font-size:0.8rem;",
           verbatimTextOutput(ns("pipeline_log_text"), placeholder = TRUE))
   )
 }
@@ -433,12 +433,12 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
     output$deconv_status_ui <- renderUI({
       global_data$language  # re-render on language switch
       if (!is.null(global_data$spatial_reference)) {
-        div(class = "alert alert-success", style = "font-size:0.75rem;",
+        div(class = "alert alert-success", style = "font-size:0.8rem;",
             bsicons::bs_icon("check-circle"),
             sprintf(.tr(" Reference partagee disponible (%s cellules) \u2014 utilisable par RCTD/Label Transfer."),
                     format(global_data$spatial_reference$n_cells %||% 0, big.mark = ",")))
       } else {
-        div(class = "alert alert-warning", style = "font-size:0.75rem;",
+        div(class = "alert alert-warning", style = "font-size:0.8rem;",
             bsicons::bs_icon("exclamation-triangle"),
             .tr(" Aucune reference partagee (onglet Import > Spatial) \u2014 RCTD/Label Transfer seront ignores meme si selectionnes ; choisissez \"Sans reference (LDA)\" ou \"Aucune\"."))
       }

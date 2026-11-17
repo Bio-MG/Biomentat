@@ -170,7 +170,7 @@
     global_data$language  # i18n: re-render on language switch
     req(global_data$spatial_reference)
     info <- global_data$spatial_reference
-    div(class = "alert alert-success", style = "font-size:0.75rem;",
+    div(class = "alert alert-success", style = "font-size:0.8rem;",
         bsicons::bs_icon("check-circle"),
         sprintf(.tr("%s cellules x %s genes (colonne '%s', backend: %s)%s — preparee le %s."),
                 format(info$n_cells, big.mark = ","), format(info$n_genes, big.mark = ","),
@@ -185,33 +185,33 @@
     global_data$language  # i18n: re-render on language switch
     st <- ref_state$status
     badge <- switch(st,
-      "empty" = div(class = "alert alert-light", style = "font-size:0.75rem; margin-bottom:4px;",
+      "empty" = div(class = "alert alert-light", style = "font-size:0.8rem; margin-bottom:4px;",
                     bsicons::bs_icon("circle"), " ", .tr("Aucune reference chargee.")),
-      "loading" = div(class = "alert alert-info", style = "font-size:0.75rem; margin-bottom:4px;",
+      "loading" = div(class = "alert alert-info", style = "font-size:0.8rem; margin-bottom:4px;",
                       bsicons::bs_icon("hourglass-split"), " ", .tr("Chargement de la reference en cours...")),
-      "error" = div(class = "alert alert-danger", style = "font-size:0.75rem; margin-bottom:4px;",
+      "error" = div(class = "alert alert-danger", style = "font-size:0.8rem; margin-bottom:4px;",
                     bsicons::bs_icon("x-circle"), " ",
                     .t_fmt(.tr("Erreur : {msg}"),
                            msg = ref_state$message %||% .tr("cause inconnue"))),
       "loaded" = if (reference_is_ready()) {
-        div(class = "alert alert-success", style = "font-size:0.75rem; margin-bottom:4px;",
+        div(class = "alert alert-success", style = "font-size:0.8rem; margin-bottom:4px;",
             bsicons::bs_icon("check-circle"), " ",
             .t_fmt(.tr("Reference chargee : {cells} cellules x {genes} genes."),
                    cells = ncol(ref_state$obj), genes = nrow(ref_state$obj)))
       } else {
-        div(class = "alert alert-warning", style = "font-size:0.75rem; margin-bottom:4px;",
+        div(class = "alert alert-warning", style = "font-size:0.8rem; margin-bottom:4px;",
             bsicons::bs_icon("exclamation-triangle"), " ",
             .tr(paste0("Reference chargee — choisissez la colonne 'type cellulaire' puis cliquez ",
                        "'1) Preparer la reference (disque)' ci-dessous.")))
       },
-      div(class = "alert alert-light", style = "font-size:0.75rem;", .tr("Statut inconnu."))
+      div(class = "alert alert-light", style = "font-size:0.8rem;", .tr("Statut inconnu."))
     )
     tagList(
       badge,
       if (identical(st, "error") || identical(st, "loaded")) {
         actionLink(ns("btn_recheck_ref"),
                    paste("\U1F504", .tr("Revérifier la reference (sans re-upload)")),
-                   style = "font-size:0.72rem;")
+                   style = "font-size:0.8rem;")
       }
     )
   })
@@ -314,7 +314,7 @@
 
     tagList(
       # Bandeau récapitulatif — AU-DESSUS du sélecteur (§4c).
-      div(class = "alert alert-light", style = "font-size:0.72rem; margin-bottom:4px;",
+      div(class = "alert alert-light", style = "font-size:0.8rem; margin-bottom:4px;",
           bsicons::bs_icon("info-circle"), " ",
           .t_fmt(.tr("Colonnes evaluees : {n_ok} compatibles, {n_warn} a verifier, {n_danger} incompatibles."),
                  n_ok = n_ok, n_warn = n_warn, n_danger = n_danger)),
@@ -334,7 +334,7 @@
       if (sel_is_warn || sel_is_danger) {
         tagList(
           div(class = if (sel_is_danger) "alert alert-danger" else "alert alert-warning",
-              style = "font-size:0.72rem; margin-bottom:4px;",
+              style = "font-size:0.8rem; margin-bottom:4px;",
               bsicons::bs_icon(if (sel_is_danger) "x-octagon" else "exclamation-triangle"), " ",
               .tr(verdicts[[sel]]$reason_key)),
           checkboxInput(ns(confirm_id),
@@ -344,11 +344,11 @@
       },
       # Blocage §7-2 — jamais silencieux : l'état désactivé est expliqué (§7-4).
       if (block_prepare) {
-        div(class = "alert alert-danger", style = "font-size:0.72rem; margin-bottom:4px;",
+        div(class = "alert alert-danger", style = "font-size:0.8rem; margin-bottom:4px;",
             bsicons::bs_icon("x-circle"), " ",
             .tr("Preparation bloquee : cochez la case de confirmation pour utiliser cette colonne."))
       },
-      div(class = "text-muted", style = "font-size:0.68rem;",
+      div(class = "text-muted", style = "font-size:0.8rem;",
           .tr("Colonnes triees : compatibles en premier (vert), a verifier (orange), incompatibles (rouge) — chaque colonne est evaluee par le composant de validation des metadonnees.")),
       checkboxInput(ns("merge_rare_types"),
                     .tr("Fusionner/exclure les types rares (< 25 cellules)"),
@@ -359,7 +359,7 @@
         condition = sprintf("input['%s']", ns("cap_ref_cells")),
         numericInput(ns("max_cells_per_type"), .tr("Max cellules par type"), 500, min = 25, max = 5000, step = 25)
       ),
-      div(class = "text-muted", style = "font-size:0.68rem;",
+      div(class = "text-muted", style = "font-size:0.8rem;",
           .tr(paste0("Sous-echantillonnage stratifie (chaque type garde sa proportion relative) — ",
                      "accelere nettement RCTD/Label Transfer sur une grosse reference (ex: >50k cellules)."))),
       btn,
@@ -410,11 +410,11 @@
     global_data$language  # i18n: re-render on language switch
     info <- ref_artifact_info()
     if (is.null(info)) {
-      return(div(class = "alert alert-light", style = "font-size:0.72rem; margin-top:4px;",
+      return(div(class = "alert alert-light", style = "font-size:0.8rem; margin-top:4px;",
                  bsicons::bs_icon("info-circle"), " ",
                  .tr("Reference pas encore preparee pour la deconvolution — cliquez ci-dessus.")))
     }
-    div(class = "alert alert-success", style = "font-size:0.72rem; margin-top:4px;",
+    div(class = "alert alert-success", style = "font-size:0.8rem; margin-top:4px;",
         bsicons::bs_icon("check-circle"), " ",
         .t_fmt(.tr("Pret : {cells} cellules x {genes} genes (backend: {backend}).{extra}"),
                cells = info$n_cells, genes = info$n_genes, backend = info$backend,
@@ -443,7 +443,7 @@
     rare <- tab[tab$Effectif < RCTD_CELL_MIN_INSTANCE, , drop = FALSE]
     tagList(
       if (nrow(rare) > 0) {
-        div(class = "alert alert-warning", style = "font-size:0.72rem;",
+        div(class = "alert alert-warning", style = "font-size:0.8rem;",
             bsicons::bs_icon("exclamation-triangle"), " ",
             .t_fmt(.tr("{n_types} type(s) sous {min_cells} cellules : {types_list}."),
                    n_types = nrow(rare), min_cells = RCTD_CELL_MIN_INSTANCE,

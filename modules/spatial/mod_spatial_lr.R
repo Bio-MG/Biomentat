@@ -25,7 +25,7 @@ mod_spatial_lr_ui <- function(id) {
            bsicons::bs_icon("info-circle"),
            i18n$t(" Evalue la co-occurrence spatiale de paires ligand-récepteur basée sur l'expression gène dans les voisinages (BANKSY-lite). ")),
 
-      div(class = "alert alert-warning", style = "font-size:0.7rem;",
+      div(class = "alert alert-warning", style = "font-size:0.8rem;",
            bsicons::bs_icon("exclamation-triangle"),
            i18n$t(" Les paires LR doivent etre fournies via lr_pairs_db (fichier CSV ). Le telechargement auto de CellTalkDB/CellPhoneDB n'est pas supporte dans ce module.")),
 
@@ -38,13 +38,13 @@ mod_spatial_lr_ui <- function(id) {
 
       hr(),
       h6(i18n$t("Top paires par spot"), style = "font-weight:bold;"),
-      div(class = "alert alert-light", style = "font-size:0.75rem;",
+      div(class = "alert alert-light", style = "font-size:0.8rem;",
            bsicons::bs_icon("list-ul"),
            i18n$t("Tableau des top-20 paires ligand-récepteur par spot, trie par |z_score|.")),
 
       hr(),
       h6(i18n$t("Carte spatiale de signification"), style = "font-weight:bold;"),
-      div(class = "alert alert-light", style = "font-size:0.75rem;",
+      div(class = "alert alert-light", style = "font-size:0.8rem;",
            bsicons::bs_icon("map-marker-alt"),
            i18n$t("Visualisez la distribution des paires selectionnees (Hotspot/Coldspot/NS) sur le fond histologique.")),
 
@@ -54,13 +54,13 @@ mod_spatial_lr_ui <- function(id) {
 
     navset_card_underline(
       nav_panel(i18n$t("Top paires par spot"),
-                div(class = "alert alert-light small mb-2", style = "font-size:0.65rem;",
+                div(class = "alert alert-light small mb-2", style = "font-size:0.8rem;",
                      i18n$t("Les paires sont triees par |z_score|. Les lignes avec NS ne sont pas considerees ")),
                 card(full_screen = TRUE, plotOutput(ns("lr_spot_map"), height = "500px")),
                 DT::DTOutput(ns("lr_pairs_table"))),
 
       nav_panel(i18n$t("Repartition des paires par spot"),
-                div(class = "alert alert-light small mb-2", style = "font-size:0.68rem;",
+                div(class = "alert alert-light small mb-2", style = "font-size:0.8rem;",
                      i18n$t("Distribution des Hotspot/Coldspot/NS par spot.")),
                 card(full_screen = TRUE, plotOutput(ns("lr_signif_hist"), height = "450px")))
     )

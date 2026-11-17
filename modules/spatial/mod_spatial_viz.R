@@ -99,9 +99,9 @@ mod_spatial_viz_controls_ui <- function(id) {
                         selected = "default"),
             conditionalPanel(
               condition = sprintf("input['%s'] == 'manual'", ns("color_palette")),
-              div(class = "text-muted", style = "font-size:0.7rem;", i18n$t("Degrade (metriques continues : QC, gene, Z-score...)")),
+              div(class = "text-muted", style = "font-size:0.8rem;", i18n$t("Degrade (metriques continues : QC, gene, Z-score...)")),
               manual_color_picker_ui(ns, c("grad_low", "grad_high"), c(i18n$t("Bas"), i18n$t("Haut")), c("#2166AC", "#B2182B")),
-              div(class = "text-muted mt-2", style = "font-size:0.7rem;", i18n$t("Couleurs discretes (categorie affichee actuellement) :")),
+              div(class = "text-muted mt-2", style = "font-size:0.8rem;", i18n$t("Couleurs discretes (categorie affichee actuellement) :")),
               uiOutput(ns("manual_discrete_picker_ui"))
             ),
             checkboxInput(ns("fixed_scale"), i18n$t("Echelle de couleur fixe (point fixe min/max)"), value = FALSE),
@@ -144,7 +144,7 @@ mod_spatial_viz_controls_ui <- function(id) {
         ),
         div(
           class = "text-muted mb-2",
-          style = "font-size: 0.7rem;",
+          style = "font-size: 0.8rem;",
           i18n$t("Meme moteur que le bouton Export PNG ci-dessous. Decochez pour donner toute la largeur a la carte interactive Plotly.")
         ),
         downloadButton(ns("dl_png"), i18n$t("Export PNG"), class = "btn-sm btn-outline-secondary w-100 mb-1"),
@@ -164,7 +164,7 @@ mod_spatial_viz_controls_ui <- function(id) {
       div(
         class = "border-top pt-2 mt-2",
         h6(i18n$t("Ajouter au rapport"), style = "font-weight: bold; font-size:0.85rem;"),
-        div(class = "text-muted", style = "font-size:0.7rem;",
+        div(class = "text-muted", style = "font-size:0.8rem;",
             i18n$t("Sauvegarde la vue ACTUELLE (coloration + parametres ci-dessus) pour l'onglet \"7. Export & Rapport\", meme apres avoir change d'onglet ou d'echantillon.")),
         textInput(ns("viz_save_label"), NULL, placeholder = .tr_plain("Nom de cette vue (ex: Cluster 3 vs stroma)")),
         actionButton(ns("btn_add_to_report"), paste("\u2795", i18n$t("Ajouter cette vue au rapport")),
@@ -186,7 +186,7 @@ mod_spatial_viz_controls_ui <- function(id) {
       # roi_context_plot); PNG export, BANKSY clustering and Moran's I are
       # never affected by it.
       tags$details(
-        tags$summary(style = "cursor:pointer; font-size:0.72rem; color:#888;",
+        tags$summary(style = "cursor:pointer; font-size:0.8rem; color:#888;",
                      i18n$t("Outil de diagnostic (debug) : orientation Plotly")),
         div(class = "mt-1",
             checkboxInput(
@@ -194,7 +194,7 @@ mod_spatial_viz_controls_ui <- function(id) {
               i18n$t("Corriger l'orientation dans la vue interactive Plotly"),
               value = FALSE
             ),
-            div(class = "text-muted", style = "font-size:0.65rem;",
+            div(class = "text-muted", style = "font-size:0.8rem;",
                 i18n$t("A utiliser seulement si le fond hires choisi ci-dessus semble encore tourne. N'affecte JAMAIS l'export PNG ni le clustering/Moran."))
         )
       ),
@@ -379,7 +379,7 @@ mod_spatial_viz_ui <- function(id) {
                   
                   div(
                     class = "bg-light border rounded p-2 mb-3",
-                    style = "max-height: 110px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; font-size: 0.75rem;",
+                    style = "max-height: 110px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; font-size: 0.8rem;",
                     verbatimTextOutput(
                       ns("roi_markers_progress_text"),
                       placeholder = TRUE
@@ -617,7 +617,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           card_body(
             div(
               class = "text-muted mb-2",
-              style = "font-size: 0.72rem;",
+              style = "font-size: 0.8rem;",
               .tr("Même moteur que le bouton Export PNG. Le fond est temporairement masqué, sans crash, pendant un changement de résolution invalide.")
             ),
             plotOutput(ns("static_export_preview"), height = "calc(72vh - 65px)")
@@ -639,7 +639,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       label <- if (identical(norm_used, "SCT")) "SCTransform" else "LogNormalize"
       div(
         class = "alert alert-light",
-        style = "font-size:0.7rem;padding:2px 8px;",
+        style = "font-size:0.8rem;padding:2px 8px;",
         .t_fmt(.tr("Normalisation du sketch : {norm}"), norm = label)
       )
     })
@@ -741,7 +741,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         return(
           div(
             class = "alert alert-light",
-            style = "font-size:0.7rem;padding:2px 6px;",
+            style = "font-size:0.8rem;padding:2px 6px;",
             .tr("Image histologique indisponible.")
           )
         )
@@ -753,7 +753,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         return(
           div(
             class = "alert alert-warning",
-            style = "font-size:0.7rem;padding:2px 6px;",
+            style = "font-size:0.8rem;padding:2px 6px;",
             .tr("Le fond histologique n'a pas pu etre prepare pour cette resolution.")
           )
         )
@@ -763,7 +763,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         return(
           div(
             class = "alert alert-warning",
-            style = "font-size:0.7rem;padding:2px 6px;",
+            style = "font-size:0.8rem;padding:2px 6px;",
             .tr("Fond disponible pour l'export PNG, mais echec de l'encodage Plotly.")
           )
         )
@@ -771,7 +771,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       
       div(
         class = "text-muted",
-        style = "font-size:0.65rem;padding:2px 6px;",
+        style = "font-size:0.8rem;padding:2px 6px;",
         sprintf(
           .tr("Fond histologique OK — %s — %d x %d px — %.0f Ko"),
           ov$resolution,
@@ -911,7 +911,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           choices = c(stats::setNames("", .tr("\u2014 choisir parmi le top Moran's I \u2014")),
                      utils::head(choices, 100))
         ),
-        div(class = "text-muted", style = "font-size:0.68rem; margin-top:-8px;",
+        div(class = "text-muted", style = "font-size:0.8rem; margin-top:-8px;",
             .tr("Classes par indice de Moran decroissant (calcule onglet 1)."))
       )
     })
@@ -967,12 +967,12 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       global_data$language  # i18n: re-render on language switch
       lst <- shared_rv$saved_viz_list %||% list()
       if (length(lst) == 0) {
-        return(div(class = "text-muted", style = "font-size:0.7rem; margin-top:4px;",
+        return(div(class = "text-muted", style = "font-size:0.8rem; margin-top:4px;",
                    .tr("Aucune vue sauvegardee pour cet echantillon.")))
       }
       tagList(
         tags$ul(
-          style = "font-size:0.72rem; padding-left:0.2rem; margin-top:4px; list-style:none;",
+          style = "font-size:0.8rem; padding-left:0.2rem; margin-top:4px; list-style:none;",
           lapply(names(lst), function(nm) {
             tags$li(style = "display:flex; justify-content:space-between; align-items:center; gap:6px; padding:1px 0;",
                     tags$span(nm),
@@ -985,7 +985,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
                            "\u2715"))
           })
         ),
-        actionLink(ns("btn_clear_saved_viz"), .tr("Vider toutes les vues sauvegardees"), style = "font-size:0.7rem;")
+        actionLink(ns("btn_clear_saved_viz"), .tr("Vider toutes les vues sauvegardees"), style = "font-size:0.8rem;")
       )
     })
 
@@ -1780,7 +1780,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       
       div(
         class = "text-info style-sm mt-1",
-        style = "font-size:0.75rem;",
+        style = "font-size:0.8rem;",
         sprintf(
           .tr("\u2139\ufe0f %d cellule(s) selectionnee(s) / isolee(s) (Spatial: %s, UMAP: %s)"),
           length(hl),

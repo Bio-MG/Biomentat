@@ -40,9 +40,9 @@ mod_spatial_export_controls_ui <- function(id) {
           i18n$t("Regroupe les resultats DEJA CALCULES (QC, clustering, deconvolution, niches, statistiques spatiales avancees, cartes) pour l'echantillon actif dans une archive .zip, ou genere un script R autonome (+ contexte) pour reproduire le pipeline hors Shiny.")),
 
       div(class = "d-flex gap-2 mb-1",
-          actionLink(ns("btn_select_all"), i18n$t("Tout selectionner"), style = "font-size:0.75rem;"),
+          actionLink(ns("btn_select_all"), i18n$t("Tout selectionner"), style = "font-size:0.8rem;"),
           tags$span("\u00b7", class = "text-muted"),
-          actionLink(ns("btn_select_none"), i18n$t("Tout deselectionner"), style = "font-size:0.75rem;")),
+          actionLink(ns("btn_select_none"), i18n$t("Tout deselectionner"), style = "font-size:0.8rem;")),
       checkboxGroupInput(ns("sections"), i18n$t("Sections a inclure dans le paquet complet"),
         choices = stats::setNames(
           c("qc", "cluster", "deconv", "niche", "moran",
@@ -60,7 +60,7 @@ mod_spatial_export_controls_ui <- function(id) {
                      class = "btn-success w-100 mb-3"),
 
       hr(),
-      div(class = "alert alert-light", style = "font-size:0.75rem;",
+      div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("code-slash"),
           i18n$t("Le script reproduit UNIQUEMENT les etapes DEJA LANCEES dans l'app (QC/clustering/deconvolution RCTD/niches) avec les MEMES parametres. Necessite que le dossier BPCells reste accessible au meme chemin (voir README/commentaires inclus dans le script). Les statistiques spatiales avancees (enrichissement/hotspots/Ripley's K) ne sont PAS re-executees par ce script -- leurs resultats DEJA calcules restent disponibles en CSV dans le paquet complet ci-dessus.")),
       downloadButton(ns("dl_script"), i18n$t("\U0001F9FE Script R reproductible (.zip)"),

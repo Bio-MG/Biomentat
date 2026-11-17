@@ -62,7 +62,7 @@ mod_spatial_report_controls_ui <- function(id) {
       hr(),
       checkboxGroupInput(ns("formats"), i18n$t("Format(s) de sortie"),
                          choices = c("HTML" = "html", "PDF" = "pdf"), selected = "html"),
-      div(class = "text-muted", style = "font-size:0.7rem;",
+      div(class = "text-muted", style = "font-size:0.8rem;",
           i18n$t("PDF necessite une distribution LaTeX (ex: tinytex::install_tinytex()) sur la machine qui heberge l'app -- en son absence le rendu PDF echoue proprement avec un message clair (notification), sans bloquer un eventuel export HTML demande en parallele.")),
 
       downloadButton(ns("dl_report"), i18n$t("\U0001F4C4 Generer le rapport"), class = "btn-success w-100 mt-2"),
@@ -169,10 +169,10 @@ mod_spatial_report_server <- function(id, global_data, shared_rv) {
       global_data$language  # re-render on language switch
       n_ds <- length(global_data$spatial_datasets)
       if (n_ds < 2) {
-        return(div(class = "text-muted", style = "font-size:0.72rem; margin-bottom:6px;",
+        return(div(class = "text-muted", style = "font-size:0.8rem; margin-bottom:6px;",
                    .tr("Un seul echantillon charge -- la portee \"multi-echantillons\" sera ignoree.")))
       }
-      div(class = "text-muted", style = "font-size:0.72rem; margin-bottom:6px;",
+      div(class = "text-muted", style = "font-size:0.8rem; margin-bottom:6px;",
           .t_fmt(.tr("{n} echantillons disponibles : {names}."), n = n_ds,
                  names = paste(names(global_data$spatial_datasets), collapse = ", ")))
     })
