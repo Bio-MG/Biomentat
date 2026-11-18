@@ -362,24 +362,27 @@ if (length(top_genes) >= 2 && requireNamespace("pheatmap", quietly=TRUE)) {
 # }
 
 # \u2500\u2500 7ter. Modules avanc\u00e9s M2-M5 (GSVA, Signatures, WGCNA, Survie \u2014 optionnel) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-# D\u00e9commenter selon les analyses activ\u00e9es dans la session Biomentat :
+# D\u00e9commenter selon les analyses activ\u00e9es dans la session Biomentat
+# (autonome CRAN/Bioc ou via TranscriptoShiny::compute_pathway_scores /
+# bulk_score_signatures / bulk_wgcna_build_modules / bulk_survival_cox) :
 # if (requireNamespace("GSVA", quietly=TRUE)) {
 #   # M2 : Scoring GSVA / ssGSEA sur vst_mat
-#   # gsva_res <- bulk_run_gsva(vst_mat, gene_sets = list(MySet = head(rownames(vst_mat), 25)), method = "gsva")
-#   # write.csv(gsva_res$scores, paste0("GSVA_scores_", Sys.Date(), ".csv"))
+#   # gs <- list(MySet = head(rownames(vst_mat), 25))
+#   # gsva_res <- GSVA::gsva(GSVA::gsvaParam(vst_mat, gs))
+#   # write.csv(gsva_res, paste0("GSVA_scores_", Sys.Date(), ".csv"))
 # }
-# # M3 : Scores de signatures cur\u00e9es (mean_z / rank)
-# # sig_res <- bulk_score_signatures(vst_mat, gene_sets = list(MySig = head(rownames(vst_mat), 20)), method = "mean_z")
-# # write.csv(sig_res$scores, paste0("Signature_scores_", Sys.Date(), ".csv"))
+# # M3 : Scores de signatures cur\u00e9es (mean_z autonome sur vst_mat)
+# # sig_genes <- intersect(head(rownames(vst_mat), 20), rownames(vst_mat))
+# # sig_z <- colMeans(t(scale(t(vst_mat[sig_genes, , drop=FALSE]))), na.rm=TRUE)
 # if (requireNamespace("WGCNA", quietly=TRUE)) {
 #   # M4 : Co-expression WGCNA (top g\u00e8nes variables sur vst_mat)
-#   # wgcna_res <- bulk_run_wgcna(vst_mat, power = 6L, min_module_size = 20L)
-#   # write.csv(wgcna_res$module_colors, paste0("WGCNA_modules_", Sys.Date(), ".csv"))
+#   # net <- WGCNA::blockwiseModules(t(vst_mat), power = 6, minModuleSize = 20)
+#   # write.csv(data.frame(gene = rownames(vst_mat), module = net$colors), paste0("WGCNA_modules_", Sys.Date(), ".csv"), row.names = FALSE)
 # }
 # if (requireNamespace("survival", quietly=TRUE)) {
 #   # M5 : Analyse de survie Kaplan-Meier / Cox (requiert colonnes time, status dans metadata)
-#   # surv_res <- bulk_run_survival(metadata, time_col = "time", status_col = "status", group_col = CONDITION_COL)
-#   # print(surv_res$summary)
+#   # fit_km <- survival::survfit(stats::as.formula(paste("survival::Surv(time, status) ~", CONDITION_COL)), data = metadata)
+#   # print(summary(fit_km))
 # }
 
 # \u2500\u2500 8. Export CSV \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500

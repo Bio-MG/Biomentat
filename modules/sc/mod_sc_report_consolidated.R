@@ -250,7 +250,7 @@ mod_sc_report_consolidated_server <- function(id, global_data, shared_rv = NULL)
       content = function(file) {
         lang <- if (identical(tolower(global_data$language %||% "fr"), "en")) "en" else "fr"
         prov_src <- state_get(shared_rv, "provenance")
-        if (is.null(prov_src) && !is.null(global_data$sc_obj)) {
+        if ((is.null(prov_src) || length(prov_src) == 0L) && !is.null(global_data$sc_obj)) {
           cv <- tryCatch(.collect_and_validate(), error = function(e) NULL)
           if (!is.null(cv)) prov_src <- cv$ri$provenance_df %||% list()
         }

@@ -835,8 +835,12 @@ build_communication_multimodal_synthesis <- function(
       best_fr <- suppressWarnings(max(c(fr, fs), na.rm = TRUE))
       if (!is.finite(best_fr)) best_fr <- NA_real_
       spatial_frac[i] <- best_fr
-      ctx_spatial[i] <- isTRUE(!is.na(pp) && pp <= 0.05) ||
-        isTRUE(!is.na(best_fr) && best_fr >= min_spatial_frac)
+      if (is.na(pp) && is.na(best_fr)) {
+        ctx_spatial[i] <- NA
+      } else {
+        ctx_spatial[i] <- isTRUE(!is.na(pp) && pp <= 0.05) ||
+          isTRUE(!is.na(best_fr) && best_fr >= min_spatial_frac)
+      }
     }
   }
 

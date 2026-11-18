@@ -260,6 +260,22 @@ build_methods_draft <- function(state_or_entries,
   lang <- match.arg(lang)
   entries <- if (is.null(state_or_entries)) {
     list()
+  } else if (is.data.frame(state_or_entries)) {
+    if ("analysis_id" %in% colnames(state_or_entries) && nrow(state_or_entries) > 0L) {
+      lapply(seq_len(nrow(state_or_entries)), function(i) {
+        row <- state_or_entries[i, , drop = FALSE]
+        list(
+          analysis_id = as.character(row$analysis_id[1L]),
+          method = if ("method" %in% colnames(row)) as.character(row$method[1L]) else NA_character_,
+          timestamp_utc = if ("timestamp_utc" %in% colnames(row)) as.character(row$timestamp_utc[1L]) else NA_character_,
+          parameters = list(),
+          dataset = list(),
+          warnings = character(0)
+        )
+      })
+    } else {
+      list()
+    }
   } else if (inherits(state_or_entries, "reactivevalues") || is.environment(state_or_entries)) {
     state_get(state_or_entries, "provenance") %||% list()
   } else if (is.list(state_or_entries) &&
