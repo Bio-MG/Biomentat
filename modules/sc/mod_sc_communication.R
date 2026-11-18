@@ -352,10 +352,15 @@ mod_sc_communication_output_ui <- function(id) {
                 div(class = "small text-muted m-2",
                     i18n$t("Comparaison inter-conditions (CC-2) : au moins 2 runs CellChat complets de cette session sont requis. Les objets retenus sont amputés de la matrice brute (@data) — les vues comparatives n'en dépendent pas.")),
                 uiOutput(ns("ccc_comp_selector_ui")),
+                div(class = "mx-2",
+                    checkboxInput(ns("ccc_comp_lift"),
+                                  i18n$t("Aligner automatiquement les groupes (liftCellChat, CC-3)"),
+                                  value = TRUE)),
                 actionButton(ns("btn_ccc_compare"), i18n$t("Lancer la comparaison"),
                              class = "btn-primary btn-sm m-2", icon = icon("scale-balanced")),
                 uiOutput(ns("ccc_comp_warnings_ui")),
                 h6(i18n$t("Flux d'information par voie (@netP$prob — équivalent rankNet)"), class = "m-2 text-muted"),
+                plotOutput(ns("ccc_comp_flow_plot"), height = "380px"),
                 DT::dataTableOutput(ns("ccc_comp_ranknet"), height = "auto", fill = FALSE),
                 h6(i18n$t("Matrice de similarité des réseaux (opt-in TS_CCC_SIMILARITY=1)"), class = "m-2 text-muted"),
                 DT::dataTableOutput(ns("ccc_comp_similarity"), height = "auto", fill = FALSE))
@@ -2127,7 +2132,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       }
       objs <- lapply(pick, function(l) reg[[l]]$object)
       names(objs) <- pick
-      res <- tryCatch(run_ccc_comparison(objs, labels = pick), error = function(e) e)
+      res <- tryCatch(
+        run_ccc_comparison(objs, labels = pick, lift_identities = isTRUE(input$ccc_comp_lift)),
+        error = function(e) e
+      )
       if (inherits(res, "error")) {
         st <- cellchat_engine_error_state(res)
         detail <- if (is.na(st)) conditionMessage(res) else
@@ -2153,6 +2161,13 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         class = "border border-warning rounded bg-warning-subtle text-dark small p-2 m-2",
         tags$ul(class = "mb-0", lapply(cmp$warnings, tags$li))
       )
+    })
+
+    output$ccc_comp_flow_plot <- renderPlot({
+      state_get(shared_rv, "comm_tabs_current")
+      cmp <- comm_state$ccc_comparison
+      req(cmp, cmp$flow_table)
+      plot_ccc_comparison_flow(cmp, top_n = 25L)
     })
 
     output$ccc_comp_ranknet <- DT::renderDataTable({

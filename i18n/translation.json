@@ -13940,6 +13940,10 @@
     {
       "fr": "Pipeline automatique (mirai)",
       "en": "Automated pipeline (mirai)"
+    },
+    {
+      "fr": "Aligner automatiquement les groupes (liftCellChat, CC-3)",
+      "en": "Auto-align cell groups (liftCellChat, CC-3)"
     }
   ]
 }

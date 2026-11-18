@@ -178,7 +178,9 @@ test_that("CC-2 UI : jumelles drawer + onglet Comparaison + serveur épinglés",
   expect_true(grepl('nav_panel(i18n$t("Comparaison"), value = "ccc_tab_comparaison"', src, fixed = TRUE))
   expect_true(grepl('output$ccc_comp_selector_ui', src, fixed = TRUE))
   expect_true(grepl("observeEvent(input$btn_ccc_compare", src, fixed = TRUE))
-  expect_true(grepl("run_ccc_comparison(objs, labels = pick)", src, fixed = TRUE))
+  expect_true(grepl("run_ccc_comparison(objs, labels = pick", src, fixed = TRUE))
+  expect_true(grepl("ccc_comp_lift", src, fixed = TRUE))
+  expect_true(grepl("ccc_comp_flow_plot", src, fixed = TRUE))
   expect_true(grepl("comm_state$ccc_registry <- reg", src, fixed = TRUE))
   # Purge du registre au clear (session-scoped).
   expect_true(grepl("comm_state$ccc_registry <- NULL", src, fixed = TRUE))
@@ -244,4 +246,83 @@ test_that("W1.2 intégration : run_cellchat_by_condition -> run_ccc_comparison s
   expect_true(is.data.frame(cmp$flow_table))
   expect_true(all(c("pathway", "ctrl", "stim", "rel_ctrl", "rel_stim") %in%
                     colnames(cmp$flow_table)))
+})
+
+test_that("CC-3 : plot_ccc_comparison_flow trace un ggplot (relatif, absolu, vide)", {
+  source_project_file("tools/pkg_skeleton/R/sc_communication_views.R")
+  fake_cmp <- list(
+    labels = c("ctrl", "stim"),
+    lifted = TRUE,
+    flow_table = data.frame(
+      pathway = c("TGFb", "MIF", "CXCL"),
+      ctrl = c(10, 4, 2),
+      stim = c(2, 8, 6),
+      rel_ctrl = c(10 / 16, 4 / 16, 2 / 16),
+      rel_stim = c(2 / 16, 8 / 16, 6 / 16),
+      stringsAsFactors = FALSE
+    )
+  )
+  p_rel <- plot_ccc_comparison_flow(fake_cmp, top_n = 10L, metric = "relative")
+  p_abs <- plot_ccc_comparison_flow(fake_cmp, top_n = 2L, metric = "absolute")
+  expect_s3_class(p_rel, "ggplot")
+  expect_s3_class(p_abs, "ggplot")
+
+  empty_cmp <- list(
+    labels = c("ctrl", "stim"),
+    flow_table = data.frame(
+      pathway = character(0), ctrl = numeric(0), stim = numeric(0),
+      rel_ctrl = numeric(0), rel_stim = numeric(0), stringsAsFactors = FALSE
+    )
+  )
+  expect_s3_class(plot_ccc_comparison_flow(empty_cmp), "ggplot")
+})
+
+test_that("CC-3 : lift_identities = TRUE aligne des groupes distincts via liftCellChat", {
+  skip_if_not(cellchat_engine_available(), "CellChat absent (dependance GitHub)")
+
+  set.seed(20261119)
+  cc_env <- new.env(parent = emptyenv())
+  utils::data(list = "CellChatDB.human", package = "CellChat", envir = cc_env)
+  cc_db <- get("CellChatDB.human", envir = cc_env)
+  cc_pw <- c("TGFb", "MIF", "MHC-I", "MHC-II", "GALECTIN", "CD99",
+             "ANNEXIN", "VISFATIN", "COMPLEMENT", "CXCL")
+  cc_sel <- cc_db$interaction[cc_db$interaction$pathway_name %in% cc_pw,
+                              c("ligand", "receptor")]
+  genes <- sort(unique(c(cc_sel$ligand, cc_sel$receptor)))
+  genes <- genes[nzchar(genes)]
+  feats <- c(genes, paste0("FILL2G", seq_len(60L)))
+  cells <- 200L
+  grp2 <- rep(c("A", "B"), length.out = cells)
+  mat <- matrix(rpois(length(feats) * cells, 2), nrow = length(feats),
+                dimnames = list(feats, paste0("g2_", seq_len(cells))))
+  lig <- intersect(cc_sel$ligand, feats)
+  rec <- intersect(cc_sel$receptor, feats)
+  iA <- which(grp2 == "A"); iB <- which(grp2 == "B")
+  mat[lig, iA] <- mat[lig, iA] + rpois(length(lig) * length(iA), 25)
+  mat[rec, iB] <- mat[rec, iB] + rpois(length(rec) * length(iB), 25)
+  inp2 <- cellchat_input_from_matrix(
+    data = mat, features = feats, labels = factor(grp2), species = "human",
+    group_by = "celltype", log_normalize = TRUE
+  )
+  o_ab <- CellChat::createCellChat(object = inp2$data, meta = inp2$meta,
+                                   group.by = cellchat_group_by_column(inp2))
+  o_ab@DB <- .cellchat_engine_db("human")$db
+  o_ab <- CellChat::subsetData(o_ab)
+  o_ab <- CellChat::identifyOverExpressedGenes(o_ab)
+  o_ab <- CellChat::identifyOverExpressedInteractions(o_ab)
+  o_ab <- CellChat::computeCommunProb(o_ab, nboot = 5L, seed.use = 77L)
+  o_ab <- CellChat::computeCommunProbPathway(o_ab)
+  o_ab <- CellChat::netAnalysis_computeCentrality(o_ab, slot.name = "netP")
+  o_ab@data <- o_ab@data.signaling
+
+  # Sans lift : mismatch bloquant maintenu.
+  err <- tryCatch(run_ccc_comparison(list(abc = .cc2_o1, ab = o_ab), lift_identities = FALSE),
+                  error = function(e) e)
+  expect_identical(cellchat_engine_error_state(err), "identity_mismatch")
+
+  # Avec lift : alignement A/B -> A/B/C réussi + trace warning CC-3.
+  res <- run_ccc_comparison(list(abc = .cc2_o1, ab = o_ab), lift_identities = TRUE)
+  expect_true(isTRUE(res$lifted))
+  expect_true(any(grepl("liftCellChat", res$warnings, fixed = TRUE)))
+  expect_true(is.data.frame(res$flow_table) && nrow(res$flow_table) > 0L)
 })

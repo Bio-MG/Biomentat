@@ -53,7 +53,9 @@ communication_views_public_api <- function() {
     # 5e pilule exploratoire « Synthèse multi-modale » (d183d11) — registre
     # reconcilié avec la surface du fichier (règle repo : pin au MÊME commit).
     "build_communication_multimodal_synthesis",
-    "plot_communication_multimodal_synthesis"
+    "plot_communication_multimodal_synthesis",
+    # CC-3 : graphe comparatif de flux par voie (@netP$prob).
+    "plot_ccc_comparison_flow"
   )
 }
 
@@ -1028,5 +1030,87 @@ plot_communication_multimodal_synthesis <- function(synthesis, top_n = 20L) {
       axis.text.x = ggplot2::element_text(face = "bold")
     )
 }
+
+#' Graphe comparatif des flux de signalisation par voie (CC-3)
+#'
+#' Visualise la table `flow_table` produite par `run_ccc_comparison()` :
+#' voies les plus divergentes entre conditions (part relative `rel_<cond>` ou
+#' poids brut `@netP$prob`), ordonnées par amplitude max-min décroissante.
+#'
+#' @param comparison_result Résultat retourné par `run_ccc_comparison()`.
+#' @param top_n Nombre maximal de voies affichées (défaut 25).
+#' @param metric `"relative"` (part du flux total) ou `"absolute"` (poids brut).
+#' @return objet ggplot.
+#' @export
+plot_ccc_comparison_flow <- function(comparison_result,
+                                     top_n = 25L,
+                                     metric = c("relative", "absolute")) {
+  metric <- match.arg(metric)
+  if (!is.list(comparison_result) ||
+      !is.data.frame(comparison_result$flow_table) ||
+      !"pathway" %in% colnames(comparison_result$flow_table)) {
+    .views_stop("plot_ccc_comparison_flow() : objet run_ccc_comparison()$flow_table requis.")
+  }
+  ft <- comparison_result$flow_table
+  labels <- as.character(comparison_result$labels %||%
+                           setdiff(colnames(ft), c("pathway", grep("^rel_", colnames(ft), value = TRUE))))
+  if (length(labels) < 2L) {
+    .views_stop("plot_ccc_comparison_flow() : au moins 2 conditions requises dans flow_table.")
+  }
+  val_cols <- if (identical(metric, "relative")) paste0("rel_", labels) else labels
+  if (!all(val_cols %in% colnames(ft))) {
+    .views_stop("plot_ccc_comparison_flow() : colonnes de métrique absentes de flow_table.")
+  }
+  if (nrow(ft) == 0L) {
+    return(.communication_empty_view_plot(
+      "Aucune voie commune à tracer entre les conditions.",
+      "Comparaison des flux par voie (CC-3)",
+      paste(labels, collapse = " vs ")
+    ))
+  }
+
+  val_mat <- as.matrix(ft[, val_cols, drop = FALSE])
+  spread <- apply(val_mat, 1L, function(x) {
+    fin <- x[is.finite(x)]
+    if (length(fin) < 2L) 0 else diff(range(fin))
+  })
+  ord <- order(-spread, ft$pathway)
+  n_show <- min(nrow(ft), max(1L, as.integer(top_n %||% 25L)))
+  sub <- ft[utils::head(ord, n_show), , drop = FALSE]
+  sub$pathway <- factor(sub$pathway, levels = rev(sub$pathway))
+
+  long_rows <- lapply(seq_along(labels), function(j) {
+    data.frame(
+      pathway = sub$pathway,
+      condition = labels[j],
+      value = as.numeric(sub[[val_cols[j]]]),
+      stringsAsFactors = FALSE
+    )
+  })
+  df <- do.call(rbind, long_rows)
+  df$condition <- factor(df$condition, levels = labels)
+
+  x_lab <- if (identical(metric, "relative")) {
+    "Part relative du flux d'information (@netP$prob)"
+  } else {
+    "Flux d'information cumulé (@netP$prob)"
+  }
+  sub_note <- sprintf(
+    "%s — Top %d/%d voie(s) commune(s)%s",
+    paste(labels, collapse = " vs "), n_show, nrow(ft),
+    if (isTRUE(comparison_result$lifted)) " (groupes alignés via liftCellChat)" else ""
+  )
+
+  ggplot2::ggplot(df, ggplot2::aes(x = .data$value, y = .data$pathway, fill = .data$condition)) +
+    ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.75), width = 0.7) +
+    ggplot2::labs(
+      x = x_lab, y = NULL, fill = "Condition",
+      title = "Flux d'information par voie (comparaison inter-conditions)",
+      subtitle = sub_note
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(panel.grid.major.y = ggplot2::element_blank())
+}
+
 
 

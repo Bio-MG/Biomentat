@@ -745,17 +745,22 @@ cellchat_analysis_identity <- function(result) {
 #'
 #' @param object.list liste nommée de 2..N objets CellChat (même session).
 #' @param labels noms affichables des conditions (défaut : names).
+#' @param lift_identities logique (défaut FALSE) : si TRUE et les groupes
+#'   diffèrent entre objets, applique `CellChat::liftCellChat()` (CC-3) sur
+#'   l'union des groupes avant `mergeCellChat()`. Si FALSE, lève
+#'   `identity_mismatch`.
 #' @return liste : `flow_table` (data.frame pathway × conditions — flux
 #'   d'information weight par voie + parts relatives `rel_<label>`, calculée
 #'   depuis @netP$prob — substitution mesurée de la table rankNet vide en
 #'   2.2.0.9001), `similarity` (matrice symétrique NxN de
 #'   computeNetSimilarityPairwise sur l'objet fusionné, ou NULL si sautée —
 #'   réseau dégénéré — ou en échec tracé), `merged` (objet fusionné pour les
-#'   vues futures), `labels`, `warnings` (échecs/sauts non bloquants tracés).
+#'   vues futures), `labels`, `lifted`, `warnings` (échecs/sauts non bloquants tracés).
 #'   Erreurs bloquantes = classes `cellchat_engine_error` (états
 #'   `insufficient_objects`, `invalid_input`, `identity_mismatch`,
 #'   `no_common_pathways`).
-run_ccc_comparison <- function(object.list, labels = names(object.list)) {
+run_ccc_comparison <- function(object.list, labels = names(object.list),
+                               lift_identities = FALSE) {
   if (!is.list(object.list) || length(object.list) < 2L) {
     .cellchat_engine_stop(
       "insufficient_objects",
@@ -780,21 +785,46 @@ run_ccc_comparison <- function(object.list, labels = names(object.list)) {
               paste(names(object.list)[bad], collapse = ", "))
     )
   }
-  # Identités strictement identiques (v1) : mergeCellChat l'exige — des
-  # groupes différents = cas limite liftCellChat, différé CC-3 (fiche §CC-2).
+  warns <- character(0)
+  lifted <- FALSE
+  # Identités : si différentes, exiger lift_identities = TRUE (CC-3) sinon
+  # refus contractuel identity_mismatch.
   grp_sig <- vapply(object.list, function(o) {
     paste(sort(unique(as.character(methods::slot(o, "meta")$labels))), collapse = ",")
   }, character(1))
   if (length(unique(grp_sig)) > 1L) {
-    .cellchat_engine_stop(
-      "identity_mismatch",
-      paste0("Les groupes d'identités diffèrent entre les objets (",
-             paste(grp_sig, collapse = " | "),
-             ") — liftCellChat est différé (CC-3) : alignez les identités et relancez.")
-    )
+    if (!isTRUE(lift_identities)) {
+      .cellchat_engine_stop(
+        "identity_mismatch",
+        paste0("Les groupes d'identités diffèrent entre les objets (",
+               paste(grp_sig, collapse = " | "),
+               ") — activez l'alignement liftCellChat (CC-3) ou alignez les identités.")
+      )
+    }
+    group_union <- sort(unique(unlist(lapply(object.list, function(o) {
+      lv <- levels(methods::slot(o, "idents"))
+      if (length(lv) > 0L) lv else as.character(methods::slot(o, "meta")$labels)
+    }))))
+    object.list <- lapply(object.list, function(o) {
+      cur_lv <- levels(methods::slot(o, "idents"))
+      if (identical(as.character(cur_lv), as.character(group_union))) {
+        return(o)
+      }
+      tryCatch(
+        CellChat::liftCellChat(o, group.new = group_union),
+        error = function(e) .cellchat_engine_stop(
+          "identity_mismatch",
+          sprintf("liftCellChat() a échoué : %s", conditionMessage(e))
+        )
+      )
+    })
+    lifted <- TRUE
+    warns <- c(warns, sprintf(
+      "CC-3 liftCellChat appliqué : identités alignées sur l'union de %d groupes (%s).",
+      length(group_union), paste(group_union, collapse = ", ")
+    ))
   }
 
-  warns <- character(0)
   merged <- tryCatch(
     CellChat::mergeCellChat(object.list, add.names = labels),
     error = function(e) { warns <<- c(warns, paste("mergeCellChat:", conditionMessage(e))); NULL }
@@ -863,6 +893,7 @@ run_ccc_comparison <- function(object.list, labels = names(object.list)) {
     merged     = merged,
     flow_table = flow,
     similarity = similarity,
+    lifted     = lifted,
     warnings   = warns
   )
 }
