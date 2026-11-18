@@ -13932,6 +13932,10 @@
     {
       "fr": "%d/%d contextes calculés — %d paire(s) — filtrage exploratoire (pas une p-value).",
       "en": "%d/%d contexts computed — %d pair(s) — exploratory filtering (not a p-value)."
+    },
+    {
+      "fr": "📝 Brouillon Matériels & Méthodes (.md)",
+      "en": "📝 Materials & Methods Draft (.md)"
     }
   ]
 }

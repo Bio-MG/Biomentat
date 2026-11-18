@@ -201,6 +201,8 @@ mod_bulk_report_ui <- function(id) {
         i18n$t("Export script R reproductible (.zip) \u2014 contient le script + counts_raw.rds + metadata.rds. Pour l'ex\u00e9cuter : d\u00e9compressez le .zip, ouvrez R/RStudio dans CE dossier (ou faites setwd() dessus), puis source(\"analyse_bulk_....R\") ou ex\u00e9cutez-le ligne par ligne.")),
     downloadButton(ns("dl_r_script"), i18n$t("🧾 Export Script R Reproductible (.zip)"),
                    class = "btn-outline-secondary w-100"),
+    downloadButton(ns("dl_bulk_methods_md"), i18n$t("📝 Brouillon Matériels & Méthodes (.md)"),
+                   class = "btn-outline-secondary w-100 mt-1"),
     div(class = "small text-muted mt-1", textOutput(ns("report_status")))
   )
 }
@@ -409,6 +411,15 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
         shared_rv$last_report <- list(name = basename(file),
                                       kind = .tr("Script R"),
                                       at   = format(Sys.time(), "%H:%M:%S"))
+      }
+    )
+
+    output$dl_bulk_methods_md <- downloadHandler(
+      filename = function() paste0("materiels_methodes_bulk_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".md"),
+      content = function(file) {
+        lang <- if (identical(tolower(global_data$language %||% "fr"), "en")) "en" else "fr"
+        draft <- build_methods_draft(shared_rv, lang = lang)
+        writeLines(draft$markdown, file, useBytes = TRUE)
       }
     )
 

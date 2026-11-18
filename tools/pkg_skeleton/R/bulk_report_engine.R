@@ -361,7 +361,28 @@ if (length(top_genes) >= 2 && requireNamespace("pheatmap", quietly=TRUE)) {
 #   write.csv(res_limma, paste0("DE_limma_", CONDITION_COL, "_", Sys.Date(), ".csv"), row.names=FALSE)
 # }
 
-# \u2500\u2500 8. Export CSV \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500 7ter. Modules avanc\u00e9s M2-M5 (GSVA, Signatures, WGCNA, Survie \u2014 optionnel) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# D\u00e9commenter selon les analyses activ\u00e9es dans la session Biomentat :
+# if (requireNamespace("GSVA", quietly=TRUE)) {
+#   # M2 : Scoring GSVA / ssGSEA sur vst_mat
+#   # gsva_res <- bulk_run_gsva(vst_mat, gene_sets = list(MySet = head(rownames(vst_mat), 25)), method = "gsva")
+#   # write.csv(gsva_res$scores, paste0("GSVA_scores_", Sys.Date(), ".csv"))
+# }
+# # M3 : Scores de signatures cur\u00e9es (mean_z / rank)
+# # sig_res <- bulk_score_signatures(vst_mat, gene_sets = list(MySig = head(rownames(vst_mat), 20)), method = "mean_z")
+# # write.csv(sig_res$scores, paste0("Signature_scores_", Sys.Date(), ".csv"))
+# if (requireNamespace("WGCNA", quietly=TRUE)) {
+#   # M4 : Co-expression WGCNA (top g\u00e8nes variables sur vst_mat)
+#   # wgcna_res <- bulk_run_wgcna(vst_mat, power = 6L, min_module_size = 20L)
+#   # write.csv(wgcna_res$module_colors, paste0("WGCNA_modules_", Sys.Date(), ".csv"))
+# }
+# if (requireNamespace("survival", quietly=TRUE)) {
+#   # M5 : Analyse de survie Kaplan-Meier / Cox (requiert colonnes time, status dans metadata)
+#   # surv_res <- bulk_run_survival(metadata, time_col = "time", status_col = "status", group_col = CONDITION_COL)
+#   # print(surv_res$summary)
+# }
+
+# \u2500\u2500 8. Export CSV \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 out <- paste0("DE_",CONDITION_COL,"_",GROUP_TARGET,"_vs_",GROUP_REF,"_",Sys.Date(),".csv")
 write.csv(res_df, out, row.names=FALSE)
 cat("Results saved to:", out, "\\n")

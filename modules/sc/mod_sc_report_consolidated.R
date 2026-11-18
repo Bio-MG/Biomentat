@@ -27,6 +27,8 @@ mod_sc_report_consolidated_ui <- function(id) {
                    class = "btn-dark w-100 mt-2"),
     downloadButton(ns("dl_consolide_bundle"), i18n$t("🧳 Bundle d'export projet (.zip)"),
                    class = "btn-outline-secondary w-100 mt-1"),
+    downloadButton(ns("dl_methods_md"), i18n$t("📝 Brouillon Matériels & Méthodes (.md)"),
+                   class = "btn-outline-secondary w-100 mt-1"),
     div(class = "small text-muted mt-1", textOutput(ns("rep_consolide_status")))
   )
 }
@@ -240,6 +242,20 @@ mod_sc_report_consolidated_server <- function(id, global_data, shared_rv = NULL)
                                     conditionMessage(e)), type = "error", duration = 12)
           })
         })
+      }
+    )
+
+    output$dl_methods_md <- downloadHandler(
+      filename = function() consolidated_report_export_filename("materiels_methodes", "md"),
+      content = function(file) {
+        lang <- if (identical(tolower(global_data$language %||% "fr"), "en")) "en" else "fr"
+        prov_src <- state_get(shared_rv, "provenance")
+        if (is.null(prov_src) && !is.null(global_data$sc_obj)) {
+          cv <- tryCatch(.collect_and_validate(), error = function(e) NULL)
+          if (!is.null(cv)) prov_src <- cv$ri$provenance_df %||% list()
+        }
+        draft <- build_methods_draft(prov_src %||% list(), lang = lang)
+        writeLines(draft$markdown, file, useBytes = TRUE)
       }
     )
   })
