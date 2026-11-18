@@ -1475,9 +1475,21 @@ server <- function(input, output, session) {
   # mod_biostat_mirror_server("biostat_sc", global_data)
 
   mod_spatial_server("spatial", global_data)
-  
-  
-  
+
+  # P1-BOOT-DELIVERY (2026-11-19, mesuré sondes b745/7237 + trace
+  # wf_trace.log) : sur une session fraîche, le renderUI wf_mode_style des
+  # TROIS modules ne s'exécute JAMAIS au premier flush (trace vide — l'
+  # output rate le premier flush et rien ne l'invalide ensuite : les
+  # styles restent vides, Spécialisé inappliqué, jusqu'à une interaction
+  # radio). L'émission initiale du radio (défaut Spécialisé, sections
+  # cachées au boot) n'arrive pas de façon fiable côté client. Bump
+  # serveur one-shot APRÈS l'enregistrement des modules : invalide les
+  # trois styles → render → livraison garantie à la connexion, zéro
+  # interaction requise. (Valeur seulement incrémentée — les renderUI
+  # relisent mode + .ts_wf_last_panel, aucun effet de bord.)
+  global_data$wf_mode_version <- (global_data$wf_mode_version %||% 0L) + 1L
+
+
   # === STATUT DES OBJETS — INDICATEUR DE PROGRESSION GLOBAL (point 8) ===
   
   output$global_status_panel <- renderUI({
