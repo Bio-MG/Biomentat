@@ -75,6 +75,11 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
         ggplot2::theme_void()
     }
     pert_ctx <- reactiveVal(NULL)
+    observeEvent(pert_ctx(), {
+      cur <- comm_state$ctx_results %||% list()
+      cur$perturbation <- pert_ctx()
+      comm_state$ctx_results <- cur
+    }, ignoreNULL = FALSE)
 
     # R-3bis (idiome repo, cf. mod_bulk.R fix 2026-11-06) : une sortie
     # invalidée pendant que son panneau est caché ne livre JAMAIS son payload.

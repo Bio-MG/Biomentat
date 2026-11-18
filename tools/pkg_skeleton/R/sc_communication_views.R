@@ -740,3 +740,285 @@ plot_communication_roles_dot <- function(roles_table) {
                    panel.grid.minor = ggplot2::element_blank())
 }
 
+#' Synthèse multi-modale des contextes CCC (filtrage exploratoire)
+#'
+#' Consommateur pur qui triangule les 4 contextes calculés par l'utilisateur
+#' (Spatial, Trajectoire, Vélocité, Perturbation) par paire `sender -> receiver`
+#' sans recalcul de score ni agrégation statistique. STRICTEMENT EXPLORATOIRE :
+#' `is_statistical_pvalue = FALSE`, aucune p-value combinée.
+#'
+#' @param communication_result Résultat canonique.
+#' @param spatial_ctx Contexte spatial (`ccc_spatial_context`) ou NULL.
+#' @param trajectory_ctx Contexte trajectoire (`ccc_trajectory_context`) ou NULL.
+#' @param velocity_ctx Contexte vélocité (`ccc_velocity_context`) ou NULL.
+#' @param perturbation_ctx Contexte perturbation (`ccc_perturbation`) ou NULL.
+#' @param filtered_table Table filtrée optionnelle ou NULL (table complète).
+#' @param min_spatial_frac Seuil exploratoire de fraction à portée (défaut 0.25).
+#' @param min_traj_corr Seuil exploratoire de corrélation ligand/récepteur (défaut 0.3).
+#' @return Liste `ccc_multimodal_synthesis` (`pair_table`, `qc`, `label`, `is_statistical_pvalue`).
+#' @export
+build_communication_multimodal_synthesis <- function(
+    communication_result,
+    spatial_ctx = NULL,
+    trajectory_ctx = NULL,
+    velocity_ctx = NULL,
+    perturbation_ctx = NULL,
+    filtered_table = NULL,
+    min_spatial_frac = 0.25,
+    min_traj_corr = 0.3) {
+  r <- assert_communication_result(
+    communication_result,
+    context = "Synthèse multi-modale CCC"
+  )
+  table <- .communication_node_keys(
+    if (is.null(filtered_table)) r$canonical_table else filtered_table
+  )
+  epistemic_label <- "Convergence des contextes (filtrage exploratoire)"
+
+  if (nrow(table) == 0L) {
+    return(list(
+      type = "ccc_multimodal_synthesis",
+      label = epistemic_label,
+      is_statistical_pvalue = FALSE,
+      pair_table = data.frame(
+        sender_node = character(0), receiver_node = character(0),
+        pair_label = character(0), n_interactions = integer(0),
+        mean_imported_score = numeric(0),
+        ctx_spatial = logical(0), ctx_trajectory = logical(0),
+        ctx_velocity = logical(0), ctx_perturbation = logical(0),
+        spatial_frac = numeric(0), traj_corr = numeric(0),
+        velocity_recv_mean = numeric(0), pert_delta_score = numeric(0),
+        n_contexts_evaluated = integer(0), n_contexts_convergent = integer(0),
+        convergence_tier = character(0), context_badges = character(0),
+        stringsAsFactors = FALSE
+      ),
+      qc = list(
+        n_pairs = 0L,
+        contexts_active = c(spatial = FALSE, trajectory = FALSE,
+                            velocity = FALSE, perturbation = FALSE),
+        n_contexts_active = 0L
+      )
+    ))
+  }
+
+  agg <- .communication_agg_pairs(table)
+  keys <- paste(agg$sender_node, agg$receiver_node, sep = "\r")
+  pair_labels <- paste(agg$sender_node, agg$receiver_node, sep = " -> ")
+
+  has_spatial <- is.list(spatial_ctx) &&
+    identical(spatial_ctx$type %||% NULL, "ccc_spatial_context") &&
+    is.data.frame(spatial_ctx$pair_table) && nrow(spatial_ctx$pair_table) > 0L
+  has_traj <- is.list(trajectory_ctx) &&
+    identical(trajectory_ctx$type %||% NULL, "ccc_trajectory_context") &&
+    is.data.frame(trajectory_ctx$pair_bin_table) && nrow(trajectory_ctx$pair_bin_table) > 0L
+  has_vel <- is.list(velocity_ctx) &&
+    identical(velocity_ctx$type %||% NULL, "ccc_velocity_context") &&
+    identical(velocity_ctx$status %||% NULL, "valid") &&
+    is.data.frame(velocity_ctx$pair_table) && nrow(velocity_ctx$pair_table) > 0L
+  has_pert <- is.list(perturbation_ctx) &&
+    identical(perturbation_ctx$type %||% NULL, "ccc_perturbation") &&
+    is.data.frame(perturbation_ctx$delta_table) && nrow(perturbation_ctx$delta_table) > 0L
+
+  # 1. Spatial proximity
+  ctx_spatial <- rep(NA, nrow(agg))
+  spatial_frac <- rep(NA_real_, nrow(agg))
+  if (has_spatial) {
+    sp_df <- spatial_ctx$pair_table
+    sp_keys <- paste(sp_df$sender_node, sp_df$receiver_node, sep = "\r")
+    m <- match(keys, sp_keys)
+    for (i in seq_along(keys)) {
+      if (is.na(m[i])) next
+      row <- sp_df[m[i], , drop = FALSE]
+      fr <- suppressWarnings(as.numeric(row$frac_receiver_within_radius[1L]))
+      fs <- suppressWarnings(as.numeric(row$frac_sender_within_radius[1L]))
+      pp <- suppressWarnings(as.numeric(row$p_perm[1L]))
+      best_fr <- suppressWarnings(max(c(fr, fs), na.rm = TRUE))
+      if (!is.finite(best_fr)) best_fr <- NA_real_
+      spatial_frac[i] <- best_fr
+      ctx_spatial[i] <- isTRUE(!is.na(pp) && pp <= 0.05) ||
+        isTRUE(!is.na(best_fr) && best_fr >= min_spatial_frac)
+    }
+  }
+
+  # 2. Trajectory co-expression
+  ctx_trajectory <- rep(NA, nrow(agg))
+  traj_corr <- rep(NA_real_, nrow(agg))
+  if (has_traj) {
+    tb <- trajectory_ctx$pair_bin_table
+    tb_keys <- paste(tb$sender_node, tb$receiver_node, sep = "\r")
+    for (i in seq_along(keys)) {
+      sub <- tb[tb_keys == keys[i], , drop = FALSE]
+      if (nrow(sub) == 0L) next
+      lx <- suppressWarnings(as.numeric(sub$mean_ligand_expression_senders))
+      rx <- suppressWarnings(as.numeric(sub$mean_receptor_expression_receivers))
+      ok <- is.finite(lx) & is.finite(rx)
+      if (sum(ok) >= 3L && stats::sd(lx[ok]) > 0 && stats::sd(rx[ok]) > 0) {
+        cc <- suppressWarnings(stats::cor(lx[ok], rx[ok]))
+        traj_corr[i] <- cc
+        ctx_trajectory[i] <- isTRUE(is.finite(cc) && cc >= min_traj_corr)
+      } else if (any(ok)) {
+        ctx_trajectory[i] <- any(lx[ok] > 0 & rx[ok] > 0)
+      } else {
+        ctx_trajectory[i] <- FALSE
+      }
+    }
+  }
+
+  # 3. Velocity-active receiver
+  ctx_velocity <- rep(NA, nrow(agg))
+  velocity_recv_mean <- rep(NA_real_, nrow(agg))
+  if (has_vel) {
+    vl_df <- velocity_ctx$pair_table
+    vl_keys <- paste(vl_df$sender_node, vl_df$receiver_node, sep = "\r")
+    med_recv <- stats::median(suppressWarnings(as.numeric(vl_df$receiver_velocity_mean)), na.rm = TRUE)
+    m <- match(keys, vl_keys)
+    for (i in seq_along(keys)) {
+      if (is.na(m[i])) next
+      rv <- suppressWarnings(as.numeric(vl_df$receiver_velocity_mean[m[i]]))
+      velocity_recv_mean[i] <- rv
+      ctx_velocity[i] <- isTRUE(is.finite(rv) && rv > 0 &&
+                                  (!is.finite(med_recv) || rv >= med_recv))
+    }
+  }
+
+  # 4. Perturbation-sensitive edge
+  ctx_perturbation <- rep(NA, nrow(agg))
+  pert_delta_score <- rep(NA_real_, nrow(agg))
+  if (has_pert) {
+    pt_df <- perturbation_ctx$delta_table
+    pt_keys <- paste(pt_df$sender_node, pt_df$receiver_node, sep = "\r")
+    m <- match(keys, pt_keys)
+    for (i in seq_along(keys)) {
+      if (is.na(m[i])) next
+      pert_delta_score[i] <- suppressWarnings(as.numeric(pt_df$delta_score_total[m[i]]))
+      ctx_perturbation[i] <- isTRUE(pt_df$affected[m[i]])
+    }
+  }
+
+  mat <- cbind(ctx_spatial, ctx_trajectory, ctx_velocity, ctx_perturbation)
+  n_eval <- apply(mat, 1L, function(x) sum(!is.na(x)))
+  n_conv <- apply(mat, 1L, function(x) sum(x %in% TRUE))
+
+  tier <- ifelse(
+    n_eval == 0L, "Aucun contexte calculé",
+    ifelse(n_conv >= 3L, "Exploratoire — fort (>=3)",
+           ifelse(n_conv == 2L, "Exploratoire — modéré (2)",
+                  ifelse(n_conv == 1L, "Exploratoire — partiel (1)",
+                         "Aucun contexte convergent (0)")))
+  )
+
+  badge_names <- c("Spatial", "Trajectoire", "Vélocité", "Perturbation")
+  badges <- apply(mat, 1L, function(x) {
+    hit <- badge_names[which(x %in% TRUE)]
+    if (length(hit)) paste(hit, collapse = " | ") else "—"
+  })
+
+  out <- data.frame(
+    sender_node = agg$sender_node,
+    receiver_node = agg$receiver_node,
+    pair_label = pair_labels,
+    n_interactions = as.integer(agg$n_interactions),
+    mean_imported_score = as.numeric(agg$mean_score),
+    ctx_spatial = ctx_spatial,
+    ctx_trajectory = ctx_trajectory,
+    ctx_velocity = ctx_velocity,
+    ctx_perturbation = ctx_perturbation,
+    spatial_frac = spatial_frac,
+    traj_corr = traj_corr,
+    velocity_recv_mean = velocity_recv_mean,
+    pert_delta_score = pert_delta_score,
+    n_contexts_evaluated = as.integer(n_eval),
+    n_contexts_convergent = as.integer(n_conv),
+    convergence_tier = tier,
+    context_badges = badges,
+    stringsAsFactors = FALSE
+  )
+
+  sc_ord <- ifelse(is.na(out$mean_imported_score), -Inf, out$mean_imported_score)
+  ord <- order(-out$n_contexts_convergent, -out$n_contexts_evaluated, -sc_ord, out$pair_label)
+  out <- out[ord, , drop = FALSE]
+  rownames(out) <- NULL
+
+  contexts_active <- c(
+    spatial = has_spatial, trajectory = has_traj,
+    velocity = has_vel, perturbation = has_pert
+  )
+
+  list(
+    type = "ccc_multimodal_synthesis",
+    label = epistemic_label,
+    is_statistical_pvalue = FALSE,
+    pair_table = out,
+    qc = list(
+      n_pairs = nrow(out),
+      contexts_active = contexts_active,
+      n_contexts_active = sum(contexts_active)
+    )
+  )
+}
+
+#' Matrice visuelle de convergence multi-modale CCC (filtrage exploratoire)
+#'
+#' @param synthesis Objet retourné par `build_communication_multimodal_synthesis()`.
+#' @param top_n Nombre maximal de paires affichées (défaut 20).
+#' @return objet ggplot.
+#' @export
+plot_communication_multimodal_synthesis <- function(synthesis, top_n = 20L) {
+  if (!is.list(synthesis) ||
+      !identical(synthesis$type %||% NULL, "ccc_multimodal_synthesis")) {
+    .views_stop("plot_communication_multimodal_synthesis() : objet ccc_multimodal_synthesis requis.")
+  }
+  pt <- synthesis$pair_table
+  if (!is.data.frame(pt) || nrow(pt) == 0L) {
+    return(.communication_empty_view_plot(
+      "Aucune paire disponible pour la synthèse multi-modale.",
+      "Convergence des contextes (filtrage exploratoire)",
+      "Aucune interaction filtrée"
+    ))
+  }
+  n_show <- min(nrow(pt), max(1L, as.integer(top_n %||% 20L)))
+  sub <- utils::head(pt, n_show)
+  sub$pair_label <- factor(sub$pair_label, levels = rev(sub$pair_label))
+
+  ctx_cols <- c("ctx_spatial", "ctx_trajectory", "ctx_velocity", "ctx_perturbation")
+  ctx_labels <- c("Spatial", "Trajectoire", "Vélocité", "Perturbation")
+  rows <- lapply(seq_along(ctx_cols), function(j) {
+    val <- sub[[ctx_cols[j]]]
+    status <- ifelse(is.na(val), "Non calculé",
+                     ifelse(val %in% TRUE, "Convergent", "Non convergent"))
+    data.frame(
+      pair_label = sub$pair_label,
+      context = ctx_labels[j],
+      status = status,
+      stringsAsFactors = FALSE
+    )
+  })
+  df <- do.call(rbind, rows)
+  df$context <- factor(df$context, levels = ctx_labels)
+  df$status <- factor(df$status, levels = c("Convergent", "Non convergent", "Non calculé"))
+
+  ggplot2::ggplot(df, ggplot2::aes(x = .data$context, y = .data$pair_label, fill = .data$status)) +
+    ggplot2::geom_tile(color = "white", linewidth = 0.6) +
+    ggplot2::scale_fill_manual(
+      values = c("Convergent" = "#1B7837",
+                 "Non convergent" = "#D9D9D9",
+                 "Non calculé" = "#F5F5F5"),
+      drop = FALSE,
+      name = "Statut"
+    ) +
+    ggplot2::labs(
+      x = NULL, y = NULL,
+      title = "Convergence des contextes (filtrage exploratoire)",
+      subtitle = sprintf(
+        "Top %d paire(s) — %d/4 contexte(s) actif(s) — PAS une p-value statistique",
+        n_show, as.integer(synthesis$qc$n_contexts_active %||% 0L)
+      )
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_text(face = "bold")
+    )
+}
+
+

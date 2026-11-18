@@ -231,7 +231,8 @@ mod_sc_communication_output_ui <- function(id) {
       list(value = "ccc_tab_spatial", label = "Contexte spatial"),
       list(value = "ccc_tab_trajectoire", label = "Contexte trajectoire"),
       list(value = "ccc_tab_velocite", label = "Contexte vélocité"),
-      list(value = "ccc_tab_perturbation", label = "Perturbation (in silico)")),
+      list(value = "ccc_tab_perturbation", label = "Perturbation (in silico)"),
+      list(value = "ccc_tab_synthese", label = "Synthèse multi-modale")),
     "Traçabilité & qualité" = list(
       list(value = "ccc_tab_schema", label = "Schema source"),
       list(value = "ccc_tab_harmonisation", label = "Harmonisation identites"),
@@ -369,7 +370,20 @@ mod_sc_communication_output_ui <- function(id) {
       nav_panel(i18n$t("Contexte vélocité"), value = "ccc_tab_velocite",
                 mod_sc_communication_velocity_ui(ns("velocity_ctx"))),
       nav_panel(i18n$t("Perturbation (in silico)"), value = "ccc_tab_perturbation",
-                mod_sc_communication_perturbation_ui(ns("perturbation")))
+                mod_sc_communication_perturbation_ui(ns("perturbation"))),
+      nav_panel(i18n$t("Synthèse multi-modale"), value = "ccc_tab_synthese",
+                div(class = "small text-muted border-start border-3 border-info ps-2 py-1 mb-2",
+                    icon("layer-group"), " ",
+                    strong(i18n$t("Convergence des contextes (filtrage exploratoire)")), " — ",
+                    i18n$t("triangulation descriptive des contextes calculés (Spatial, Trajectoire, Vélocité, Perturbation) ; jamais une p-value statistique.")),
+                div(class = "d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2",
+                    div(class = "small text-muted", textOutput(ns("synth_status"), inline = TRUE)),
+                    div(class = "d-flex gap-2",
+                        downloadButton(ns("synth_dl_csv"), i18n$t("Exporter CSV"),
+                                       class = "btn-outline-secondary btn-sm"))),
+                plotOutput(ns("synth_plot"), height = "380px"),
+                div(class = "mt-3",
+                    DT::dataTableOutput(ns("synth_table"), height = "auto", fill = FALSE)))
       ),
       nav_menu(i18n$t("Traçabilité & qualité"),
       nav_panel(i18n$t("Schema source"), value = "ccc_tab_schema",
@@ -554,7 +568,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         list(value = "ccc_tab_spatial", label = "Contexte spatial"),
         list(value = "ccc_tab_trajectoire", label = "Contexte trajectoire"),
         list(value = "ccc_tab_velocite", label = "Contexte vélocité"),
-        list(value = "ccc_tab_perturbation", label = "Perturbation (in silico)")),
+        list(value = "ccc_tab_perturbation", label = "Perturbation (in silico)"),
+        list(value = "ccc_tab_synthese", label = "Synthèse multi-modale")),
       "Traçabilité & qualité" = list(
         list(value = "ccc_tab_schema", label = "Schema source"),
         list(value = "ccc_tab_harmonisation", label = "Harmonisation identites"),
@@ -597,7 +612,9 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       # re-paramètrent et les contextes se recalculent depuis les résultats
       # déjà sauvegardés (auto-calc Lane 3b). Miroir snapshot :
       # shared_rv$communication_ctx_view (observeEvent ci-dessous).
-      ctx_view = NULL
+      ctx_view = NULL,
+      ctx_results = list(spatial = NULL, trajectory = NULL,
+                         velocity = NULL, perturbation = NULL)
     )
     comm_status_rv <- reactiveVal(.tr("En attente d'import de resultats de communication..."))
 
@@ -2571,6 +2588,68 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     mod_sc_communication_trajectory_server("trajectory", comm_state, global_data, shared_rv)
     mod_sc_communication_velocity_server("velocity_ctx", comm_state, global_data, shared_rv)
     mod_sc_communication_perturbation_server("perturbation", comm_state, global_data, shared_rv)
+
+    # ── 5e pill : Synthèse multi-modale (consommateur pur) ───────────────────
+    comm_synthesis <- reactive({
+      req(comm_state$result)
+      flt <- tryCatch(comm_filtered()$table, error = function(e) NULL)
+      cr <- comm_state$ctx_results %||% list()
+      build_communication_multimodal_synthesis(
+        communication_result = comm_state$result,
+        spatial_ctx = cr$spatial %||% NULL,
+        trajectory_ctx = cr$trajectory %||% NULL,
+        velocity_ctx = cr$velocity %||% NULL,
+        perturbation_ctx = cr$perturbation %||% NULL,
+        filtered_table = flt
+      )
+    })
+
+    output$synth_status <- renderText({
+      state_get(shared_rv, "comm_tabs_current")
+      if (is.null(comm_state$result)) {
+        return(.tr("Aucun résultat de communication importé ou calculé."))
+      }
+      syn <- comm_synthesis()
+      sprintf(
+        .tr("%d/%d contextes calculés — %d paire(s) — filtrage exploratoire (pas une p-value)."),
+        as.integer(syn$qc$n_contexts_active %||% 0L), 4L,
+        as.integer(syn$qc$n_pairs %||% 0L)
+      )
+    })
+
+    output$synth_plot <- renderPlot({
+      state_get(shared_rv, "comm_tabs_current")
+      req(comm_state$result)
+      plot_communication_multimodal_synthesis(comm_synthesis(), top_n = 20L)
+    })
+
+    output$synth_table <- DT::renderDT({
+      state_get(shared_rv, "comm_tabs_current")
+      req(comm_state$result)
+      pt <- comm_synthesis()$pair_table
+      dt <- DT::datatable(
+        pt,
+        rownames = FALSE,
+        options = list(pageLength = 15, scrollX = TRUE)
+      )
+      num_cols <- intersect(
+        c("mean_imported_score", "spatial_frac", "traj_corr",
+          "velocity_recv_mean", "pert_delta_score"),
+        colnames(pt)
+      )
+      if (length(num_cols)) {
+        dt <- DT::formatRound(dt, columns = num_cols, digits = 4L)
+      }
+      dt
+    })
+
+    output$synth_dl_csv <- downloadHandler(
+      filename = function() "communication_multimodal_synthesis.csv",
+      content = function(file) {
+        req(comm_state$result)
+        utils::write.csv(comm_synthesis()$pair_table, file, row.names = FALSE)
+      }
+    )
 
     # Expose state for tests (optional)
     return(comm_state)

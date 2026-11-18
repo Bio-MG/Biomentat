@@ -51,6 +51,11 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
     vel_ctx <- reactiveVal(NULL)
+    observeEvent(vel_ctx(), {
+      cur <- comm_state$ctx_results %||% list()
+      cur$velocity <- vel_ctx()
+      comm_state$ctx_results <- cur
+    }, ignoreNULL = FALSE)
     # Lane 3c (2026-11-14, retour live « white card ») : résultat source du
     # contexte courant — permet au reset de n'invalider que les contextes
     # PÉRIMÉS (voir l'observateur reset ci-dessous).

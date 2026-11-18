@@ -77,6 +77,11 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
         ggplot2::theme_void()
     }
     spc_ctx <- reactiveVal(NULL)
+    observeEvent(spc_ctx(), {
+      cur <- comm_state$ctx_results %||% list()
+      cur$spatial <- spc_ctx()
+      comm_state$ctx_results <- cur
+    }, ignoreNULL = FALSE)
     # PAS 1 (idéation saves 2026-11-17) : aide de publication de l'état léger.
     # ⚠️ JUMELLE de la même aide dans mod_sc_communication_velocity.R et
     # _trajectory.R — read-modify-write explicite (affectation imbriquée
