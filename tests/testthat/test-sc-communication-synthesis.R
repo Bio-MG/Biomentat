@@ -83,3 +83,20 @@ test_that("build_communication_multimodal_synthesis : convergence sur 4 contexte
   p <- plot_communication_multimodal_synthesis(syn, top_n = 10L)
   expect_s3_class(p, "ggplot")
 })
+
+test_that("W1.2 #3 : .cellchat_sanitize_zero_labels protège contre les étiquettes '0'", {
+  s1 <- .cellchat_sanitize_zero_labels(c("0", "1", "2"))
+  expect_true(isTRUE(s1$changed))
+  expect_identical(s1$labels, c("cluster_0", "cluster_1", "cluster_2"))
+  expect_false("0" %in% s1$labels)
+  expect_true(nzchar(s1$warning))
+
+  s2 <- .cellchat_sanitize_zero_labels(c("Tcell", "0", "Bcell"))
+  expect_true(isTRUE(s2$changed))
+  expect_identical(s2$labels, c("Tcell", "cluster_0", "Bcell"))
+
+  s3 <- .cellchat_sanitize_zero_labels(c("Tcell", "Bcell"))
+  expect_false(isTRUE(s3$changed))
+  expect_identical(s3$labels, c("Tcell", "Bcell"))
+  expect_null(s3$warning)
+})

@@ -344,17 +344,17 @@ plot_communication_dotplot <- function(communication_result, filtered_table = NU
     )
   if (has_rank) {
     p <- p + ggplot2::scale_colour_gradient(
-      low = "#E8F1FA", high = "#2166AC",
+      low = "#9ECAE1", high = "#084594",
       trans = scales::reverse_trans(),
       name = "rang moyen (1 = meilleur)"
     )
   } else if (has_score) {
     p <- p + ggplot2::scale_colour_gradient(
-      low = "#E8F1FA", high = "#2166AC", name = "Score moyen importe"
+      low = "#9ECAE1", high = "#084594", name = "Score moyen importe"
     )
   } else {
     p <- p + ggplot2::scale_colour_gradient(
-      low = "#E8F1FA", high = "#2166AC", name = "Nb interactions"
+      low = "#9ECAE1", high = "#084594", name = "Nb interactions"
     )
   }
   p

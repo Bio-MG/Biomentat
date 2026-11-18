@@ -476,6 +476,12 @@ cellchat_input_from_matrix <- function(data, features, labels, species = NULL,
     )
   }
 
+  san <- .cellchat_sanitize_zero_labels(labels)
+  labels <- san$labels
+  if (!is.null(san$warning)) {
+    warnings_out <- c(warnings_out, san$warning)
+  }
+
   # --- 6. Table de features finale (alignee sur rownames(data)) -------------
   final_symbols <- rownames(data)
   first_idx <- match(final_symbols, symbols)
@@ -671,6 +677,32 @@ cellchat_group_by_column <- function(x) {
     )
   }
   "labels"
+}
+
+# Garde-fou CellChat "0"-label (W1.2 #3) : CellChat:::setIdent() avorte si une
+# étiquette vaut littéralement "0" (fréquent avec seurat_clusters 0-indexé).
+.cellchat_sanitize_zero_labels <- function(labels) {
+  lbl <- as.character(labels)
+  if (!("0" %in% lbl)) {
+    return(list(labels = lbl, changed = FALSE, warning = NULL))
+  }
+  uniq <- unique(lbl)
+  all_digits <- all(grepl("^[0-9]+$", uniq))
+  if (all_digits) {
+    new_lbl <- paste0("cluster_", lbl)
+  } else {
+    cand <- "cluster_0"
+    while (cand %in% setdiff(uniq, "0")) {
+      cand <- paste0(cand, "_san")
+    }
+    new_lbl <- ifelse(lbl == "0", cand, lbl)
+  }
+  warn <- paste0(
+    "CellChat interdit l'etiquette '0' (seurat_clusters 0-indexe) : ",
+    if (all_digits) "etiquettes numeriques prefixees par 'cluster_'."
+    else "etiquette '0' renommee automatiquement pour eviter un crash CellChat."
+  )
+  list(labels = new_lbl, changed = TRUE, warning = warn)
 }
 
 #' Resume d'entree CellChat pour export CSV (une ligne)

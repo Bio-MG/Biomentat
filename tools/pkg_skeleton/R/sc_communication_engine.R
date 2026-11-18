@@ -475,6 +475,13 @@ run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT
   # `meta` » — le moteur ne marchait que si la colonne s'appelait "labels".
   # Calcule AVANT le tryCatch pour qu'une entree non conforme garde son etat.
   group_col <- cellchat_group_by_column(cellchat_input)
+  san_lbl <- .cellchat_sanitize_zero_labels(cellchat_input$meta[[group_col]])
+  if (isTRUE(san_lbl$changed)) {
+    cellchat_input$meta[[group_col]] <- san_lbl$labels
+    if (!is.null(san_lbl$warning)) {
+      warnings_all <- c(warnings_all, san_lbl$warning)
+    }
+  }
   object <- tryCatch(
     CellChat::createCellChat(
       object  = cellchat_input$data,
