@@ -13954,12 +13954,12 @@
       "en": "Marker concordance (multi-dataset)"
     },
     {
-      "fr": "Au moins 2 datasets enregistrés portant des marqueurs (@misc) sont requis pour calculer la concordance Jaccard.",
-      "en": "At least 2 registered datasets with markers (@misc) are required to compute Jaccard concordance."
-    },
-    {
       "fr": "%d jeux avec marqueurs prêts pour la concordance.",
       "en": "%d datasets with markers ready for concordance."
+    },
+    {
+      "fr": "Au moins 2 datasets enregistrés portant des marqueurs sont requis pour calculer la concordance Jaccard.",
+      "en": "At least 2 registered datasets with markers are required to compute Jaccard concordance."
     }
   ]
 }

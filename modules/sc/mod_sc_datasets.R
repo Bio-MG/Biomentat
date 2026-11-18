@@ -226,7 +226,7 @@ mod_sc_datasets_server <- function(id, global_data) {
       mks <- .collect_ds_markers()
       if (length(mks) < 2L) {
         return(tags$div(class = "small text-muted",
-                        .tr("Au moins 2 datasets enregistrés portant des marqueurs (@misc$markers) sont requis pour calculer la concordance Jaccard.")))
+                        .tr("Au moins 2 datasets enregistrés portant des marqueurs sont requis pour calculer la concordance Jaccard.")))
       }
       tags$div(class = "small text-success",
                sprintf(.tr("%d jeux avec marqueurs prêts pour la concordance."), length(mks)))
