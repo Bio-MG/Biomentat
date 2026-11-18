@@ -245,3 +245,241 @@ bulk_concordance_summary <- function(count_ids, meta_ids) {
   list(ok = ok, n_common = n_common,
        counts_only = counts_only, meta_only = meta_only, reason = reason)
 }
+
+#' Prépare une matrice quantitative omique générique p x n (BK-03)
+#'
+#' Accepte des matrices continues non-entières (protéomique LFQ/TMT,
+#' métabolomique, lipidomique, méthylation beta/M-values, etc.) avec valeurs
+#' négatives ou manquantes, sans exiger d'entiers de comptage RNA-seq.
+#'
+#' @param mat Matrice ou data.frame numérique (gènes/entités en lignes,
+#'   échantillons en colonnes), avec rownames et colnames non vides.
+#' @param modality Modalité déclarée (`proteomics`, `metabolomics`,
+#'   `lipidomics`, `methylation`, `generic`).
+#' @param log_transform Logique : appliquer `log2(x + 1)` si `all(x >= 0, na.rm = TRUE)`.
+#' @param impute Méthode d'imputation des `NA` : `"none"`, `"min_half"`, `"median"`.
+#' @param normalize Normalisation : `"none"`, `"median_center"`, `"zscore"`.
+#' @param min_present_frac Fraction minimale de valeurs finies requise par ligne (0..1).
+#' @return Liste `generic_omics_matrix` (`matrix`, `modality`, `qc`, `provenance`).
+#' @export
+prepare_generic_omics_matrix <- function(
+    mat,
+    modality = c("proteomics", "metabolomics", "lipidomics", "methylation", "generic"),
+    log_transform = FALSE,
+    impute = c("none", "min_half", "median"),
+    normalize = c("none", "median_center", "zscore"),
+    min_present_frac = 0.5) {
+  modality <- match.arg(modality)
+  impute <- match.arg(impute)
+  normalize <- match.arg(normalize)
+
+  if (is.null(mat) || (!is.matrix(mat) && !is.data.frame(mat))) {
+    stop(errorCondition("prepare_generic_omics_matrix() : matrice/data.frame p x n requis.",
+                        class = "bulk_import_error", state = "invalid_input"))
+  }
+  m <- as.matrix(mat)
+  storage.mode(m) <- "double"
+  if (nrow(m) == 0L || ncol(m) == 0L) {
+    stop(errorCondition("prepare_generic_omics_matrix() : matrice vide.",
+                        class = "bulk_import_error", state = "empty_matrix"))
+  }
+  if (is.null(rownames(m)) || any(!nzchar(rownames(m)))) {
+    rownames(m) <- paste0("feature_", seq_len(nrow(m)))
+  }
+  if (is.null(colnames(m)) || any(!nzchar(colnames(m)))) {
+    colnames(m) <- paste0("sample_", seq_len(ncol(m)))
+  }
+
+  n_in <- nrow(m)
+  n_na_before <- sum(!is.finite(m))
+  present_frac <- rowMeans(is.finite(m))
+  keep <- present_frac >= min_present_frac
+  m <- m[keep, , drop = FALSE]
+  if (nrow(m) == 0L) {
+    stop(errorCondition("prepare_generic_omics_matrix() : aucune entité ne passe min_present_frac.",
+                        class = "bulk_import_error", state = "empty_after_filter"))
+  }
+
+  if (isTRUE(log_transform)) {
+    vals <- m[is.finite(m)]
+    if (length(vals) > 0L && all(vals >= 0)) {
+      m <- log2(m + 1)
+    }
+  }
+
+  if (identical(impute, "min_half")) {
+    pos <- m[is.finite(m) & m > 0]
+    fill_val <- if (length(pos) > 0L) 0.5 * min(pos) else 0
+    m[!is.finite(m)] <- fill_val
+  } else if (identical(impute, "median")) {
+    for (i in seq_len(nrow(m))) {
+      bad <- !is.finite(m[i, ])
+      if (any(bad)) {
+        med <- stats::median(m[i, !bad])
+        m[i, bad] <- if (is.finite(med)) med else 0
+      }
+    }
+  }
+
+  if (identical(normalize, "median_center")) {
+    col_med <- apply(m, 2L, stats::median, na.rm = TRUE)
+    col_med[!is.finite(col_med)] <- 0
+    m <- sweep(m, 2L, col_med, "-")
+  } else if (identical(normalize, "zscore")) {
+    for (i in seq_len(nrow(m))) {
+      mu <- mean(m[i, ], na.rm = TRUE)
+      sd_i <- stats::sd(m[i, ], na.rm = TRUE)
+      if (is.finite(sd_i) && sd_i > 0) {
+        m[i, ] <- (m[i, ] - mu) / sd_i
+      } else {
+        m[i, ] <- m[i, ] - mu
+      }
+    }
+  }
+
+  prov <- new_provenance_entry(
+    analysis_id = "generic-omics-matrix",
+    method = paste0("generic_quantitative_", modality),
+    parameters = list(
+      modality = modality, log_transform = isTRUE(log_transform),
+      impute = impute, normalize = normalize,
+      min_present_frac = min_present_frac
+    ),
+    dataset = m
+  )
+
+  list(
+    type = "generic_omics_matrix",
+    matrix = m,
+    modality = modality,
+    qc = list(
+      n_features_in = as.integer(n_in),
+      n_features_kept = as.integer(nrow(m)),
+      n_samples = as.integer(ncol(m)),
+      n_na_before = as.integer(n_na_before),
+      n_na_after = as.integer(sum(!is.finite(m))),
+      is_count_matrix = FALSE
+    ),
+    provenance = prov
+  )
+}
+
+#' Analyse différentielle quantitative générique (modèle linéaire / limma, BK-03)
+#'
+#' @param mat Matrice numérique p x n (ou objet retourné par `prepare_generic_omics_matrix()`).
+#' @param group Vecteur facteur/caractère de longueur `ncol(mat)` (2 niveaux).
+#' @param case_level Niveau cas (numérateur du `logFC`).
+#' @param control_level Niveau contrôle (référence).
+#' @return Liste `generic_omics_de` (`table`, `case_level`, `control_level`, `engine`, `provenance`).
+#' @export
+run_generic_omics_de <- function(mat, group, case_level = NULL, control_level = NULL) {
+  if (is.list(mat) && identical(mat$type %||% NULL, "generic_omics_matrix")) {
+    mat <- mat$matrix
+  }
+  m <- as.matrix(mat)
+  storage.mode(m) <- "double"
+  grp <- as.character(group)
+  if (length(grp) != ncol(m)) {
+    stop(errorCondition("run_generic_omics_de() : length(group) doit égaler ncol(mat).",
+                        class = "bulk_import_error", state = "invalid_design"))
+  }
+  lvls <- unique(grp[!is.na(grp)])
+  if (length(lvls) < 2L) {
+    stop(errorCondition("run_generic_omics_de() : au moins 2 groupes requis.",
+                        class = "bulk_import_error", state = "invalid_design"))
+  }
+  if (is.null(control_level)) control_level <- lvls[1L]
+  if (is.null(case_level)) case_level <- setdiff(lvls, control_level)[1L]
+  keep_s <- grp %in% c(control_level, case_level)
+  m <- m[, keep_s, drop = FALSE]
+  grp <- grp[keep_s]
+  idx_case <- which(grp == case_level)
+  idx_ctrl <- which(grp == control_level)
+  if (length(idx_case) < 2L || length(idx_ctrl) < 2L) {
+    stop(errorCondition("run_generic_omics_de() : au moins 2 réplicats par groupe requis.",
+                        class = "bulk_import_error", state = "insufficient_replicates"))
+  }
+
+  engine <- "welch_t"
+  tbl <- NULL
+  if (requireNamespace("limma", quietly = TRUE)) {
+    res_limma <- tryCatch({
+      f <- factor(grp, levels = c(control_level, case_level))
+      design <- stats::model.matrix(~ f)
+      fit <- limma::lmFit(m, design)
+      fit <- limma::eBayes(fit)
+      tt <- limma::topTable(fit, coef = 2L, number = Inf, sort.by = "none")
+      tt$feature <- rownames(tt)
+      tt
+    }, error = function(e) NULL)
+    if (!is.null(res_limma)) {
+      engine <- "limma_ebayes"
+      tbl <- data.frame(
+        feature = res_limma$feature,
+        logFC = as.numeric(res_limma$logFC),
+        t = as.numeric(res_limma$t),
+        P.Value = as.numeric(res_limma$P.Value),
+        adj.P.Val = as.numeric(res_limma$adj.P.Val),
+        mean_case = rowMeans(m[res_limma$feature, idx_case, drop = FALSE], na.rm = TRUE),
+        mean_control = rowMeans(m[res_limma$feature, idx_ctrl, drop = FALSE], na.rm = TRUE),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+
+  if (is.null(tbl)) {
+    feats <- rownames(m)
+    rows <- lapply(seq_len(nrow(m)), function(i) {
+      xc <- m[i, idx_case]
+      xr <- m[i, idx_ctrl]
+      xc <- xc[is.finite(xc)]
+      xr <- xr[is.finite(xr)]
+      if (length(xc) < 2L || length(xr) < 2L) {
+        return(c(logFC = NA_real_, t = NA_real_, p = NA_real_,
+                 mc = if (length(xc)) mean(xc) else NA_real_,
+                 mr = if (length(xr)) mean(xr) else NA_real_))
+      }
+      tt <- tryCatch(stats::t.test(xc, xr), error = function(e) NULL)
+      c(
+        logFC = mean(xc) - mean(xr),
+        t = if (is.null(tt)) NA_real_ else unname(tt$statistic),
+        p = if (is.null(tt)) NA_real_ else unname(tt$p.value),
+        mc = mean(xc),
+        mr = mean(xr)
+      )
+    })
+    mat_r <- do.call(rbind, rows)
+    tbl <- data.frame(
+      feature = feats,
+      logFC = mat_r[, "logFC"],
+      t = mat_r[, "t"],
+      P.Value = mat_r[, "p"],
+      adj.P.Val = stats::p.adjust(mat_r[, "p"], method = "BH"),
+      mean_case = mat_r[, "mc"],
+      mean_control = mat_r[, "mr"],
+      stringsAsFactors = FALSE
+    )
+  }
+
+  tbl$modality_mode <- "generic_quantitative"
+  tbl <- tbl[order(tbl$adj.P.Val, -abs(tbl$logFC), na.last = TRUE), , drop = FALSE]
+  rownames(tbl) <- NULL
+
+  prov <- new_provenance_entry(
+    analysis_id = "generic-omics-de",
+    method = engine,
+    parameters = list(case_level = case_level, control_level = control_level,
+                       n_features = nrow(tbl)),
+    dataset = m
+  )
+
+  list(
+    type = "generic_omics_de",
+    table = tbl,
+    case_level = case_level,
+    control_level = control_level,
+    engine = engine,
+    provenance = prov
+  )
+}
+

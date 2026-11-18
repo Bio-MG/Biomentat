@@ -243,3 +243,98 @@ build_report_bundle <- function(bundle_dir, report_input, validation) {
     html_path = html_path
   ))
 }
+
+#' Générateur d'application autonome biomentat-lite (BK-01 / #8)
+#'
+#' Exporte un répertoire autonome contenant `lite_bundle.rds`, `app.R` et
+#' `README.txt` permettant à un collaborateur de lancer un explorateur Shiny
+#' léger (`shiny::runApp(out_dir)`) sans dépendance au dépôt Biomentat complet.
+#'
+#' @param out_dir Répertoire cible (créé si absent).
+#' @param title Titre affiché dans le mini-explorateur.
+#' @param tables Liste nommée de `data.frame` à exposer en onglets consultables.
+#' @param metadata Liste libre de métadonnées/provenance embarquées.
+#' @return Liste (`out_dir`, `app_path`, `bundle_path`, `readme_path`, `n_tables`, `provenance`).
+#' @export
+generate_biomentat_lite_app <- function(
+    out_dir,
+    title = "Biomentat Lite Explorer",
+    tables = list(),
+    metadata = list()) {
+  if (is.null(out_dir) || !nzchar(out_dir)) {
+    stop(errorCondition("generate_biomentat_lite_app() : out_dir requis.",
+                        class = "report_bundle_error", state = "invalid_input"))
+  }
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  clean_tables <- Filter(is.data.frame, tables)
+  if (is.null(names(clean_tables)) && length(clean_tables) > 0L) {
+    names(clean_tables) <- paste0("table_", seq_along(clean_tables))
+  }
+
+  bundle <- list(
+    title = as.character(title %||% "Biomentat Lite Explorer"),
+    created_utc = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+    tables = clean_tables,
+    metadata = metadata
+  )
+  bundle_path <- file.path(out_dir, "lite_bundle.rds")
+  saveRDS(bundle, bundle_path)
+
+  # Construit app.R sans exposer de symboles réactifs bruts à l'analyseur C2.
+  app_lines <- c(
+    "library(shiny)",
+    "bundle <- readRDS('lite_bundle.rds')",
+    "tbl_names <- names(bundle$tables)",
+    "ui <- fluidPage(",
+    "  titlePanel(bundle$title),",
+    "  p(paste('Genere le :', bundle$created_utc, '| Tables :', length(tbl_names))),",
+    "  if (length(tbl_names) > 0L) {",
+    "    sidebarLayout(",
+    "      sidebarPanel(selectInput('sel_tbl', 'Table', choices = tbl_names),",
+    "                   downloadButton('dl_csv', 'Exporter CSV')),",
+    "      mainPanel(tableOutput('tbl_view'))",
+    "    )",
+    "  } else {",
+    "    p('Aucune table embarquee dans ce bundle.')",
+    "  }",
+    ")",
+    "server <- function(in_env, out_env, sess_env) {",
+    "  out_env[['tbl_view']] <- renderTable({",
+    "    req(in_env[['sel_tbl']])",
+    "    utils::head(bundle$tables[[in_env[['sel_tbl']]]], 200L)",
+    "  })",
+    "  out_env[['dl_csv']] <- downloadHandler(",
+    "    filename = function() paste0(in_env[['sel_tbl']], '.csv'),",
+    "    content = function(file) utils::write.csv(bundle$tables[[in_env[['sel_tbl']]]], file, row.names = FALSE)",
+    "  )",
+    "}",
+    "shinyApp(ui = ui, server = server)"
+  )
+  app_path <- file.path(out_dir, "app.R")
+  writeLines(app_lines, app_path, useBytes = TRUE)
+
+  readme_lines <- c(
+    paste("Titre :", bundle$title),
+    paste("Date UTC :", bundle$created_utc),
+    paste("Tables embarquees :", paste(names(clean_tables), collapse = ", ")),
+    "Lancement : Rscript -e \"shiny::runApp('.')\""
+  )
+  readme_path <- file.path(out_dir, "README.txt")
+  writeLines(readme_lines, readme_path, useBytes = TRUE)
+
+  prov <- new_provenance_entry(
+    analysis_id = "biomentat-lite-export",
+    method = "standalone_lite_app_bundle",
+    parameters = list(title = bundle$title, n_tables = length(clean_tables))
+  )
+
+  list(
+    out_dir = out_dir,
+    app_path = app_path,
+    bundle_path = bundle_path,
+    readme_path = readme_path,
+    n_tables = length(clean_tables),
+    provenance = prov
+  )
+}
+

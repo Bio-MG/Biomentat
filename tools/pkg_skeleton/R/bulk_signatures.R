@@ -300,3 +300,137 @@ build_signature_scores_export <- function(result) {
   grid$disclaimer <- result$disclaimer %||% BULK_SIGNATURES_DISCLAIMER
   grid[order(grid$signature, grid$sample), ]
 }
+
+#' Scoreur offline de connectivité CMAP / LINCS L1000 (BK-02)
+#'
+#' Calcule un score de connectivité basé sur les rangs (type Lamb et al. 2006 /
+#' L1000 CMap) entre un profil différentiel observé et un pack hors-ligne de
+#' signatures perturbateurs (`up` / `down`). Zéro appel réseau.
+#'
+#' @param de_stats Vecteur numérique nommé (noms = gènes, valeurs = stat/logFC
+#'   triables) OU `data.frame` avec colonnes `gene` (ou rownames) et `logFC` / `stat`.
+#' @param signatures_pack Liste de perturbateurs (`list(id, target, moa, up, down)`)
+#'   OU `data.frame` avec colonnes `id`, `direction` (`"up"`/`"down"`), `gene`.
+#' @param top_k Nombre maximal de gènes `up` et `down` de la signature requête
+#'   retenus si `de_stats` dépasse `2 * top_k` (défaut 150, `NULL` = tout).
+#' @return Liste `cmap_offline_result` (`table`, `qc`, `provenance`).
+#' @export
+score_cmap_connectivity <- function(de_stats, signatures_pack, top_k = 150L) {
+  if (is.data.frame(de_stats)) {
+    genes <- if ("gene" %in% colnames(de_stats)) {
+      as.character(de_stats$gene)
+    } else if ("feature" %in% colnames(de_stats)) {
+      as.character(de_stats$feature)
+    } else {
+      rownames(de_stats)
+    }
+    val_col <- intersect(c("stat", "t", "logFC", "score"), colnames(de_stats))[1L]
+    if (is.na(val_col) || is.null(genes)) {
+      stop(errorCondition("score_cmap_connectivity() : de_stats doit contenir gene/rownames et stat/logFC.",
+                          class = "bulk_signatures_error", state = "invalid_input"))
+    }
+    vec <- suppressWarnings(as.numeric(de_stats[[val_col]]))
+    names(vec) <- genes
+  } else if (is.numeric(de_stats) && !is.null(names(de_stats))) {
+    vec <- de_stats
+  } else {
+    stop(errorCondition("score_cmap_connectivity() : de_stats doit être un vecteur nommé ou un data.frame.",
+                        class = "bulk_signatures_error", state = "invalid_input"))
+  }
+
+  vec <- vec[is.finite(vec) & !is.na(names(vec)) & nzchar(names(vec))]
+  vec <- vec[!duplicated(names(vec))]
+  if (length(vec) < 4L) {
+    stop(errorCondition("score_cmap_connectivity() : au moins 4 gènes finis requis dans de_stats.",
+                        class = "bulk_signatures_error", state = "insufficient_genes"))
+  }
+  vec <- sort(vec, decreasing = TRUE)
+  ranked_genes <- names(vec)
+  n_total <- length(ranked_genes)
+
+  if (is.data.frame(signatures_pack)) {
+    req_cols <- c("id", "direction", "gene")
+    if (!all(req_cols %in% colnames(signatures_pack))) {
+      stop(errorCondition("score_cmap_connectivity() : signatures_pack data.frame requiert id, direction, gene.",
+                          class = "bulk_signatures_error", state = "invalid_pack"))
+    }
+    ids <- unique(as.character(signatures_pack$id))
+    signatures_pack <- lapply(ids, function(pid) {
+      sub <- signatures_pack[signatures_pack$id == pid, , drop = FALSE]
+      dir_low <- tolower(as.character(sub$direction))
+      list(
+        id = pid,
+        target = if ("target" %in% colnames(sub)) as.character(sub$target[1L]) else NA_character_,
+        moa = if ("moa" %in% colnames(sub)) as.character(sub$moa[1L]) else NA_character_,
+        up = unique(as.character(sub$gene[dir_low == "up"])),
+        down = unique(as.character(sub$gene[dir_low == "down"]))
+      )
+    })
+  }
+  if (!is.list(signatures_pack) || length(signatures_pack) == 0L) {
+    stop(errorCondition("score_cmap_connectivity() : signatures_pack non vide requis.",
+                        class = "bulk_signatures_error", state = "invalid_pack"))
+  }
+
+  .ks_es <- function(hit_ranks, n) {
+    t_len <- length(hit_ranks)
+    if (t_len == 0L || t_len >= n) return(0)
+    r_sorted <- sort(hit_ranks)
+    j <- seq_len(t_len)
+    a <- max(j / t_len - r_sorted / n)
+    b <- max(r_sorted / n - (j - 1) / t_len)
+    if (a > b) a else -b
+  }
+
+  rows <- lapply(signatures_pack, function(sig) {
+    pid <- as.character(sig$id %||% "unknown")
+    up_g <- intersect(as.character(sig$up %||% character(0)), ranked_genes)
+    dn_g <- intersect(as.character(sig$down %||% character(0)), ranked_genes)
+    if (!is.null(top_k) && is.finite(top_k) && top_k > 0L) {
+      up_g <- utils::head(up_g, as.integer(top_k))
+      dn_g <- utils::head(dn_g, as.integer(top_k))
+    }
+    r_up <- match(up_g, ranked_genes)
+    r_dn <- match(dn_g, ranked_genes)
+    es_up <- .ks_es(r_up, n_total)
+    es_dn <- .ks_es(r_dn, n_total)
+    # Connectivité signée : +1 si up en haut & down en bas (mimic),
+    # -1 si up en bas & down en haut (reversal).
+    raw_conn <- if (sign(es_up) == sign(es_dn) && es_up != 0) 0 else (es_up - es_dn) / 2
+    raw_conn <- max(-1, min(1, raw_conn))
+    direction <- if (raw_conn <= -0.1) "reverses" else if (raw_conn >= 0.1) "mimics" else "neutral"
+    data.frame(
+      id = pid,
+      target = as.character(sig$target %||% NA_character_),
+      moa = as.character(sig$moa %||% NA_character_),
+      n_up_overlap = length(up_g),
+      n_down_overlap = length(dn_g),
+      es_up = es_up,
+      es_down = es_dn,
+      connectivity_score = raw_conn,
+      direction = direction,
+      stringsAsFactors = FALSE
+    )
+  })
+  tbl <- do.call(rbind, rows)
+  tbl <- tbl[order(tbl$connectivity_score, -tbl$n_up_overlap - tbl$n_down_overlap), , drop = FALSE]
+  rownames(tbl) <- NULL
+
+  prov <- new_provenance_entry(
+    analysis_id = "bulk-cmap-offline",
+    method = "cmap_ks_rank_connectivity_offline",
+    parameters = list(n_ranked_genes = n_total, n_signatures = nrow(tbl),
+                       top_k = top_k, offline = TRUE),
+    dataset = vec
+  )
+
+  list(
+    type = "cmap_offline_result",
+    table = tbl,
+    qc = list(n_ranked_genes = as.integer(n_total),
+              n_signatures = as.integer(nrow(tbl)),
+              offline = TRUE),
+    provenance = prov
+  )
+}
+
