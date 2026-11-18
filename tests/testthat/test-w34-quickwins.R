@@ -27,6 +27,16 @@ test_that("BK-03 : prepare_generic_omics_matrix & run_generic_omics_de gèrent f
   expect_true(all(de$table$modality_mode == "generic_quantitative"))
   expect_identical(de$table$feature[1L], "PROT_1")
   expect_true(de$table$logFC[1L] > 2)
+
+  # Edge cases: non-numeric column rejected, min_half on negative matrix imputes below min,
+  # and log_transform=TRUE on negative matrix emits warning instead of silent no-op.
+  df_bad <- data.frame(id = c("A", "B"), s1 = c(1, 2), stringsAsFactors = FALSE)
+  expect_error(prepare_generic_omics_matrix(df_bad), class = "bulk_import_error")
+
+  mat_neg <- matrix(c(-2.0, 1.0, NA_real_, 3.0, -1.0, 2.0, 0.5, 1.5), nrow = 2, ncol = 4)
+  prep_neg <- prepare_generic_omics_matrix(mat_neg, log_transform = TRUE, impute = "min_half")
+  expect_true(prep_neg$matrix[1L, 2L] < -2.0)
+  expect_true(length(prep_neg$qc$warnings) >= 1L)
 })
 
 test_that("BK-02 : score_cmap_connectivity distingue reversal et mimic hors-ligne", {

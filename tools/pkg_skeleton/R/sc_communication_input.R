@@ -683,19 +683,20 @@ cellchat_group_by_column <- function(x) {
 # étiquette vaut littéralement "0" (fréquent avec seurat_clusters 0-indexé).
 .cellchat_sanitize_zero_labels <- function(labels) {
   lbl <- as.character(labels)
-  if (!("0" %in% lbl)) {
+  has_zero_level <- is.factor(labels) && ("0" %in% levels(labels))
+  if (!("0" %in% lbl) && !has_zero_level) {
     return(list(labels = lbl, changed = FALSE, warning = NULL))
   }
-  uniq <- unique(lbl)
-  all_digits <- all(grepl("^[0-9]+$", uniq))
+  uniq <- unique(lbl[!is.na(lbl)])
+  all_digits <- length(uniq) > 0L && all(grepl("^[0-9]+$", uniq))
   if (all_digits) {
-    new_lbl <- paste0("cluster_", lbl)
+    new_lbl <- ifelse(is.na(lbl), NA_character_, paste0("cluster_", lbl))
   } else {
     cand <- "cluster_0"
     while (cand %in% setdiff(uniq, "0")) {
       cand <- paste0(cand, "_san")
     }
-    new_lbl <- ifelse(lbl == "0", cand, lbl)
+    new_lbl <- ifelse(!is.na(lbl) & lbl == "0", cand, lbl)
   }
   warn <- paste0(
     "CellChat interdit l'etiquette '0' (seurat_clusters 0-indexe) : ",

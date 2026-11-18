@@ -277,6 +277,19 @@ prepare_generic_omics_matrix <- function(
     stop(errorCondition("prepare_generic_omics_matrix() : matrice/data.frame p x n requis.",
                         class = "bulk_import_error", state = "invalid_input"))
   }
+  if (is.data.frame(mat)) {
+    non_num <- !vapply(mat, is.numeric, logical(1))
+    if (any(non_num)) {
+      stop(errorCondition(
+        sprintf("prepare_generic_omics_matrix() : colonnes non numériques détectées (%s).",
+                paste(colnames(mat)[non_num], collapse = ", ")),
+        class = "bulk_import_error", state = "non_numeric_columns"
+      ))
+    }
+  } else if (!is.numeric(mat)) {
+    stop(errorCondition("prepare_generic_omics_matrix() : matrice numérique requise.",
+                        class = "bulk_import_error", state = "non_numeric_matrix"))
+  }
   m <- as.matrix(mat)
   storage.mode(m) <- "double"
   if (nrow(m) == 0L || ncol(m) == 0L) {
@@ -300,16 +313,26 @@ prepare_generic_omics_matrix <- function(
                         class = "bulk_import_error", state = "empty_after_filter"))
   }
 
+  warnings_out <- character(0)
   if (isTRUE(log_transform)) {
     vals <- m[is.finite(m)]
     if (length(vals) > 0L && all(vals >= 0)) {
       m <- log2(m + 1)
+    } else if (length(vals) > 0L) {
+      warnings_out <- c(warnings_out,
+                        "log_transform = TRUE ignoré : valeurs négatives détectées (matrice déjà log-transformée ?).")
     }
   }
 
   if (identical(impute, "min_half")) {
-    pos <- m[is.finite(m) & m > 0]
-    fill_val <- if (length(pos) > 0L) 0.5 * min(pos) else 0
+    vals_fin <- m[is.finite(m)]
+    if (length(vals_fin) == 0L) {
+      fill_val <- 0
+    } else if (min(vals_fin) > 0) {
+      fill_val <- 0.5 * min(vals_fin)
+    } else {
+      fill_val <- min(vals_fin) - 1
+    }
     m[!is.finite(m)] <- fill_val
   } else if (identical(impute, "median")) {
     for (i in seq_len(nrow(m))) {
@@ -345,7 +368,8 @@ prepare_generic_omics_matrix <- function(
       impute = impute, normalize = normalize,
       min_present_frac = min_present_frac
     ),
-    dataset = m
+    dataset = m,
+    warnings = warnings_out
   )
 
   list(
@@ -358,7 +382,8 @@ prepare_generic_omics_matrix <- function(
       n_samples = as.integer(ncol(m)),
       n_na_before = as.integer(n_na_before),
       n_na_after = as.integer(sum(!is.finite(m))),
-      is_count_matrix = FALSE
+      is_count_matrix = FALSE,
+      warnings = warnings_out
     ),
     provenance = prov
   )
