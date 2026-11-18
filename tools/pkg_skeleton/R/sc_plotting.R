@@ -71,13 +71,19 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   if (type == "feature") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
     if (!length(valid)) stop(errorCondition("Aucun gène valide", class = "sc_plotting_error"))
+    # BK-04 opt-in 1st/99th percentile color clipping (robust to outlier cells)
+    q_min <- if (isTRUE(cfg$clip_quantiles)) "q1" else NA
+    q_max <- if (isTRUE(cfg$clip_quantiles)) "q99" else NA
     # multi-gene returns patchwork: scale only safe for single gene
     if (length(valid) == 1L) {
-      p <- FeaturePlot(obj, features = valid[1], pt.size = pt_size, raster = .raster_large) + theme_fn
+      p <- FeaturePlot(obj, features = valid[1], pt.size = pt_size,
+                       min.cutoff = q_min, max.cutoff = q_max,
+                       raster = .raster_large) + theme_fn
       return(.add(p, pal_cont))
     }
     return(FeaturePlot(obj, features = head(valid, 4), ncol = 2,
-                       pt.size = pt_size, raster = .raster_large) + theme_fn)
+                       pt.size = pt_size, min.cutoff = q_min, max.cutoff = q_max,
+                       raster = .raster_large) + theme_fn)
   }
 
   # 3. Scatter (enhanced) -----------------------------------------------------

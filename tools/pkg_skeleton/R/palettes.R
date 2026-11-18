@@ -547,3 +547,17 @@ packs_palette_attribution <- function(packs, choice) {
     NULL
   })
 }
+
+#' BK-04 : bornes de couleurs par quantiles (1er / 99e centile par défaut)
+#'
+#' @param x Vecteur numérique (valeurs finies conservées).
+#' @param probs Paire de probabilités `(low, high)` dans `[0, 1]`.
+#' @return Vecteur numérique `c(low, high)` ou `NULL` si insuffisant / dégénéré.
+ts_clip_quantile_limits <- function(x, probs = c(0.01, 0.99)) {
+  x <- as.numeric(x)
+  x <- x[is.finite(x)]
+  if (length(x) < 2L) return(NULL)
+  q <- as.numeric(stats::quantile(x, probs = probs, na.rm = TRUE, names = FALSE))
+  if (length(q) != 2L || !all(is.finite(q)) || q[1L] >= q[2L]) return(NULL)
+  q
+}

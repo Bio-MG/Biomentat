@@ -1919,25 +1919,37 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     }, ignoreInit = TRUE)
 
     # ── Vues (consommatrices pures du resultat canonique) ──────────────────
+    .round_comm_dt <- function(dt, df) {
+      float_cols <- names(df)[vapply(df, function(col) is.numeric(col) && !is.integer(col), logical(1))]
+      if (length(float_cols) > 0L) {
+        dt <- DT::formatRound(dt, columns = float_cols, digits = 4L)
+      }
+      dt
+    }
+
     output$comm_table <- DT::renderDataTable({
       req(comm_state$result)
       .check_fingerprint()
-      ts_datatable(
-        comm_state$result$canonical_table,
+      df <- comm_state$result$canonical_table
+      dt <- ts_datatable(
+        df,
         page_length = 15L,
         filename_base = "sc_comm_canonical_table"
       )
+      .round_comm_dt(dt, df)
     })
 
     output$comm_table_filtered <- DT::renderDataTable({
       req(comm_state$result)
       .check_fingerprint()
-      ts_datatable(
-        comm_filtered()$table,
+      df <- comm_filtered()$table
+      dt <- ts_datatable(
+        df,
         page_length = 15L,
         filename_base = "sc_comm_filtered_table",
         filter = "none"
       )
+      .round_comm_dt(dt, df)
     })
 
     output$comm_dotplot <- renderPlot({

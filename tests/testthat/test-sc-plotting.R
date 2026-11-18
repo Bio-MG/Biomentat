@@ -192,3 +192,25 @@ test_that("build_sc_viz_plot rend un ggplot sur le chemin nominal (dim)", {
   p <- build_sc_viz_plot(obj, list(type = "dim", group_by = "seurat_clusters"))
   expect_s3_class(p, "ggplot")
 })
+
+test_that("BK-04 : ts_clip_quantile_limits() et clip_quantiles = TRUE dans FeaturePlot", {
+  skip_if_not_installed("ggplot2")
+  suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
+  x <- c(1:99, 10000)
+  lim <- ts_clip_quantile_limits(x)
+  expect_length(lim, 2L)
+  expect_lt(lim[2L], 10000)
+  expect_null(ts_clip_quantile_limits(c(5, 5, 5)))
+
+  obj <- .viz_obj(n = 12L)
+  obj <- suppressWarnings(Seurat::NormalizeData(obj, verbose = FALSE))
+  emb <- matrix(rnorm(24), nrow = 12L,
+                dimnames = list(colnames(obj), c("umap_1", "umap_2")))
+  obj[["umap"]] <- suppressWarnings(
+    SeuratObject::CreateDimReducObject(embeddings = emb, key = "umap_"))
+  p <- suppressWarnings(build_sc_viz_plot(
+    obj,
+    list(type = "feature", feat_sel = rownames(obj)[1L], clip_quantiles = TRUE)
+  ))
+  expect_s3_class(p, "ggplot")
+})
