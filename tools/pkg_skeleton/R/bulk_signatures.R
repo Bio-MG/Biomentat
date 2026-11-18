@@ -30,7 +30,8 @@ bulk_signatures_public_api <- function() {
     "bulk_signature_resources",
     "bulk_load_signatures",
     "bulk_score_signatures",
-    "build_signature_scores_export")
+    "build_signature_scores_export",
+    "score_cmap_connectivity")
 }
 
 #' Ressources de signatures disponibles (détection locale, jamais réseau)
@@ -342,7 +343,7 @@ score_cmap_connectivity <- function(de_stats, signatures_pack, top_k = 150L) {
   vec <- vec[!duplicated(names(vec))]
   if (length(vec) < 4L) {
     stop(errorCondition("score_cmap_connectivity() : au moins 4 gènes finis requis dans de_stats.",
-                        class = "bulk_signatures_error", state = "insufficient_genes"))
+                        class = "bulk_signatures_error", state = "invalid_input"))
   }
   vec <- sort(vec, decreasing = TRUE)
   ranked_genes <- names(vec)
@@ -352,7 +353,7 @@ score_cmap_connectivity <- function(de_stats, signatures_pack, top_k = 150L) {
     req_cols <- c("id", "direction", "gene")
     if (!all(req_cols %in% colnames(signatures_pack))) {
       stop(errorCondition("score_cmap_connectivity() : signatures_pack data.frame requiert id, direction, gene.",
-                          class = "bulk_signatures_error", state = "invalid_pack"))
+                          class = "bulk_signatures_error", state = "invalid_input"))
     }
     ids <- unique(as.character(signatures_pack$id))
     signatures_pack <- lapply(ids, function(pid) {
@@ -369,7 +370,7 @@ score_cmap_connectivity <- function(de_stats, signatures_pack, top_k = 150L) {
   }
   if (!is.list(signatures_pack) || length(signatures_pack) == 0L) {
     stop(errorCondition("score_cmap_connectivity() : signatures_pack non vide requis.",
-                        class = "bulk_signatures_error", state = "invalid_pack"))
+                        class = "bulk_signatures_error", state = "no_gene_sets"))
   }
 
   .ks_es <- function(hit_ranks, n) {

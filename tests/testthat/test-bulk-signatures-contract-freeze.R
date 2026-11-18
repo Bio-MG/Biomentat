@@ -35,7 +35,7 @@ test_that("public API surface is frozen (names + signatures)", {
     bulk_signatures_public_api(),
     c("bulk_signatures_public_api", "bulk_signature_resources",
       "bulk_load_signatures", "bulk_score_signatures",
-      "build_signature_scores_export")
+      "build_signature_scores_export", "score_cmap_connectivity")
   )
   expected_api <- list(
     bulk_signatures_public_api    = list(),
@@ -44,7 +44,9 @@ test_that("public API surface is frozen (names + signatures)", {
                                          rds_path = NULL),
     bulk_score_signatures         = list(expr_matrix = NULL, gene_sets = NULL,
                                          method = NULL, ... = quote(expr = )),
-    build_signature_scores_export = list(result = NULL)
+    build_signature_scores_export = list(result = NULL),
+    score_cmap_connectivity       = list(de_stats = NULL, signatures_pack = NULL,
+                                         top_k = NULL)
   )
   for (fn_name in names(expected_api)) {
     expect_true(exists(fn_name, where = globalenv(), inherits = FALSE),

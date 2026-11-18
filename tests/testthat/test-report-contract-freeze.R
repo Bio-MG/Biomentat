@@ -85,7 +85,9 @@ test_that("the four report files define exactly their frozen symbols", {
   expect_setequal(
     .rep_top_level_assignments(file.path(.rep_pkg_dir, "report_bundle.R")),
     c(".report_bundle_stop", "consolidated_report_export_filename",
-      ".report_bundle_tables", ".report_bundle_readme", "build_report_bundle")
+      ".report_bundle_tables", ".report_bundle_readme", "build_report_bundle",
+      # BK-01 (gelé en attente arbitrage swarm, 76d9b75)
+      "generate_biomentat_lite_app")
   )
 })
 

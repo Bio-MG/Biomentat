@@ -2627,10 +2627,12 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       state_get(shared_rv, "comm_tabs_current")
       req(comm_state$result)
       pt <- comm_synthesis()$pair_table
-      dt <- DT::datatable(
+      dt <- ts_datatable(
         pt,
-        rownames = FALSE,
-        options = list(pageLength = 15, scrollX = TRUE)
+        page_length = 15L,
+        filename_base = "sc_comm_multimodal_synthesis",
+        filter = "none",
+        scroll_x = TRUE
       )
       num_cols <- intersect(
         c("mean_imported_score", "spatial_frac", "traj_corr",
