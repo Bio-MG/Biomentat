@@ -362,3 +362,39 @@ test_that("mode par défaut INCHANGÉ : sans --swarm, le garde rend son rapport 
   expect_true(grepl("VERDICT", res$output, fixed = TRUE),
               info = substr(res$output, 1, 400))
 })
+
+test_that("swarm_check reconnaît WebFetch, curl, node et python comme commandes de preuve (sans accepter la prose)", {
+  root <- .cwr_tmp_root("cmd_tokens")
+  .cwr_write_utf8(
+    file.path(.cwr_swarm_dir(root), "round11", "collector_NET_claims.md"), c(
+      "# Registre de claims — collecteur NET (fixture)",
+      "",
+      "| ID | source (file:line) | claim (verbatim, ≤25 mots) | domain | severity AS STATED | verdict | proof (command + measured value) | scope |",
+      "|---|---|---|---|---|---|---|---|",
+      "| NET-01 | docs/p.md:10 | « c1 » | external-research | non datée | CONFIRMÉ | `WebFetch https://developer.chrome.com/blog/chrome-for-testing` -> \"pin a specific browser version\" | doc |",
+      "| NET-02 | docs/p.md:11 | « c2 » | external-research | non datée | CONFIRMÉ | `curl -s https://example.org/api` -> HTTP 200 | api |",
+      "| NET-03 | docs/p.md:12 | « c3 » | external-research | non datée | CONFIRMÉ | `node -e 'console.log(process.version)'` -> v22 | runtime |",
+      "| NET-04 | docs/p.md:13 | « c4 » | external-research | non datée | CONFIRMÉ | `python -c 'print(1)'` -> 1 | runtime |",
+      ""
+    ))
+  findings <- swarm_check(root = root)
+  expect_identical(as.character(findings), character(0),
+                   info = paste("faux positifs sur commandes légitimes :",
+                                paste(findings, collapse = " | ")))
+
+  root_neg <- .cwr_tmp_root("cmd_tokens_neg")
+  .cwr_write_utf8(
+    file.path(.cwr_swarm_dir(root_neg), "round11", "collector_NET_claims.md"), c(
+      "# Registre de claims — collecteur NET (fixture négative)",
+      "",
+      "| ID | source (file:line) | claim (verbatim, ≤25 mots) | domain | severity AS STATED | verdict | proof (command + measured value) | scope |",
+      "|---|---|---|---|---|---|---|---|",
+      "| NET-05 | docs/p.md:14 | « c5 » | external-research | non datée | RÉFUTÉ | lecture visuelle du navigateur sans commande | prose |",
+      ""
+    ))
+  findings_neg <- swarm_check(root = root_neg)
+  expect_true(any(grepl("NET-05", findings_neg, fixed = TRUE)) &&
+                any(grepl("commande", findings_neg, fixed = TRUE)),
+              info = paste("la prose sans commande doit être rejetée :",
+                           paste(findings_neg, collapse = " | ")))
+})

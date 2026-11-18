@@ -213,7 +213,7 @@ SWARM_ROLES <- c("orchestrateur", "collecteur", "bâtisseur", "vérificateur")
 # BYTE-based et l'octet final de « é » (0xA9, non-mot) cree une fausse
 # frontiere — « exécuté » contiendrait « cut » (mesure, 2026-10-25).
 .swarm_tokens <- paste0("(grep|sed|awk|git|rscript|sha256|sha1|md5|wc|ls|find|",
-                        "cat|head|tail|jq|diff|cut|sort|R -e)")
+                        "cat|head|tail|jq|diff|cut|sort|R -e|curl|webfetch|node|python)")
 
 .swarm_has_command <- function(cell) {
   spans <- regmatches(cell, gregexpr("`[^`]+`", cell))[[1]]
