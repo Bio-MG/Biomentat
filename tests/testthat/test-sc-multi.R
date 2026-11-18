@@ -32,7 +32,7 @@ test_that("surface publique, états d'erreur et relations figés", {
     c("sc_multi_public_api", "sc_multi_error_states", "sc_multi_relations",
       "sc_multi_check_label", "sc_multi_check_obj", "sc_multi_check_relation",
       "sc_multi_register", "sc_multi_remove", "sc_multi_get",
-      "sc_multi_summary")
+      "sc_multi_summary", "sc_multi_compare_markers")
   )
   expect_setequal(
     sc_multi_error_states(),
@@ -171,4 +171,26 @@ test_that("pureté Shiny : aucun symbole réactif dans R/sc/sc_multi.R", {
     expect_false(grepl(sym, src, perl = TRUE),
                  info = paste("symbole Shiny interdit trouvé :", sym))
   }
+})
+
+test_that("W3.3 M5 : sc_multi_compare_markers calcule Jaccard et gènes partagés", {
+  t1 <- data.frame(
+    gene = c("CD3D", "CD8A", "MS4A1", "LYZ", "BAD1"),
+    p_val_adj = c(1e-5, 0.01, 0.20, 0.002, NA_real_),
+    avg_log2FC = c(1.2, 0.8, 1.5, 0.9, 2.0),
+    stringsAsFactors = FALSE
+  )
+  t2 <- data.frame(
+    gene = c("CD3D", "LYZ", "GNLY", "NKG7"),
+    p_val_adj = c(1e-4, 0.03, 0.001, 0.50),
+    avg_log2FC = c(1.0, 0.5, 1.8, 0.7),
+    stringsAsFactors = FALSE
+  )
+  cmp <- sc_multi_compare_markers(list(ctrl = t1, stim = t2), padj_max = 0.05, lfc_min = 0.25)
+  expect_identical(cmp$type, "sc_multi_marker_comparison")
+  expect_identical(cmp$per_dataset$n_markers_filtered, c(3L, 3L))
+  expect_identical(cmp$shared_genes, c("CD3D", "LYZ"))
+  expect_identical(cmp$pairwise_jaccard$n_intersection, 2L)
+  expect_identical(cmp$pairwise_jaccard$n_union, 4L)
+  expect_equal(cmp$pairwise_jaccard$jaccard, 0.5, tolerance = 1e-12)
 })

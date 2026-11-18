@@ -41,7 +41,7 @@ sc_multi_public_api <- function() {
     "sc_multi_public_api", "sc_multi_error_states", "sc_multi_relations",
     "sc_multi_check_label", "sc_multi_check_obj", "sc_multi_check_relation",
     "sc_multi_register", "sc_multi_remove", "sc_multi_get",
-    "sc_multi_summary"
+    "sc_multi_summary", "sc_multi_compare_markers"
   )
 }
 
@@ -324,4 +324,121 @@ sc_multi_summary <- function(datasets) {
     )
   })
   do.call(rbind, rows)
+}
+
+#' Concordance multi-jeux des marqueurs Single-Cell (W3.3 M5 — parité bulk)
+#'
+#' Compare >= 2 tables de marqueurs (issues des jeux SC enregistrés) par
+#' filtrage optionnel sur `p_val_adj` et `|avg_log2FC|`, puis calcule l'effectif
+#' par jeu, l'overlap pair-à-pair (Jaccard), les gènes partagés par >= 2 jeux
+#' et l'empreinte de provenance. Zéro ré-exécution d'analyse.
+#'
+#' @param marker_tables Liste nommée (`length >= 2`) de `data.frame` de marqueurs
+#'   portant au moins une colonne `gene` (et optionnellement `p_val_adj`, `avg_log2FC`).
+#' @param padj_max Seuil maximal sur `p_val_adj` lorsqu'elle est présente (défaut 0.05).
+#' @param lfc_min Seuil minimal sur `|avg_log2FC|` lorsqu'elle est présente (défaut 0.25).
+#' @return Liste `sc_multi_marker_comparison` (`per_dataset`, `pairwise_jaccard`,
+#'   `shared_genes`, `gene_membership`, `provenance`).
+#' @export
+sc_multi_compare_markers <- function(marker_tables,
+                                     padj_max = 0.05,
+                                     lfc_min = 0.25) {
+  if (!is.list(marker_tables) || length(marker_tables) < 2L) {
+    stop(.sc_multi_stop(
+      "sc_multi_compare_markers() : au moins 2 tables de marqueurs nommées requises.",
+      state = "invalid_input"
+    ))
+  }
+  ds_names <- names(marker_tables)
+  if (is.null(ds_names) || any(!nzchar(trimws(ds_names))) || anyDuplicated(ds_names)) {
+    stop(.sc_multi_stop(
+      "sc_multi_compare_markers() : les tables de marqueurs doivent porter des noms uniques non vides.",
+      state = "invalid_input"
+    ))
+  }
+
+  gene_sets <- lapply(ds_names, function(nm) {
+    df <- marker_tables[[nm]]
+    if (!is.data.frame(df) || !"gene" %in% colnames(df)) {
+      stop(.sc_multi_stop(
+        sprintf("sc_multi_compare_markers() : table '%s' invalide (data.frame avec colonne 'gene' requis).", nm),
+        state = "invalid_input"
+      ))
+    }
+    keep <- !is.na(df$gene) & nzchar(trimws(as.character(df$gene)))
+    if ("p_val_adj" %in% colnames(df) && !is.null(padj_max) && is.finite(padj_max)) {
+      keep <- keep & !is.na(df$p_val_adj) & is.finite(df$p_val_adj) & (df$p_val_adj <= padj_max)
+    }
+    if ("avg_log2FC" %in% colnames(df) && !is.null(lfc_min) && is.finite(lfc_min)) {
+      keep <- keep & !is.na(df$avg_log2FC) & is.finite(df$avg_log2FC) & (abs(df$avg_log2FC) >= lfc_min)
+    }
+    unique(trimws(as.character(df$gene[keep])))
+  })
+  names(gene_sets) <- ds_names
+
+  per_dataset <- data.frame(
+    dataset = ds_names,
+    n_input_rows = vapply(marker_tables, nrow, integer(1)),
+    n_markers_filtered = vapply(gene_sets, length, integer(1)),
+    stringsAsFactors = FALSE
+  )
+
+  pairs <- utils::combn(seq_along(ds_names), 2L, simplify = FALSE)
+  pw_rows <- lapply(pairs, function(idx) {
+    a <- ds_names[idx[1L]]; b <- ds_names[idx[2L]]
+    ga <- gene_sets[[a]]; gb <- gene_sets[[b]]
+    n_inter <- length(intersect(ga, gb))
+    n_union <- length(union(ga, gb))
+    data.frame(
+      dataset_a = a,
+      dataset_b = b,
+      n_a = length(ga),
+      n_b = length(gb),
+      n_intersection = as.integer(n_inter),
+      n_union = as.integer(n_union),
+      jaccard = if (n_union > 0L) n_inter / n_union else NA_real_,
+      stringsAsFactors = FALSE
+    )
+  })
+  pairwise_jaccard <- do.call(rbind, pw_rows)
+
+  all_genes <- sort(unique(unlist(gene_sets, use.names = FALSE)))
+  if (length(all_genes) == 0L) {
+    membership <- data.frame(
+      gene = character(0), n_datasets = integer(0), datasets = character(0),
+      stringsAsFactors = FALSE
+    )
+    shared_genes <- character(0)
+  } else {
+    present_lists <- lapply(all_genes, function(g) {
+      ds_names[vapply(gene_sets, function(s) g %in% s, logical(1))]
+    })
+    counts <- vapply(present_lists, length, integer(1))
+    membership <- data.frame(
+      gene = all_genes,
+      n_datasets = as.integer(counts),
+      datasets = vapply(present_lists, function(x) paste(x, collapse = ","), character(1)),
+      stringsAsFactors = FALSE
+    )
+    membership <- membership[order(-membership$n_datasets, membership$gene), , drop = FALSE]
+    rownames(membership) <- NULL
+    shared_genes <- membership$gene[membership$n_datasets >= 2L]
+  }
+
+  prov <- if (exists("new_provenance_entry", mode = "function")) {
+    new_provenance_entry(
+      analysis_id = "sc-multi-compare",
+      method = "sc_multi_marker_concordance",
+      parameters = list(datasets = ds_names, padj_max = padj_max, lfc_min = lfc_min)
+    )
+  } else NULL
+
+  list(
+    type = "sc_multi_marker_comparison",
+    per_dataset = per_dataset,
+    pairwise_jaccard = pairwise_jaccard,
+    shared_genes = shared_genes,
+    gene_membership = membership,
+    provenance = prov
+  )
 }

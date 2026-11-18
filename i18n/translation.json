@@ -13944,6 +13944,10 @@
     {
       "fr": "Aligner automatiquement les groupes (liftCellChat, CC-3)",
       "en": "Auto-align cell groups (liftCellChat, CC-3)"
+    },
+    {
+      "fr": "⚠️ Aucun marqueur avec p_val_adj valide (tous NA).",
+      "en": "⚠️ No markers with valid p_val_adj (all NA)."
     }
   ]
 }

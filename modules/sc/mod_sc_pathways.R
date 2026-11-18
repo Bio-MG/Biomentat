@@ -67,6 +67,17 @@
 #' FROZEN inputs (frozen source = markers), then the SAME two writes
 #' (`shared_rv$pathway_results` / `shared_rv$pathway_db`). The record comes
 #' back so the module-scoped observer can refresh its local table too.
+.sc_pathways_extract_marker_genes <- function(df, n = 100L) {
+  if (is.null(df) || !is.data.frame(df) || !nrow(df) || !"gene" %in% colnames(df)) {
+    return(character(0))
+  }
+  if ("p_val_adj" %in% colnames(df)) {
+    df <- df[!is.na(df$p_val_adj) & is.finite(df$p_val_adj), , drop = FALSE]
+  }
+  if (nrow(df) == 0L) return(character(0))
+  utils::head(as.character(df$gene), as.integer(n))
+}
+
 .sc_pathways_run_drive <- function(global_data, shared_rv, close_job) {
   inp <- .SC_PATHWAYS_DRIVE_INPUTS()
   res <- tryCatch({
@@ -75,7 +86,11 @@
       stop(errorCondition("no marker table — run Step 4 first",
                           class = "sc_pathways_drive_error"))
     }
-    genes_to_test <- head(md$gene, 100)
+    genes_to_test <- .sc_pathways_extract_marker_genes(md, 100L)
+    if (length(genes_to_test) == 0L) {
+      stop(errorCondition("no markers with valid p_val_adj (all NA)",
+                          class = "sc_pathways_drive_error"))
+    }
     genes_to_test <- unique(trimws(genes_to_test[nchar(trimws(genes_to_test)) > 0]))
     genes_to_test <- .remap_if_ensg(genes_to_test, inp$org, notify_fn = NULL)
     genes_to_test <- unique(genes_to_test[nchar(genes_to_test) > 0])
@@ -302,7 +317,11 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
         if (is.null(df) || nrow(df)==0) {
           showNotification(.tr("⚠️ Lancez d'abord l'étape 1d (Marqueurs)."), type="warning"); return()
         }
-        genes_to_test <- head(df$gene, 100)
+        genes_to_test <- .sc_pathways_extract_marker_genes(df, 100L)
+        if (length(genes_to_test) == 0L) {
+          showNotification(.tr("⚠️ Aucun marqueur avec p_val_adj valide (tous NA)."),
+                           type="warning"); return()
+        }
 
       } else if (input$pathway_source == "correlated") {
         df <- shared_rv$correlated_genes

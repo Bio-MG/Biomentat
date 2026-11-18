@@ -27,7 +27,7 @@ test_that("public API surface is frozen (names + signatures)", {
     c("sc_multi_public_api", "sc_multi_error_states", "sc_multi_relations",
       "sc_multi_check_label", "sc_multi_check_obj", "sc_multi_check_relation",
       "sc_multi_register", "sc_multi_remove", "sc_multi_get",
-      "sc_multi_summary")
+      "sc_multi_summary", "sc_multi_compare_markers")
   )
   for (fn_name in sc_multi_public_api()) {
     expect_true(exists(fn_name, where = globalenv(), inherits = FALSE),
@@ -46,7 +46,8 @@ test_that("public API surface is frozen (names + signatures)", {
                                    overwrite = FALSE, max_datasets = NULL),
     sc_multi_remove         = list(datasets = NULL, label = NULL),
     sc_multi_get            = list(datasets = NULL, label = NULL),
-    sc_multi_summary        = list(datasets = NULL)
+    sc_multi_summary        = list(datasets = NULL),
+    sc_multi_compare_markers = list(marker_tables = NULL, padj_max = 0.05, lfc_min = 0.25)
   )
   for (fn_name in names(expected_args)) {
     fmls <- names(formals(get(fn_name, envir = globalenv())))

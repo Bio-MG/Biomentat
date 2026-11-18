@@ -379,3 +379,19 @@ test_that("the human observer and the drive action write the SAME two slots", {
   # Both stored the SAME observed pathway count (4), from the same mock record.
   expect_identical(nrow(human), 4L)
 })
+
+test_that("W3.3 M3 : .sc_pathways_extract_marker_genes filtre p_val_adj NA sans fuite", {
+  df <- data.frame(
+    gene = c("G1", "G2", "G3"),
+    p_val_adj = c(0.01, NA_real_, 0.04),
+    stringsAsFactors = FALSE
+  )
+  expect_identical(.sc_pathways_extract_marker_genes(df, 100L), c("G1", "G3"))
+
+  df_all_na <- data.frame(
+    gene = c("G1", "G2"),
+    p_val_adj = c(NA_real_, NA_real_),
+    stringsAsFactors = FALSE
+  )
+  expect_identical(.sc_pathways_extract_marker_genes(df_all_na, 100L), character(0))
+})
