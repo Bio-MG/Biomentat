@@ -171,3 +171,28 @@ test_that("provenance_to_dataframe returns a typed empty frame when nothing reco
     }
   }
 })
+
+test_that("#15 biomentat-methods-drafter : build_methods_draft() déterministe FR/EN sans hallucination", {
+  empty_fr <- build_methods_draft(NULL, lang = "fr")
+  expect_identical(empty_fr$n_steps, 0L)
+  expect_match(empty_fr$markdown, "Aucune")
+
+  s <- create_analysis_state()
+  provenance_append(s, new_provenance_entry(
+    analysis_id = "sc-pipeline-1",
+    method = "Seurat::FindClusters",
+    parameters = list(resolution = 0.5, npcs = 20L),
+    cells_used = 906L,
+    seed = 989L
+  ))
+  dr_fr <- build_methods_draft(s, lang = "fr", dataset_label = "pbmc_1000cells")
+  expect_identical(dr_fr$n_steps, 1L)
+  expect_match(dr_fr$markdown, "sc-pipeline-1", fixed = TRUE)
+  expect_match(dr_fr$markdown, "resolution=0.5", fixed = TRUE)
+  expect_match(dr_fr$markdown, "seed: 989", fixed = TRUE)
+  expect_match(dr_fr$markdown, "pbmc_1000cells", fixed = TRUE)
+
+  dr_en <- build_methods_draft(s, lang = "en")
+  expect_match(dr_en$markdown, "## Materials and Methods", fixed = TRUE)
+  expect_match(dr_en$markdown, "parameters: resolution=0.5", fixed = TRUE)
+})

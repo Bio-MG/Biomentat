@@ -244,3 +244,91 @@ provenance_to_dataframe <- function(state) {
   })
   do.call(rbind, rows)
 }
+
+#' #15 biomentat-methods-drafter : rédige une section Matériel & Méthodes
+#' déterministe à partir de la provenance enregistrée (aucune hallucination).
+#'
+#' @param state_or_entries État partagé (`state_get(..., "provenance")`) ou
+#'   liste directe d'entrées `new_provenance_entry()`.
+#' @param lang Langue de sortie (`"fr"` ou `"en"`).
+#' @param dataset_label Nom lisible du jeu de données (optionnel).
+#' @return Liste `list(markdown, text, n_steps, packages_cited)`.
+#' @export
+build_methods_draft <- function(state_or_entries,
+                                lang = c("fr", "en"),
+                                dataset_label = NULL) {
+  lang <- match.arg(lang)
+  entries <- if (is.null(state_or_entries)) {
+    list()
+  } else if (inherits(state_or_entries, "reactivevalues") || is.environment(state_or_entries)) {
+    state_get(state_or_entries, "provenance") %||% list()
+  } else if (is.list(state_or_entries) &&
+             all(vapply(state_or_entries, function(x) is.list(x) && !is.null(x$analysis_id), logical(1)))) {
+    state_or_entries
+  } else {
+    state_get(state_or_entries, "provenance") %||% list()
+  }
+
+  if (length(entries) == 0L) {
+    msg <- if (identical(lang, "en")) {
+      "No analysis steps recorded in provenance."
+    } else {
+      "Aucune \u00e9tape d'analyse enregistr\u00e9e dans la provenance."
+    }
+    return(list(markdown = msg, text = msg, n_steps = 0L, packages_cited = character(0)))
+  }
+
+  df <- provenance_to_dataframe(
+    if (inherits(state_or_entries, "reactivevalues") || is.environment(state_or_entries)) {
+      state_or_entries
+    } else {
+      list(provenance = entries)
+    }
+  )
+  pkgs <- character(0)
+  for (e in entries) {
+    v <- e$versions
+    if (length(v) > 0L && !is.null(names(v))) {
+      for (nm in names(v)) pkgs[[nm]] <- as.character(v[[nm]])
+    }
+  }
+  pkg_str <- if (length(pkgs) > 0L) {
+    paste(sprintf("%s (%s)", names(pkgs), unname(pkgs)), collapse = ", ")
+  } else {
+    paste0("R (", R.version$major, ".", R.version$minor, ")")
+  }
+
+  hdr <- if (identical(lang, "en")) "## Materials and Methods" else "## Mat\u00e9riel et M\u00e9thodes"
+  intro <- if (identical(lang, "en")) {
+    sprintf(
+      "Analyses were performed with Biomentat using %s%s.",
+      pkg_str,
+      if (!is.null(dataset_label) && nzchar(dataset_label)) sprintf(" on dataset '%s'", dataset_label) else ""
+    )
+  } else {
+    sprintf(
+      "Les analyses ont \u00e9t\u00e9 r\u00e9alis\u00e9es avec Biomentat \u00e0 l'aide de %s%s.",
+      pkg_str,
+      if (!is.null(dataset_label) && nzchar(dataset_label)) sprintf(" sur le jeu \u00ab %s \u00bb", dataset_label) else ""
+    )
+  }
+
+  bullets <- vapply(seq_len(nrow(df)), function(i) {
+    parts <- c(
+      sprintf("**%s** (`%s`)", df$analysis_id[i], df$method[i]),
+      if (nzchar(df$parameters[i])) paste0(if (identical(lang, "en")) "parameters: " else "param\u00e8tres : ", df$parameters[i]),
+      if (nzchar(df$cells_used[i])) paste0(if (identical(lang, "en")) "cells used: " else "cellules utilis\u00e9es : ", df$cells_used[i]),
+      if (nzchar(df$seed[i])) paste0("seed: ", df$seed[i])
+    )
+    paste0("- ", paste(parts[!is.na(parts) & nzchar(parts)], collapse = " ; "), ".")
+  }, character(1L))
+
+  md <- paste(c(hdr, "", intro, "", bullets), collapse = "\n")
+  txt <- gsub("[`*]", "", md)
+  list(
+    markdown = md,
+    text = txt,
+    n_steps = nrow(df),
+    packages_cited = pkgs
+  )
+}
