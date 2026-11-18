@@ -400,7 +400,19 @@ init_spatial_daemons <- function(n_daemons = ts_mirai_n_daemons(),
   }
 
   tryCatch({
+    .main_ctype <- tryCatch(Sys.getlocale("LC_CTYPE"), error = function(e) "")
     mirai::everywhere({
+      # Harden daemon LC_CTYPE to UTF-8 on Windows so IPC strings never emit
+      # invalid bytes / embedded NULs back to the main Shiny session.
+      .utf8_ok <- isTRUE(tryCatch(l10n_info()$`UTF-8`, error = function(e) FALSE))
+      if (!.utf8_ok) {
+        for (.loc in unique(c(.main_ctype, "French_France.65001", "en_US.UTF-8", "C.UTF-8"))) {
+          if (is.character(.loc) && length(.loc) == 1L && nzchar(.loc) && !identical(.loc, "C")) {
+            suppressWarnings(try(Sys.setlocale("LC_CTYPE", .loc), silent = TRUE))
+            if (isTRUE(tryCatch(l10n_info()$`UTF-8`, error = function(e) FALSE))) break
+          }
+        }
+      }
       suppressPackageStartupMessages({
         if (requireNamespace("Seurat", quietly = TRUE))  library(Seurat)
         if (requireNamespace("BPCells", quietly = TRUE)) library(BPCells)
@@ -423,12 +435,12 @@ init_spatial_daemons <- function(n_daemons = ts_mirai_n_daemons(),
       }
       for (.f in .abs_files) {
         if (file.exists(.f)) {
-          source(.f)
+          source(.f, encoding = "UTF-8")
         } else {
           message(sprintf("[spatial daemon] Fichier attendu introuvable (chemin absolu) : %s", .f))
         }
       }
-    }, .abs_files = abs_files)
+    }, .abs_files = abs_files, .main_ctype = .main_ctype)
   }, error = function(e) {
     warning("mirai::everywhere() a echoue lors du preload des daemons : ", conditionMessage(e))
   })

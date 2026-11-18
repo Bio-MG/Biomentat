@@ -697,7 +697,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         ensure_app_daemons()
         mirai::mirai(
           {
-            for (f in deps) if (file.exists(f)) source(f, local = FALSE)
+            for (f in deps) if (file.exists(f)) source(f, local = FALSE, encoding = "UTF-8")
             sc_velocity_scvelo_optin_infer(canon, embedding = emb, params = params)
           },
           canon = canon, emb = emb, params = params, deps = scvelo_core_deps,

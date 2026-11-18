@@ -92,3 +92,22 @@ test_that("PC : init_spatial_daemons respawn un pool epuise (watchdog, pas early
   init_spatial_daemons(n_daemons = 2L, source_files = character(0))
   expect_gt(as.integer(mirai::status()$connections), 0L)
 })
+
+test_that("IPC UTF-8 daemon boundary : preload et ExtendedTask sourcent en UTF-8 et durcissent LC_CTYPE", {
+  async_src <- paste(readLines(file.path(ts_project_root(), "tools", "pkg_skeleton",
+                                         "R", "spatial_async.R"),
+                               warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(async_src, 'source(.f, encoding = "UTF-8")', fixed = TRUE)
+  expect_match(async_src, 'Sys.setlocale("LC_CTYPE"', fixed = TRUE)
+
+  for (rel in c("modules/sc/mod_sc_communication.R",
+                "modules/sc/mod_sc_pipeline.R",
+                "modules/sc/mod_sc_velocity.R")) {
+    src <- paste(readLines(file.path(ts_project_root(), rel),
+                           warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+    expect_false(grepl("source(f, local = FALSE)", src, fixed = TRUE),
+                 info = paste(rel, "contient encore source(f, local = FALSE) sans encoding = UTF-8"))
+    expect_match(src, 'source(f, local = FALSE, encoding = "UTF-8")', fixed = TRUE,
+                 info = paste(rel, "doit passer encoding = UTF-8 au source() daemon"))
+  }
+})

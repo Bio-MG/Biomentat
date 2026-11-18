@@ -1314,7 +1314,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
             # engine.R — run_cellchat vérifie exists(assert_cellchat_input) et
             # le check tirait quand l'ordre était (engine, error_state).
             # sc_communication.R fournira finalize_communication_result().
-            for (f in deps) if (file.exists(f)) source(f, local = FALSE)
+            for (f in deps) if (file.exists(f)) source(f, local = FALSE, encoding = "UTF-8")
             run_cellchat(cc_input,
                          seed = args$seed, nboot = args$nboot,
                          seurat_obj = args$seurat_obj,
@@ -1516,7 +1516,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         ensure_app_daemons()
         mirai::mirai(
           {
-            for (f in deps) if (file.exists(f)) source(f, local = FALSE)
+            for (f in deps) if (file.exists(f)) source(f, local = FALSE, encoding = "UTF-8")
             run_cellchat_by_condition(
               obj,
               condition_col = args$condition_col,
@@ -1727,7 +1727,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         ensure_app_daemons()
         mirai::mirai(
           {
-            for (f in deps) if (file.exists(f)) source(f, local = FALSE)
+            for (f in deps) if (file.exists(f)) source(f, local = FALSE, encoding = "UTF-8")
             run_liana_by_sample(
               obj,
               sample_col = args$sample_col,

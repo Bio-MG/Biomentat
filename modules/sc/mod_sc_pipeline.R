@@ -373,7 +373,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         ensure_app_daemons()
         mirai::mirai(
           {
-            for (f in deps) if (file.exists(f)) source(f, local = FALSE)
+            for (f in deps) if (file.exists(f)) source(f, local = FALSE, encoding = "UTF-8")
             run_sc_manual_pipeline_core(obj, params, log_file = log_file)
           },
           obj = obj, params = params, log_file = log_file, deps = core_deps,
