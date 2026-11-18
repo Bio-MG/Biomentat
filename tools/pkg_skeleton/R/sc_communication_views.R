@@ -49,7 +49,11 @@ communication_views_public_api <- function() {
     "build_communication_centrality",
     "plot_communication_roles_dot",
     "build_communication_filter_provenance",
-    "build_communication_filtered_export"
+    "build_communication_filtered_export",
+    # 5e pilule exploratoire « Synthèse multi-modale » (d183d11) — registre
+    # reconcilié avec la surface du fichier (règle repo : pin au MÊME commit).
+    "build_communication_multimodal_synthesis",
+    "plot_communication_multimodal_synthesis"
   )
 }
 
