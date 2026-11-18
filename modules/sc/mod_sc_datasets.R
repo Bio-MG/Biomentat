@@ -40,7 +40,11 @@ mod_sc_datasets_ui <- function(id) {
     div(class = "alert alert-light", style = "font-size:0.8rem;padding:4px;margin-bottom:5px;",
         bsicons::bs_icon("info-circle"),
         " ", i18n$t("Charge le jeu sélectionné comme objet actif (les résultats calculés sur l'ancien jeu sont purgés).")),
-    uiOutput(ns("ds_activate_ui"))
+    uiOutput(ns("ds_activate_ui")),
+    hr(),
+    h6(i18n$t("Concordance marqueurs (multi-jeux)"), style = "font-weight:bold;"),
+    uiOutput(ns("ds_compare_ui")),
+    DTOutput(ns("ds_compare_table"))
   )
 }
 
@@ -201,6 +205,40 @@ mod_sc_datasets_server <- function(id, global_data) {
                 lbl,
                 if (is.na(n_cells)) "?" else format(n_cells, big.mark = " ")),
         type = "message", duration = 6)
+    })
+
+    # ── Concordance marqueurs multi-jeux (W3.3 M5) ──────────────────────────
+    .collect_ds_markers <- reactive({
+      dss <- global_data$sc_datasets
+      if (is.null(dss) || length(dss) < 2L) return(list())
+      out <- list()
+      for (nm in names(dss)) {
+        obj <- dss[[nm]]$obj
+        mk <- tryCatch(obj@misc$markers %||% obj@misc$markers_data, error = function(e) NULL)
+        if (is.data.frame(mk) && nrow(mk) > 0L && "gene" %in% colnames(mk)) {
+          out[[nm]] <- mk
+        }
+      }
+      out
+    })
+
+    output$ds_compare_ui <- renderUI({
+      mks <- .collect_ds_markers()
+      if (length(mks) < 2L) {
+        return(tags$div(class = "small text-muted",
+                        .tr("Au moins 2 datasets enregistrés portant des marqueurs (@misc$markers) sont requis pour calculer la concordance Jaccard.")))
+      }
+      tags$div(class = "small text-success",
+               sprintf(.tr("%d jeux avec marqueurs prêts pour la concordance."), length(mks)))
+    })
+
+    output$ds_compare_table <- renderDT({
+      mks <- .collect_ds_markers()
+      if (length(mks) < 2L) return(NULL)
+      cmp <- tryCatch(sc_multi_compare_markers(mks), error = function(e) NULL)
+      if (is.null(cmp) || !is.data.frame(cmp$pairwise_jaccard)) return(NULL)
+      ts_datatable(cmp$pairwise_jaccard, page_length = 6L,
+                   filename_base = "sc_multi_concordance", filter = "none")
     })
   })
 }
