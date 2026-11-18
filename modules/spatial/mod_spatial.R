@@ -98,12 +98,13 @@ mod_spatial_ui <- function(id) {
   # replaced by the project-wide skeleton: layout_sidebar(sidebar = numbered
   # accordion, navset_card_underline = results).
   #
-  # FOLLOW-UP (known leftover, zero regression): QC / Cluster / Deconv /
-  # Visualisation / Multi-echantillons / Niches child UIs still ship their own
-  # layout_sidebar (controls + results together). They are reparented AS-IS
-  # into the right navset (like the previous horizontal tabs) — their internals
-  # are out of scope for this lot. Only the pipeline module is split: controls
-  # in the accordion panel, summary in the right navset.
+  # AUDIT EXTERNE (2026-11-18, BRAIN-one) : le commentaire historique
+  # ci-dessous était PÉRIMÉ — les child UIs n'embarquent PLUS de
+  # layout_sidebar depuis dcb6ec7 (contrat split gellé par
+  # test-mod-spatial-layout.R:224-245) ; c'est ce faux diagnostic qui a
+  # nourri le « résiduel Option B » des handoffs §S/§V (corrigés).
+  # The child UIs ship controls-only variants (mod_spatial_*_controls_ui)
+  # mounted in the sidebar accordion; the full UIs live in the right navset.
   layout_sidebar(
     sidebar = sidebar(
       width = 340,
@@ -130,9 +131,16 @@ mod_spatial_ui <- function(id) {
       # selector + daemon status stay ALWAYS VISIBLE in the sidebar header —
       # SPATIAL-SIDEBAR-A : enrobés pour sticky (cf. tags$style ci-dessus).
       div(class = "ts-spatial-side-head",
-          # LOT 1 (V1.x UX): paradigm badge — async auto-pipeline (mirai).
+          # RETOUR OPÉRATEUR (2026-11-18) : la longue phrase pédagogique
+          # n'occupe plus la bande sticky — texte court visible, phrase
+          # complète au survol (tooltip). Le statut daemons reste TOUJOURS
+          # visible (préférence opérateur : « it's the best we have »).
           div(class = "alert alert-success", style = "font-size:0.8rem;padding:5px;margin-bottom:5px;",
-              icon("bolt"), " ", i18n$t("Pipeline automatique asynchrone (mirai) — le statut reste visible ci-dessous")),
+              bslib::tooltip(
+                span(icon("bolt"), " ", i18n$t("Pipeline automatique (mirai)"),
+                     icon("circle-info", class = "text-muted small ms-1")),
+                i18n$t("Pipeline automatique asynchrone (mirai) — le statut reste visible ci-dessous. Les étapes lourdes tournent hors de la session R ; en cas de blocage, réinitialisez les daemons.")
+              )),
           uiOutput(ns("active_dataset_ui")),
           uiOutput(ns("daemon_status_ui")),
           actionButton(ns("btn_reset_daemons"), i18n$t("Reinitialiser les daemons"),
@@ -555,7 +563,14 @@ mod_spatial_server <- function(id, global_data) {
         try(nav_select(id = "results", selected = sel, session = session), silent = TRUE)
       }
       if (isTRUE(sync_accordion)) {
-        try(bslib::accordion_panel_set(id = "steps", values = panel, session = session), silent = TRUE)
+        # P1-FLICKER FIX (retour opérateur 2026-11-18, mesuré sonde
+        # scratch_p1_flicker_replay.R) : accordion_panel_set se comporte en
+        # TOGGLE côté client sur ce multiple=FALSE — set(panneau déjà ouverte)
+        # la FERME, et combiné au rouvreur P1 (ci-dessous) le couple
+        # résultats↔étape oscillait en boucle (« Résumé pipeline » ↔ « 1. QC »
+        # à l'infini en Spécialisé). open() est idempotent : rouvrir une
+        # panneau déjà ouverte est un no-op, l'oscillateur converge.
+        try(bslib::accordion_panel_open(id = "steps", values = panel, session = session), silent = TRUE)
       }
       invisible(NULL)
     }
@@ -568,6 +583,13 @@ mod_spatial_server <- function(id, global_data) {
       if (is.null(panels) || length(panels) == 0) return(invisible(NULL))
       panel <- utils::tail(panels, 1)
       if (length(panel) != 1 || is.na(panel)) return(invisible(NULL))
+      # P1-FLICKER FIX : si l'accordéon affiche DÉJÀ l'étape courante, la
+      # synchro résultats est déjà faite — ne renvoie AUCUN message client
+      # (chaque message redondant est une source de course).
+      if (identical(panel, isolate(current_step_rv())) &&
+          identical(isolate(input$results), .step_results[[panel]])) {
+        return(invisible(NULL))
+      }
       .activate_spatial_step(panel, sync_accordion = FALSE, sync_results = TRUE)
     }, ignoreNULL = TRUE)
 
@@ -576,7 +598,11 @@ mod_spatial_server <- function(id, global_data) {
       if (is.null(res_tab) || length(res_tab) != 1L || is.na(res_tab)) return(invisible(NULL))
       panel <- .results_to_step[[res_tab]]
       if (is.null(panel) || identical(panel, isolate(current_step_rv()))) return(invisible(NULL))
-      .activate_spatial_step(panel, sync_accordion = TRUE, sync_results = FALSE)
+      # P1-FLICKER FIX : l'accordéon affiche déjà la cible → ne le touche PAS
+      # (le set/open redondant était le déclencheur de l'oscillation).
+      open_now <- isolate(input$steps)
+      acc_sync <- !(identical(utils::tail(open_now %||% character(0), 1), panel))
+      .activate_spatial_step(panel, sync_accordion = acc_sync, sync_results = FALSE)
     }, ignoreInit = TRUE)
 
     observeEvent(input$export_report_controls_tabs, {
@@ -612,8 +638,11 @@ mod_spatial_server <- function(id, global_data) {
         p <- utils::tail(panels, 1)
         if (length(p) == 1L && !is.na(p) && nzchar(p)) .ts_wf_last_panel(p)
       } else if (identical(global_data$workflow_display_mode %||% "specialise", "specialise")) {
-        try(bslib::accordion_panel_set(id = "steps", values = .ts_wf_last_panel(),
-                                       session = session), silent = TRUE)
+        # P1-FLICKER FIX : open() (idempotent) et NON set() — le set sur la
+        # panneau déjà ouverte la FERMETTAIT (toggle), et le couple
+        # rouvreur↔sync oscillait en boucle infinie (mesuré 2026-11-18).
+        try(bslib::accordion_panel_open(id = "steps", values = .ts_wf_last_panel(),
+                                        session = session), silent = TRUE)
       }
       invisible(NULL)
     }, ignoreNULL = FALSE)

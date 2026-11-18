@@ -13936,6 +13936,10 @@
     {
       "fr": "📝 Brouillon Matériels & Méthodes (.md)",
       "en": "📝 Materials & Methods Draft (.md)"
+    },
+    {
+      "fr": "Pipeline automatique (mirai)",
+      "en": "Automated pipeline (mirai)"
     }
   ]
 }
