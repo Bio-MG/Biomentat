@@ -643,8 +643,8 @@ mod_import_bulk_server <- function(id, global_data) {
         return(invisible(NULL))
       }
       target <- if (identical(mode, "per_sample")) "panel_multi" else "panel_counts"
-      try(bslib::accordion_panel_set(id = "acc_import", values = target,
-                                     session = session), silent = TRUE)
+      try(bslib::accordion_panel_open(id = "acc_import", values = target,
+                                      session = session), silent = TRUE)
       invisible(NULL)
     }, ignoreInit = TRUE)
 

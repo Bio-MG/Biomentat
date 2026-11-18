@@ -2323,8 +2323,11 @@ server <- function(input, output, session) {
   # connexion : les renderUI des modules lisent wf_mode_version et
   # re-rendent leur style exactement quand un client (re)devient présent.
   observeEvent(input$workflow_display_mode, {
+    changed <- !identical(global_data$workflow_display_mode, input$workflow_display_mode)
     global_data$workflow_display_mode <- input$workflow_display_mode
-    global_data$wf_mode_version <- (global_data$wf_mode_version %||% 0L) + 1L
+    if (changed || isTRUE((global_data$wf_mode_version %||% 0L) == 0L)) {
+      global_data$wf_mode_version <- (global_data$wf_mode_version %||% 0L) + 1L
+    }
   }, ignoreNULL = FALSE)
   # Restauration de session : re-synchroniser le radio avec l'état restauré
   # (le rendu statique repart du défaut, l'état restauré peut différer).

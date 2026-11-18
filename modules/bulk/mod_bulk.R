@@ -303,8 +303,9 @@ mod_bulk_server <- function(id, global_data) {
         p <- utils::tail(panels, 1)
         if (length(p) == 1L && !is.na(p) && nzchar(p)) .ts_wf_last_panel(p)
       } else if (identical(global_data$workflow_display_mode %||% "specialise", "specialise")) {
-        try(bslib::accordion_panel_set(id = "acc_bulk", values = .ts_wf_last_panel(),
-                                       session = session), silent = TRUE)
+        # P1-FLICKER parity : open() (idempotent) au lieu de set() (toggle).
+        try(bslib::accordion_panel_open(id = "acc_bulk", values = .ts_wf_last_panel(),
+                                        session = session), silent = TRUE)
       }
       invisible(NULL)
     }, ignoreNULL = FALSE)
