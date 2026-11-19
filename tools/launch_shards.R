@@ -4,8 +4,11 @@
 # (fiche docs/proposals/SUITE_SHARDING_DESIGN_2026-11-18.md §3.2/§10.4).
 #
 # Usage (GO opérateur requis — BOOST) :
-#   LC_ALL=French_France.65001 Rscript tools/launch_shards.R --n=2
-#   --dry-run : imprime les commandes et le verdict RAM sans rien lancer.
+#   LC_ALL=French_France.65001 Rscript tools/launch_shards.R --n=6
+#   --dry-run : imprime les commandes, le verdict RAM, l'artefact de poids
+#   chargé (population par fichier) et le max-safe N §14 — sans rien lancer.
+# Défauts O40 (Q7-bis, adoption 2026-11-19/20) : N=6 + poids du contexte
+# shardié. Un flag explicite --n/--timings gagne TOUJOURS (override intact).
 # Le verdict d'un shard = présence d'une ligne ^BILAN: dans SON fichier, jamais
 # son exit code (SIGSEGV 139 possible même en succès, AGENTS.md:21).
 .localectl <- Sys.setlocale("LC_CTYPE", "fr_FR.UTF-8")
@@ -19,10 +22,19 @@ args <- commandArgs(trailingOnly = TRUE)
 }
 n_spec <- .flag("n")
 out_dir <- if (!is.na(.flag("out-dir"))) .flag("out-dir") else "QC"
-timings <- if (!is.na(.flag("timings"))) .flag("timings") else "QC/full_suite_results.txt"
+# Poids par défaut = le relevé du CONTEXTE SHARDIÉ (levier L1, adoption O40) —
+# c'est aussi la sortie par défaut du merge (tools/merge_shard_results.R) : la
+# population imprimée au dry-run rend sa dérive visible à chaque lancement.
+# Le verdict ne coule JAMAIS de ce chemin (règle de confiance §12.1) — la
+# comparaison per-run via tools/compare_shard_equiv.R reste la seule preuve.
+timings <- if (!is.na(.flag("timings"))) .flag("timings") else "QC/full_suite_results_sharded.txt"
 threshold <- suppressWarnings(as.numeric(if (!is.na(.flag("ram-gb"))) .flag("ram-gb") else "8"))
 dry <- "--dry-run" %in% args
-n <- suppressWarnings(as.integer(if (is.na(n_spec)) "2" else n_spec))
+# N=6 = point de fonctionnement adopté (O40, §12.1). Le max-safe N de la
+# table §14 est imprimé au dry-run à titre INFORMATIF seulement — jamais
+# auto-appliqué (« N=7 réservé machine calme ») : la table §14 reste le
+# pré-vol MANUEL de l'opérateur (runbook docs/audits/BASELINES.txt).
+n <- suppressWarnings(as.integer(if (is.na(n_spec)) "6" else n_spec))
 die <- function(msg) {
   cat(paste0("ERREUR launch_shards : ", msg, "\n"), file = stderr())
   quit(save = "no", status = 1L)
@@ -58,6 +70,27 @@ cmds <- lapply(seq_len(n), function(i) {
 if (dry) {
   for (i in seq_len(n)) cat(sprintf("[dry] shard %d/%d : %s\n", i, n,
                                     paste(cmds[[i]], collapse = " ")))
+  # O40 — visibilité, pas d'automatisation : l'artefact de poids réellement
+  # chargé, sa population par fichier (même regex que le comparateur
+  # compare_shard_equiv.R) et le max-safe N de la table §14 pour la RAM libre
+  # MESURÉE ci-dessus. Le défaut N reste 6 ; N=7 jamais auto-appliqué — la
+  # table §14 reste le pré-vol MANUEL de l'opérateur (runbook
+  # docs/audits/BASELINES.txt : « choisir N selon RAM libre, table §14 »).
+  pop <- NA_integer_
+  if (file.exists(timings)) {
+    pop <- suppressWarnings(length(grep("^test-.*\\.R[[:space:]]+fail=",
+                                        readLines(timings, warn = FALSE))))
+  }
+  cat(sprintf("[dry] poids : %s (%s fichiers test)\n", timings,
+              if (is.na(pop)) "artefact absent" else as.character(pop)))
+  # Table §14 du fiche DEEP_ANALYSIS_SUITE_ACCELERATION_2026-11-19.md —
+  # affichage seul : AUCUN effet sur n (l'override --n reste le seul pilote).
+  s14_breaks <- c(21, 19, 16.8, 14.6, 12.4, 10.2)  # planchers Go libres
+  s14_ns <- c(7L, 6L, 5L, 4L, 3L, 2L)
+  s14_hit <- which(free >= s14_breaks)
+  s14_n <- if (length(s14_hit)) s14_ns[s14_hit[1]] else 1L
+  cat(sprintf("[dry] S14/§14 max-safe N=%d pour %.2f Go libres — RAM would allow N=%d — pass --n=%d (informatif : défaut inchangé N=%d, jamais auto-appliqué)\n",
+              s14_n, free, s14_n, s14_n, n))
   if (free < threshold) quit(save = "no", status = 1L)
   quit(save = "no", status = 0L)
 }
