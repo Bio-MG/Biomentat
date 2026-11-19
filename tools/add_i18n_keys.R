@@ -883,7 +883,11 @@ new_entries <- list(
   # SPÉCIALISÉ — arbitrage opérateur).
   c("Affichage du workflow latéral :", "Side workflow display:"),
   c("Spécialisé — une seule étape à la fois", "Specialised — one step at a time"),
-  c("Complet — toutes les étapes empilées", "Full — all steps stacked")
+  c("Complet — toutes les étapes empilées", "Full — all steps stacked"),
+  # --- C7 (2026-11-19) : clé absente de mod_spatial.R:142 (commit 4636054,
+  # garde check_conventions.R rouge depuis lors). Une seule entrée ajoutée.
+  c("Pipeline automatique asynchrone (mirai) — le statut reste visible ci-dessous. Les étapes lourdes tournent hors de la session R ; en cas de blocage, réinitialisez les daemons.",
+    "Asynchronous pipeline (mirai) — the status remains visible below. Heavy steps run outside the R session; if blocked, reset the daemons.")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

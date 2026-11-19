@@ -13996,6 +13996,10 @@
     {
       "fr": "CMAP hors-ligne OK : %d signature(s) sur %d gènes classés.",
       "en": "Offline CMAP OK: %d signature(s) on %d ranked genes."
+    },
+    {
+      "fr": "Pipeline automatique asynchrone (mirai) — le statut reste visible ci-dessous. Les étapes lourdes tournent hors de la session R ; en cas de blocage, réinitialisez les daemons.",
+      "en": "Asynchronous pipeline (mirai) — the status remains visible below. Heavy steps run outside the R session; if blocked, reset the daemons."
     }
   ]
 }
