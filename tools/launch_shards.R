@@ -49,8 +49,11 @@ runner <- "tools/run_full_suite.R"
 cmds <- lapply(seq_len(n), function(i) {
   out_i <- file.path(out_dir, sprintf("full_suite_results_shard_%d_of_%d.txt", i, n))
   log_i <- file.path(out_dir, sprintf("shard_%d_of_%d.log", i, n))
-  c(shQuote(rscript), shQuote(runner), shQuote(paste0("--shard=", i, "/", n)),
-    shQuote(paste0("--out=", out_i)), shQuote(paste0("--timings=", timings)))
+  # processx passe les arguments sans shell : jamais shQuote, et JAMAIS le
+  # chemin de Rscript comme premier argument (bug mesuré 2026-11-19 : le
+  # fils segfaultait en 139 et écrivait 0 octet — handoff §2.1).
+  c(runner, paste0("--shard=", i, "/", n),
+    paste0("--out=", out_i), paste0("--timings=", timings))
 })
 if (dry) {
   for (i in seq_len(n)) cat(sprintf("[dry] shard %d/%d : %s\n", i, n,
@@ -69,6 +72,25 @@ Sys.setenv(LC_CTYPE = "French_France.65001")
 t0 <- Sys.time()
 handles <- vector("list", n)
 for (i in seq_len(n)) {
+  # Garde RAM re-mesuré avant CHAQUE spawn (fiche §3.2 — le contrôle unique
+  # pré-boucle ne voit pas la RAM déjà consommée par les shards lancés).
+  # Refus = exit 1 avec la mesure dans le message ; les shards déjà lancés
+  # terminent seuls (processx, cleanup_tree=FALSE) et l'absence de BILAN du
+  # shard refusé sera un hard error au merge — jamais un vert partiel.
+  ram_lines <- suppressWarnings(system2(
+    "powershell",
+    c("-NoProfile", "-Command",
+      "Get-CimInstance Win32_OperatingSystem | ForEach-Object { 'FreeRAM_GB={0:N2}' -f ($_.FreePhysicalMemory/1MB) }"),
+    stdout = TRUE))
+  free_txt <- grep("FreeRAM_GB=", ram_lines, value = TRUE)
+  free_i <- if (length(free_txt))
+    suppressWarnings(as.numeric(gsub(",", ".",
+      sub("FreeRAM_GB=", "", free_txt[1])))) else NA_real_
+  if (is.na(free_i)) die("impossible de mesurer la RAM libre (spawn %d)", i)
+  if (free_i < threshold) {
+    die(sprintf("%.2f Go libres < %.2f Go : refus du spawn du shard %d/%d",
+                free_i, threshold, i, n))
+  }
   out_i <- file.path(out_dir, sprintf("full_suite_results_shard_%d_of_%d.txt", i, n))
   log_i <- file.path(out_dir, sprintf("shard_%d_of_%d.log", i, n))
   cat(sprintf("lancement shard %d/%d -> %s (log %s)\n", i, n, out_i, log_i))
