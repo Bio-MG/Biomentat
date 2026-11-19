@@ -89,6 +89,26 @@ ts_e2e_with_child_locale <- function(expr) {
   force(expr)
 }
 
+#' Test-only Chrome PIDs (chromote/shinytest2), never the user's browser.
+#' A failed AppDriver boot spawns a whole Chrome tree that gets REPARENTED, so
+#' ps_children() no longer sees it. Filtering by command line is the reliable
+#' handle; measured 2026-11-19: one failed boot leaves up to 67 chrome.exe.
+ts_test_chrome_pids <- function() {
+  tryCatch({
+    pids <- ps::ps_pids()
+    nms <- vapply(pids, function(pid) {
+      tryCatch(ps::ps_name(ps::ps_handle(pid)), error = function(e) "")
+    }, character(1))
+    chrome <- pids[grepl("^chrome\\.exe$", nms, ignore.case = TRUE)]
+    if (!length(chrome)) return(integer(0))
+    cmd <- vapply(chrome, function(pid) {
+      tryCatch(ps::ps_cmdline(ps::ps_handle(pid)), error = function(e) "")
+    }, character(1))
+    chrome[grepl("(?i)remote-debugging|user-data-dir=.*(Temp|Rtmp|chromote|shinytest)",
+                 cmd)]
+  }, error = function(e) integer(0))
+}
+
 #' Retrieve the private drive sandbox path attached to an AppDriver instance
 app_driver_sandbox_dir <- function(driver) {
   attr(driver, "ts_drive_sandbox", exact = TRUE)
@@ -119,6 +139,16 @@ new_app_driver <- function(name) {
     }
   }, add = TRUE)
 
+  # Snapshot des enfants AVANT le boot. Mesure 2026-11-19 : un timeout
+  # Page.navigate laisse le process Shiny + l'arbre Chrome vivants ; 8 boots
+  # ratés => 66 process / 22,4 Go. On ne tue que les PIDs apparus pendant CE
+  # boot, jamais les enfants déjà présents (shards concurrents, daemons, etc.).
+  child_pids_before <- tryCatch(
+    vapply(ps::ps_children(recursive = TRUE),
+           function(h) as.integer(ps::ps_pid(h)), integer(1)),
+    error = function(e) integer(0))
+  chrome_pids_before <- ts_test_chrome_pids()
+
   err <- NULL
   driver <- tryCatch(
     ts_e2e_with_child_locale(
@@ -132,7 +162,30 @@ new_app_driver <- function(name) {
         options = list(shiny.testmode = TRUE)
       )
     ),
-    error = function(e) { err <<- conditionMessage(e); NULL }
+    error = function(e) {
+      err <<- conditionMessage(e)
+      # shinytest2 expose le driver à moitié initialisé via last_error()$app.
+      tryCatch({
+        le <- rlang::last_error()
+        if (!is.null(le) && !is.null(le$app)) try(le$app$stop(), silent = TRUE)
+      }, error = function(e2) NULL)
+      # Puis on tue les enfants laissés par ce boot raté (Shiny, Chrome, mirai).
+      child_pids_after <- tryCatch(
+        vapply(ps::ps_children(recursive = TRUE),
+               function(h) as.integer(ps::ps_pid(h)), integer(1)),
+        error = function(e2) integer(0))
+      for (pid in setdiff(child_pids_after, child_pids_before)) {
+        tryCatch(ps::ps_kill(ps::ps_handle(pid), grace = 500L),
+                 error = function(e2) NULL)
+      }
+      # L'arbre Chrome est réparenté : le tuer par signature de commande,
+      # jamais par parenté (et jamais le navigateur de l'utilisateur).
+      for (pid in setdiff(ts_test_chrome_pids(), chrome_pids_before)) {
+        tryCatch(ps::ps_kill(ps::ps_handle(pid), grace = 500L),
+                 error = function(e2) NULL)
+      }
+      NULL
+    }
   )
   # Le motif de skip porte desormais la VRAIE cause : un echec de locale ne
   # doit plus se déguiser en « Chrome absent » (8 tests restes invisibles
