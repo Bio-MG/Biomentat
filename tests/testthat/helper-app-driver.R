@@ -123,6 +123,20 @@ app_driver_sandbox_dir <- function(driver) {
 #' Automatically isolates test execution in a private drive sandbox via
 #' `TRANSCRIPTO_DRIVE_ROOT`, preventing any interference with host tools/_drive/ready.json.
 new_app_driver <- function(name) {
+  # Porte e2e (DEEP_ANALYSIS_SUITE_ACCELERATION_2026-11-19 §5) : les 8 boots
+  # échouent aujourd'hui à launch_chrome_impl (named-pipe err 232, mesuré
+  # 2026-11-19, artefact e2e_probe.err) pendant que chromote réussit HORS
+  # contexte (sonde standalone : session en 1,2 s) — une sonde de
+  # disponibilité ne reproduit PAS l'échec. Les 4 fichiers e2e coûtent
+  # 308,8 s (13 % de la suite) pour 8 skips sans assertion.
+  # Quadruplet préservé par construction : chaque test skippe => (0,0,0,2),
+  # identique aux relevés sériel ET shardié existants. TS_E2E=1 rétablit le
+  # comportement historique verbatim (boots tentés, skip sur échec).
+  # Blast radius vérifié (grep) : seuls les 4 test-shinytest2-*.R appellent
+  # cette fonction (test-drive-sandbox.R construit un mock, l.195).
+  if (!identical(Sys.getenv("TS_E2E"), "1")) {
+    testthat::skip("e2e gated: TS_E2E!=1 — boots launch_chrome named-pipe err 232 (DEEP_ANALYSIS_2026-11-19 §5)")
+  }
   testthat::skip_if_not_installed("shinytest2")
 
   # M2: Isolated drive sandbox per AppDriver instance to protect host tools/_drive/ready.json
