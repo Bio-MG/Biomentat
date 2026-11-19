@@ -1261,12 +1261,24 @@ mod_sc_server <- function(id, global_data) {
     }, ignoreInit = TRUE)
 
     observeEvent(state_get(shared_rv, "active_tab"), {
-      req(state_get(shared_rv, "active_tab"))
-      nav_select(id="main_tabs", selected=state_get(shared_rv, "active_tab"), session=session)
+      tab <- state_get(shared_rv, "active_tab")
+      req(tab)
+      info <- .sc_tab_to_step_info(tab)
+      if (!is.null(info) && !identical(info$panel, isolate(active_sc_step_rv()))) {
+        active_sc_step_rv(info$panel)
+      }
+      if (!identical(tab, isolate(input$main_tabs))) {
+        nav_select(id="main_tabs", selected=tab, session=session)
+      }
     })
 
     # P3.1: Spatial-inspired step <-> result tab synchronization
     active_sc_step_rv <- reactiveVal("1_pipeline")
+    # H1 anti-ping-pong guard (STATUS.md:23) : suppress accordion_panel_open()
+    # client echoes from firing nav_select("main_tabs") back under rapid clicks.
+    .sc_sync_guard <- new.env(parent = emptyenv())
+    .sc_sync_guard$from_tab_step <- NULL
+    .sc_sync_guard$from_tab_ts <- 0
     .sync_sc_step_to_tab <- function(step_val) {
       if (is.null(step_val) || !length(step_val) || !nzchar(as.character(step_val[1]))) return()
       # P1-ÉTAPE 3 (MEASURÉ boot33h) : prendre le DERNIER ouvert, pas le
@@ -1275,7 +1287,16 @@ mod_sc_server <- function(id, global_data) {
       # step_val[1] rendait l'ÉTAPE PRÉCÉDENTE active (désynchronisation
       # sidebar↔résultat). Même défense que l'observer spatial (tail).
       s <- as.character(utils::tail(step_val, 1))
-      active_sc_step_rv(s)
+      now_s <- proc.time()[["elapsed"]]
+      is_echo <- identical(s, .sc_sync_guard$from_tab_step) &&
+        (now_s - (.sc_sync_guard$from_tab_ts %||% 0)) < 0.6
+      if (is_echo) {
+        .sc_sync_guard$from_tab_step <- NULL
+        return(invisible(NULL))
+      }
+      if (!identical(s, isolate(active_sc_step_rv()))) {
+        active_sc_step_rv(s)
+      }
       target_tab <- .sc_step_to_tab_map(
         s,
         da_tab = isolate(input$da_tabs),
@@ -1337,9 +1358,13 @@ mod_sc_server <- function(id, global_data) {
       if (is.null(tab) || length(tab) != 1L || is.na(tab) || !nzchar(tab)) return(invisible(NULL))
       info <- .sc_tab_to_step_info(tab)
       if (is.null(info)) return(invisible(NULL))
-      active_sc_step_rv(info$panel)
-      try(bslib::accordion_panel_open(id = "acc_workflow", values = info$group, session = session), silent = TRUE)
-      try(bslib::accordion_panel_open(id = info$acc, values = info$panel, session = session), silent = TRUE)
+      if (!identical(info$panel, isolate(active_sc_step_rv()))) {
+        .sc_sync_guard$from_tab_step <- info$panel
+        .sc_sync_guard$from_tab_ts <- proc.time()[["elapsed"]]
+        active_sc_step_rv(info$panel)
+        try(bslib::accordion_panel_open(id = "acc_workflow", values = info$group, session = session), silent = TRUE)
+        try(bslib::accordion_panel_open(id = info$acc, values = info$panel, session = session), silent = TRUE)
+      }
       invisible(NULL)
     }, ignoreInit = TRUE)
 

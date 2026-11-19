@@ -315,6 +315,7 @@ mod_sc_communication_output_ui <- function(id) {
       id = ns("comm_tabs"),
       nav_menu(i18n$t("Exploration des interactions"),
         nav_panel(i18n$t("Table interactions"), value = "ccc_tab_interactions",
+                  uiOutput(ns("comm_empty_hint")),
                   DT::dataTableOutput(ns("comm_table"), height = "auto", fill = FALSE)),
         nav_panel(i18n$t("Table (filtres)"), value = "ccc_tab_table_filtres",
                   DT::dataTableOutput(ns("comm_table_filtered"), height = "auto", fill = FALSE)),
@@ -632,6 +633,15 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       # dans le drawer — livraison garantie à l'ouverture.
       state_get(shared_rv, "comm_tabs_current")
       comm_status_rv()
+    })
+
+    output$comm_empty_hint <- renderUI({
+      state_get(shared_rv, "comm_tabs_current")
+      if (!is.null(comm_state$result)) return(NULL)
+      div(
+        class = "small text-muted border-start border-3 border-secondary ps-2 py-1 mb-2",
+        icon("circle-info"), " ", comm_status_rv()
+      )
     })
 
     # R-3bis : publier la feuille active du drawer comm_tabs — consommée par

@@ -681,3 +681,11 @@ test_that("W1.2 : UI et serveur par condition (Sweep 1B, warnings persistants, v
     expect_identical(names(comm_state$ccc_registry), "Run 1 (12:00)")
   })
 })
+
+test_that("P3 vision audit: comm_empty_hint renders inline hint when empty and NULL when populated", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCC_UI_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src, 'uiOutput(ns("comm_empty_hint"))', fixed = TRUE)
+  expect_match(src, "output$comm_empty_hint <- renderUI(", fixed = TRUE)
+  expect_identical(.n_hits(src, "class = \"alert alert-"), 1L)
+})

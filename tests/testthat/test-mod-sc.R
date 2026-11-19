@@ -581,3 +581,12 @@ test_that("P3.1 SC unification: mod_sc_ui emits single-scroll-owner CSS inside s
   expect_true(sb_pos > 0L && style_pos > sb_pos,
               info = "tags$style(HTML(...)) must sit INSIDE sidebar = sidebar(...) so shiny emits it in the DOM")
 })
+
+test_that("H1 anti-ping-pong + P3 active_tab sync guard in mod_sc.R", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCR_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src, ".sc_sync_guard <- new.env(parent = emptyenv())", fixed = TRUE)
+  expect_match(src, ".sc_sync_guard$from_tab_step <- info$panel", fixed = TRUE)
+  expect_match(src, 'if (!identical(tab, isolate(input$main_tabs)))', fixed = TRUE)
+  expect_match(src, 'if (!identical(info$panel, isolate(active_sc_step_rv())))', fixed = TRUE)
+})
