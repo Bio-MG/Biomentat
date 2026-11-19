@@ -76,12 +76,24 @@ claim <- c(failed = getn(claims_txt[1], "failed"), passed = getn(claims_txt[1], 
 
 problems <- character(0)
 
+mode_txt <- ""
 if (file.exists(results_path)) {
-  res_txt <- paste(readLines(results_path, warn = FALSE), collapse = "\n")
+  res_lines <- readLines(results_path, warn = FALSE)
+  # M-SH4 : exactement UNE ligne BILAN. Un relevé mergé/contaminé qui en porte
+  # plusieurs est AMBIGU — le garde ne doit jamais en choisir une au hasard
+  # (l'ancien regexpr prenait le PREMIER match, faux verdict dans les 2 sens).
+  n_bilan <- sum(grepl("^BILAN:", res_lines))
+  if (n_bilan != 1L) {
+    problems <- append(problems, sprintf(
+      "relevé porte %d lignes BILAN (exactement 1 requis)", n_bilan))
+  }
+  res_txt <- paste(res_lines, collapse = "\n")
   bilan <- regmatches(res_txt, regexpr("BILAN: [^|]*", res_txt))
   if (!length(bilan)) {
     problems <- append(problems, "full_suite_results.txt présent mais sans ligne BILAN")
   } else {
+    mode_m <- regmatches(bilan, regexpr("mode=sharded_\\d+", bilan))
+    if (length(mode_m)) mode_txt <- paste0(" [", mode_m, "]")
     fact <- c(failed = getn(bilan, "failed"), passed = getn(bilan, "passed"),
               error = getn(bilan, "error"), skipped = getn(bilan, "skipped"))
     diffs <- names(claim)[which(claim != fact)]
@@ -117,6 +129,6 @@ if (length(problems)) {
   cat(sprintf("---- Resume : %d desaccord(s) document vs releve ----\n", length(problems)))
   quit(save = "no", status = 1L)
 }
-cat(sprintf("---- Resume : 0 desaccord — §0 (%s ; %s fichiers) concorde avec les faits disponibles ----\n",
-            claims_txt[1], if (is.na(claim_nfiles)) "?" else claim_nfiles))
+cat(sprintf("---- Resume : 0 desaccord — §0 (%s ; %s fichiers)%s concorde avec les faits disponibles ----\n",
+            claims_txt[1], if (is.na(claim_nfiles)) "?" else claim_nfiles, mode_txt))
 quit(save = "no", status = 0L)

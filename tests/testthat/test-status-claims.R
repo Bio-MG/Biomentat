@@ -88,3 +88,27 @@ test_that("faits absents (clone frais) -> RAS, exit 0 — le garde ne juge pas s
                 file.path(.tc_tmp, "inexistant_census.txt"))
   expect_identical(st$status, 0L)
 })
+
+# --- M-SH4 : relevé shardié (token mode=sharded_N) -------------------------
+.tc_results_sharded <- c(
+  "start 00:00:00 | 3 files",
+  "CENSUS: begin", "CENSUS: total=3",
+  "BILAN: mode=sharded_2 failed=0 passed=10 error=0 skipped=2 elapsed_s=1 | 00:00:42"
+)
+
+test_that("BILAN shardié (mode=sharded_2) est accepté et son mode est reporté", {
+  st <- .tc_run(.tc_write("st_shard.md", .tc_status_ok),
+                .tc_write("res_shard.txt", .tc_results_sharded),
+                .tc_write("cen_shard.txt", .tc_census_ok))
+  expect_identical(st$status, 0L)
+  expect_match(st$out, "sharded_2", fixed = TRUE)
+})
+
+test_that("deux lignes BILAN dans un relevé -> exit 1 (jamais de vert partiel/ambigu)", {
+  doubled <- c(.tc_results_ok, .tc_results_ok[4])
+  st <- .tc_run(.tc_write("st_dbl.md", .tc_status_ok),
+                .tc_write("res_dbl.txt", doubled),
+                .tc_write("cen_dbl.txt", .tc_census_ok))
+  expect_identical(st$status, 1L)
+  expect_match(st$out, "BILAN", fixed = TRUE)
+})
