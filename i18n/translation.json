@@ -13960,6 +13960,42 @@
     {
       "fr": "Au moins 2 datasets enregistrés portant des marqueurs sont requis pour calculer la concordance Jaccard.",
       "en": "At least 2 registered datasets with markers are required to compute Jaccard concordance."
+    },
+    {
+      "fr": "Connectivité CMAP (hors-ligne)",
+      "en": "CMAP Connectivity (offline)"
+    },
+    {
+      "fr": "Scoreur hors-ligne par rang KS comparant le contraste DE actif à un pack local de signatures perturbateurs.",
+      "en": "Offline KS-rank scorer comparing active DE contrast to a local perturbagen signature pack."
+    },
+    {
+      "fr": "Pack signatures perturbateurs (.rds / .csv)",
+      "en": "Perturbagen signature pack (.rds / .csv)"
+    },
+    {
+      "fr": "Top K gènes",
+      "en": "Top K genes"
+    },
+    {
+      "fr": "Scorer CMAP",
+      "en": "Score CMAP"
+    },
+    {
+      "fr": "En attente : lancez une analyse DE puis chargez un pack CMAP local.",
+      "en": "Waiting: run DE analysis then load a local CMAP pack."
+    },
+    {
+      "fr": "Aucun contraste DE actif disponible pour le scoring CMAP.",
+      "en": "No active DE contrast available for CMAP scoring."
+    },
+    {
+      "fr": "Chargez d'abord un fichier pack CMAP local.",
+      "en": "Load a local CMAP pack file first."
+    },
+    {
+      "fr": "CMAP hors-ligne OK : %d signature(s) sur %d gènes classés.",
+      "en": "Offline CMAP OK: %d signature(s) on %d ranked genes."
     }
   ]
 }

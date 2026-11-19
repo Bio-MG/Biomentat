@@ -309,7 +309,25 @@ mod_bulk_signatures_output_ui <- function(id) {
       nav_panel(i18n$t("Heatmap"), value = "sig_heatmap_tab", plotOutput(ns("sig_heatmap"), height = "640px")),
       nav_panel("PCA",              plotOutput(ns("sig_pca"), height = "420px")),
       nav_panel(i18n$t("Table"),    DTOutput(ns("sig_table"))),
-      nav_panel(i18n$t("Rejets"),   uiOutput(ns("sig_dropped_ui")))
+      nav_panel(i18n$t("Rejets"),   uiOutput(ns("sig_dropped_ui"))),
+      nav_panel(
+        i18n$t("Connectivité CMAP (hors-ligne)"),
+        value = "sig_cmap_tab",
+        div(class = "small text-muted mt-2 mb-2",
+            i18n$t("Scoreur hors-ligne par rang KS comparant le contraste DE actif à un pack local de signatures perturbateurs.")),
+        fluidRow(
+          column(7, fileInput(ns("cmap_pack_file"), i18n$t("Pack signatures perturbateurs (.rds / .csv)"),
+                              accept = c(".rds", ".RDS", ".csv", ".tsv"),
+                              buttonLabel = i18n$t("Parcourir..."))),
+          column(3, numericInput(ns("cmap_top_k"), i18n$t("Top K gènes"),
+                                 value = 150L, min = 10L, max = 1000L, step = 10L)),
+          column(2, div(class = "pt-4",
+                        actionButton(ns("run_cmap"), i18n$t("Scorer CMAP"),
+                                     class = "btn-outline-primary w-100", icon = icon("pills"))))
+        ),
+        div(class = "small text-muted mb-2", textOutput(ns("cmap_status"))),
+        DTOutput(ns("cmap_table"))
+      )
     ),
     fluidRow(
       column(6, downloadButton(ns("dl_sig_csv"), i18n$t("Export CSV"),
@@ -547,6 +565,88 @@ mod_bulk_signatures_server <- function(id, global_data, shared_rv) {
     # mod_bulk_signatures_export.R so the offline tests can reach it.
     ts_drive_publish_export(global_data, "bulk_signatures", function() {
       bulk_signatures_export_scores_csv(shared_rv, global_data)
+    })
+
+    # ── BK-02 : Connectivité CMAP / LINCS L1000 hors-ligne ────────────────
+    cmap_res_rv <- reactiveVal(NULL)
+    cmap_status_rv <- reactiveVal(.tr("En attente : lancez une analyse DE puis chargez un pack CMAP local."))
+
+    output$cmap_status <- renderText({
+      global_data$language
+      cmap_status_rv()
+    })
+
+    observeEvent(input$run_cmap, {
+      ac <- shared_rv$active_contrast %||% ""
+      de_df <- if (nzchar(ac) && is.list(shared_rv$contrasts) && ac %in% names(shared_rv$contrasts)) {
+        shared_rv$contrasts[[ac]]$res_df %||% shared_rv$contrasts[[ac]]
+      } else {
+        shared_rv$de_results
+      }
+      if (!is.data.frame(de_df) || nrow(de_df) == 0L) {
+        showNotification(.tr("Aucun contraste DE actif disponible pour le scoring CMAP."),
+                         type = "warning", duration = 6)
+        return()
+      }
+      f_info <- input$cmap_pack_file
+      if (is.null(f_info) || is.null(f_info$datapath) || !file.exists(f_info$datapath)) {
+        showNotification(.tr("Chargez d'abord un fichier pack CMAP local."),
+                         type = "warning", duration = 6)
+        return()
+      }
+      pack <- tryCatch({
+        if (grepl("\\.rds$", f_info$name %||% "", ignore.case = TRUE)) {
+          readRDS(f_info$datapath)
+        } else if (grepl("\\.tsv$", f_info$name %||% "", ignore.case = TRUE)) {
+          utils::read.delim(f_info$datapath, stringsAsFactors = FALSE)
+        } else {
+          utils::read.csv(f_info$datapath, stringsAsFactors = FALSE)
+        }
+      }, error = function(e) e)
+      if (inherits(pack, "error")) {
+        showNotification(conditionMessage(pack), type = "error", duration = 8)
+        cmap_status_rv(conditionMessage(pack))
+        return()
+      }
+      if (!any(c("stat", "t", "logFC", "score") %in% colnames(de_df)) &&
+          "log2FoldChange" %in% colnames(de_df)) {
+        de_df$logFC <- de_df$log2FoldChange
+      }
+      res <- tryCatch(
+        score_cmap_connectivity(de_df, pack, top_k = input$cmap_top_k %||% 150L),
+        error = function(e) e
+      )
+      if (inherits(res, "error")) {
+        showNotification(conditionMessage(res), type = "error", duration = 8)
+        cmap_status_rv(conditionMessage(res))
+        return()
+      }
+      cmap_res_rv(res)
+      if (!is.null(res$provenance) && exists("provenance_append", mode = "function")) {
+        try(provenance_append(shared_rv, res$provenance), silent = TRUE)
+      }
+      cmap_status_rv(sprintf(
+        .tr("CMAP hors-ligne OK : %d signature(s) sur %d gènes classés."),
+        as.integer(res$qc$n_signatures %||% 0L),
+        as.integer(res$qc$n_ranked_genes %||% 0L)
+      ))
+    })
+
+    output$cmap_table <- renderDT({
+      res <- cmap_res_rv()
+      req(res, is.data.frame(res$table))
+      dt <- ts_datatable(
+        res$table,
+        page_length = 15L,
+        filename_base = "bulk_cmap_connectivity",
+        filter = "none",
+        scroll_x = TRUE
+      )
+      num_cols <- intersect(c("es_up", "es_down", "connectivity_score"), colnames(res$table))
+      if (length(num_cols)) {
+        dt <- DT::formatRound(dt, columns = num_cols, digits = 4L)
+      }
+      dt
     })
 
   }) # /moduleServer

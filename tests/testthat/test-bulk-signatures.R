@@ -28,7 +28,7 @@ test_that("surface publique figée + garde disclaimer contractuelle", {
     bulk_signatures_public_api(),
     c("bulk_signatures_public_api", "bulk_signature_resources",
       "bulk_load_signatures", "bulk_score_signatures",
-      "build_signature_scores_export")
+      "build_signature_scores_export", "score_cmap_connectivity")
   )
   expect_match(BULK_SIGNATURES_DISCLAIMER, "relatifs")
   expect_match(BULK_SIGNATURES_DISCLAIMER, "cytom")
@@ -155,4 +155,23 @@ test_that("export : colonne disclaimer sur CHAQUE ligne (garde §M3)", {
                                   "analysis_id", "disclaimer"))
   expect_true(all(ex$disclaimer == BULK_SIGNATURES_DISCLAIMER))
   expect_identical(nrow(ex), nrow(res$scores) * ncol(res$scores))
+})
+
+test_that("BK-02 UI : mod_bulk_signatures câble l'onglet sig_cmap_tab et ts_datatable", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "bulk", "mod_bulk_signatures.R"),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src, 'value = "sig_cmap_tab"', fixed = TRUE)
+  expect_match(src, "score_cmap_connectivity(", fixed = TRUE)
+  expect_match(src, 'filename_base = "bulk_cmap_connectivity"', fixed = TRUE)
+
+  # DESeq2 table compatibility via log2FoldChange -> logFC mapping:
+  de_deseq <- data.frame(
+    gene = paste0("G", seq_len(12)),
+    log2FoldChange = seq(3, -3, length.out = 12),
+    stringsAsFactors = FALSE
+  )
+  de_deseq$logFC <- de_deseq$log2FoldChange
+  pack <- list(list(id = "P1", up = c("G10", "G11"), down = c("G1", "G2")))
+  res <- score_cmap_connectivity(de_deseq, pack)
+  expect_true(res$table$connectivity_score[1L] < -0.5)
 })
