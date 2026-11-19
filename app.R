@@ -1476,22 +1476,31 @@ server <- function(input, output, session) {
 
   mod_spatial_server("spatial", global_data)
 
-  # P1-BOOT-DELIVERY (2026-11-19, mesuré sondes b745/7237 + trace
-  # wf_trace.log) : sur une session fraîche, le renderUI wf_mode_style des
-  # TROIS modules ne s'exécute JAMAIS au premier flush (trace vide — l'
-  # output rate le premier flush et rien ne l'invalide ensuite : les
-  # styles restent vides, Spécialisé inappliqué, jusqu'à une interaction
-  # radio). L'émission initiale du radio (défaut Spécialisé, sections
-  # cachées au boot) n'arrive pas de façon fiable côté client. Bump
-  # serveur one-shot APRÈS l'enregistrement des modules : invalide les
-  # trois styles → render → livraison garantie à la connexion, zéro
-  # interaction requise. (Valeur seulement incrémentée — les renderUI
-  # relisent mode + .ts_wf_last_panel, aucun effet de bord.)
-  global_data$wf_mode_version <- (global_data$wf_mode_version %||% 0L) + 1L
+  # P1-BOOT-DELIVERY (2026-11-19, mesuré sondes chromote + trace serveur,
+  # worktree jetable sur f64c52c) : le bump one-shot introduit ici par
+  # 779acb6 est RETIRÉ. Cause racine mesurée : la lecture
+  # `global_data$wf_mode_version` dans le corps de server() (hors contexte
+  # réactif) déclenche « Can't access reactive value 'wf_mode_version'
+  # outside of reactive consumer » — server() ABORTE à cette ligne à
+  # CHAQUE session fraîche : l'observateur du radio (l.2325+) et tout le
+  # reste du server() ne s'enregistrent jamais, et la session ne livre
+  # quasiment plus rien (3 messages WS en 46 s, 0 messages `values` — tous
+  # les outputs dynamiques vides, dont les trois styles wf_mode_style).
+  # Sans ce bump (état pré-779acb6), le premier flush — qui suit la fin de
+  # server() — émet et livre les trois styles v=0 (Spécialisé appliqué)
+  # SANS interaction : mesuré t=13 s sur session fraîche chaude (t=33 s sur
+  # la première session d'un boot froid — le délai est le coût
+  # d'enregistrement de server(), hors périmètre P1). L'émission initiale
+  # du radio re-bump ensuite v→2 via l'observateur l.2325 (trace
+  # « radio observeEvent FIRED value=specialise » mesurée). Suites
+  # p1-workflow / spatial-sidebar / nav-wiring : 96/96 pass.
+  # RÈGLE : toute écriture de champ reactiveValues qui LIT la valeur
+  # précédente dans le corps de server() doit être enveloppée dans
+  # isolate() — sinon crash silencieux (Warning uniquement dans le log).
 
 
   # === STATUT DES OBJETS — INDICATEUR DE PROGRESSION GLOBAL (point 8) ===
-  
+
   output$global_status_panel <- renderUI({
     global_data$language
     .tr <- function(key) {

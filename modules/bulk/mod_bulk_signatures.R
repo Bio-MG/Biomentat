@@ -568,8 +568,15 @@ mod_bulk_signatures_server <- function(id, global_data, shared_rv) {
     })
 
     # ── BK-02 : Connectivité CMAP / LINCS L1000 hors-ligne ────────────────
+    # P1-BOOT-DELIVERY suite (2026-11-19) : .tr() lit global_data$i18n —
+    # appelé ICI à l'ENREGISTREMENT du module (valeur initiale de la
+    # reactiveVal, hors consumer réactif) il aborge server() à chaque
+    # session fraîche (« Can't access reactive value 'i18n' outside of
+    # reactive consumer », trace mod_bulk_signatures_server, mesuré boot
+    # 3778) — TOUTE session naissait dégradée. isolate() à l'init : lecture
+    # sûre, texte initial inchangé.
     cmap_res_rv <- reactiveVal(NULL)
-    cmap_status_rv <- reactiveVal(.tr("En attente : lancez une analyse DE puis chargez un pack CMAP local."))
+    cmap_status_rv <- reactiveVal(shiny::isolate(.tr("En attente : lancez une analyse DE puis chargez un pack CMAP local.")))
 
     output$cmap_status <- renderText({
       global_data$language
