@@ -329,6 +329,19 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         ggplot2::theme_void()
     }
 
+    .velocity_has_reduction <- function(obj, sel_red) {
+      if (is.null(obj) || is.null(sel_red) || !nzchar(sel_red)) return(FALSE)
+      reds <- tryCatch(Seurat::Reductions(obj), error = function(e) names(obj@reductions))
+      isTRUE(sel_red %in% reds)
+    }
+
+    .velocity_missing_reduction_msg <- function(sel_red) {
+      sprintf(
+        "Réduction '%s' absente de l'objet Seurat — exécutez d'abord le Pipeline SC (PCA / UMAP) avant de lancer la vélocité.",
+        as.character(sel_red %||% "umap")
+      )
+    }
+
     # Coordonnees de base pour la vue embedding : embedding RDS partiel
     # prioritaire, sinon reduction Seurat restreinte aux cellules velocity
     # validees. NULL si introuvables (le demandeur affiche alors un message
@@ -339,7 +352,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       }
       obj <- global_data$sc_obj
       if (is.null(obj) || is.null(velocity_state$result) ||
-          !red %in% names(obj@reductions)) {
+          !.velocity_has_reduction(obj, red)) {
         return(NULL)
       }
       emb <- Seurat::Embeddings(obj, reduction = red)
@@ -821,6 +834,13 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       # garde de ré-entrée (P1-6b) : un calcul déjà en vol ne relance pas
       if (!is.null(scvelo_task) && identical(scvelo_task$status(), "running")) return(invisible())
       sel_red <- input$velocity_reduction %||% "umap"
+      if (!.velocity_has_reduction(global_data$sc_obj, sel_red)) {
+        .vel_scvelo_fail(errorCondition(
+          .velocity_missing_reduction_msg(sel_red),
+          class = c("sc_velocity_error", "error", "condition")
+        ))
+        return()
+      }
       emb_all <- Seurat::Embeddings(global_data$sc_obj, reduction = sel_red)
       emb <- emb_all[canon$cell_names, seq_len(min(2L, ncol(emb_all))), drop = FALSE]
       params <- list(seed = 1L, n_pcs = 30L, n_neighbors = 30L, mode = "stochastic")
@@ -950,6 +970,12 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
 
       sel_red <- input$velocity_reduction %||% "umap"
       orchestration_warnings <- character(0)
+      if (is.null(validated$umap_embedding) &&
+          !.velocity_has_reduction(global_data$sc_obj, sel_red)) {
+        msg_red <- .velocity_missing_reduction_msg(sel_red)
+        orchestration_warnings <- c(orchestration_warnings, msg_red)
+        showNotification(msg_red, type = "warning", duration = 8)
+      }
 
       # BUG 3/BUG 4: partial coordinate display via align_velocity_embedding()
       if (!is.null(validated$umap_embedding)) {
@@ -1287,12 +1313,14 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
 
       base_coords <- .base_coords_for(red)
       if (is.null(base_coords)) {
-        shiny::validate(shiny::need(
-          FALSE,
+        msg <- if (!.velocity_has_reduction(global_data$sc_obj, red)) {
+          .velocity_missing_reduction_msg(red)
+        } else {
           sprintf(paste0("Reduction '%s' introuvable sur l'objet Seurat ou ",
                          "aucune cellule velocity dans l'embedding : calculez ",
                          "la reduction ou choisissez-en une autre."), red)
-        ))
+        }
+        shiny::validate(shiny::need(FALSE, msg))
       }
 
       tryCatch(
@@ -1417,11 +1445,13 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       red <- input$velocity_reduction %||% "umap"
       coords <- .base_coords_for(red)
       if (is.null(coords)) {
-        showNotification(
+        msg <- if (!.velocity_has_reduction(global_data$sc_obj, red)) {
+          .velocity_missing_reduction_msg(red)
+        } else {
           sprintf(paste0("Reduction '%s' introuvable ou aucune cellule ",
-                         "velocity dans l'embedding : export annule."), red),
-          type = "error", duration = 8
-        )
+                         "velocity dans l'embedding : export annule."), red)
+        }
+        showNotification(msg, type = "error", duration = 8)
         req(FALSE)
       }
       p <- plot_velocity_embedding(

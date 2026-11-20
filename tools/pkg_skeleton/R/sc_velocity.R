@@ -494,27 +494,38 @@ validate_velocity_identifiers <- function(
 #' Normalize cell barcodes without silently creating collisions
 #'
 #' @param ids Cell barcodes.
-#' @param strip_suffix Logical, remove terminal -1/-2 style suffix.
+#' @param strip_suffix Logical, remove terminal -1/-2 style suffix and/or
+#'   velocyto trailing `x`.
+#' @param strip_prefix Logical, remove common 10x/velocyto sample prefixes
+#'   (`SAMPLE:` or `SAMPLE_` before a barcode-like token).
 #' @return Normalized barcodes.
 #' @export
 normalize_velocity_cell_barcodes <- function(
     ids,
-    strip_suffix = FALSE
+    strip_suffix = FALSE,
+    strip_prefix = FALSE
 ) {
     ids <- as.character(ids)
 
-    if (!isTRUE(strip_suffix)) {
+    if (!isTRUE(strip_suffix) && !isTRUE(strip_prefix)) {
         return(ids)
     }
 
-    normalized <- sub("-[0-9]+$", "", ids)
+    normalized <- ids
+    if (isTRUE(strip_prefix)) {
+        normalized <- sub("^[^:]+:", "", normalized)
+        normalized <- sub("^[^_]+_(?=[ACGTN]{8,})", "", normalized, perl = TRUE)
+    }
+    if (isTRUE(strip_suffix)) {
+        normalized <- sub("(-[0-9]+)?x?$", "", normalized)
+    }
     collisions <- unique(normalized[duplicated(normalized)])
 
     if (length(collisions) > 0L) {
         .velocity_stop(
             "invalid_input",
             paste0(
-                "Le retrait des suffixes de barcodes cree des collisions : ",
+                "Le retrait des prefixes/suffixes de barcodes cree des collisions : ",
                 paste(head(collisions, 10L), collapse = ", "),
                 ". Desactivez cette option ou corrigez les identifiants."
             )
@@ -570,6 +581,8 @@ normalize_velocity_gene_ids <- function(
 #' @param allow_low_overlap Allow overlap below the declared minimum.
 #' @param min_cell_overlap Optional numeric override of the declared minimum
 #'   overlap fraction (TS_VELOCITY_OVERLAP_MIN, historique 0.8). NULL par defaut.
+#' @param strip_cell_prefix Remove common 10x/velocyto sample prefixes on cell
+#'   barcodes.
 #' @return Validated velocity structure and alignment report. La structure
 #'   inclut les tables d'alignement `cell_mapping`/`gene_mapping` (Stage 8)
 #'   lorsque les identifiants Seurat sont fournis (NULL sinon), ainsi que les
@@ -585,7 +598,8 @@ validate_velocity_matrices <- function(
     strip_cell_suffix = FALSE,
     strip_gene_version = FALSE,
     allow_low_overlap = FALSE,
-    min_cell_overlap = NULL
+    min_cell_overlap = NULL,
+    strip_cell_prefix = FALSE
 ) {
     if (!requireNamespace("Matrix", quietly = TRUE)) {
         .velocity_stop(
@@ -712,7 +726,8 @@ validate_velocity_matrices <- function(
 
     cell_ids <- normalize_velocity_cell_barcodes(
         cell_ids_original,
-        strip_suffix = strip_cell_suffix
+        strip_suffix = strip_cell_suffix,
+        strip_prefix = strip_cell_prefix
     )
 
     gene_ids <- normalize_velocity_gene_ids(
@@ -750,7 +765,8 @@ validate_velocity_matrices <- function(
 
         seurat_cells_normalized <- normalize_velocity_cell_barcodes(
             seurat_cells,
-            strip_suffix = strip_cell_suffix
+            strip_suffix = strip_cell_suffix,
+            strip_prefix = strip_cell_prefix
         )
 
         if (anyDuplicated(seurat_cells_normalized)) {
@@ -769,13 +785,39 @@ validate_velocity_matrices <- function(
         )
 
         if (length(matched_cells) == 0L) {
+            rescue_n <- if (!isTRUE(strip_cell_suffix) || !isTRUE(strip_cell_prefix)) {
+                tryCatch({
+                    v_probe <- normalize_velocity_cell_barcodes(
+                        cell_ids_original, strip_suffix = TRUE, strip_prefix = TRUE
+                    )
+                    s_probe <- normalize_velocity_cell_barcodes(
+                        seurat_cells_raw, strip_suffix = TRUE, strip_prefix = TRUE
+                    )
+                    length(intersect(s_probe, v_probe))
+                }, error = function(e) 0L)
+            } else {
+                0L
+            }
+            hint <- if (rescue_n > 0L) {
+                sprintf(
+                    paste0(
+                        " Indice : %d barcode(s) correspondent apres retrait des ",
+                        "prefixes/suffixes (ex. 'SAMPLE:BARCODE-1x' ou 'SAMPLE_BARCODE') ",
+                        "— activez le retrait des prefixes/suffixes de barcodes."
+                    ),
+                    rescue_n
+                )
+            } else {
+                ""
+            }
             .velocity_stop(
                 "invalid_cell_alignment",
                 paste0(
                     "Aucune cellule alignee entre les matrices velocity et ",
                     "l'objet Seurat courant. Verifiez que l'objet charge ",
                     "correspond au meme run Cell Ranger et activez le retrait ",
-                    "des suffixes (-1) si necessaire."
+                    "des suffixes (-1) si necessaire.",
+                    hint
                 )
             )
         }
@@ -951,9 +993,18 @@ validate_velocity_matrices <- function(
         cell_names = aligned_cells,
         gene_names = aligned_genes,
         orientation = detected_orientation,
-        cell_match_mode = if (isTRUE(strip_cell_suffix)) "suffix" else "exact",
+        cell_match_mode = if (isTRUE(strip_cell_suffix) && isTRUE(strip_cell_prefix)) {
+            "prefix_suffix"
+        } else if (isTRUE(strip_cell_prefix)) {
+            "prefix"
+        } else if (isTRUE(strip_cell_suffix)) {
+            "suffix"
+        } else {
+            "exact"
+        },
         gene_match_mode = if (isTRUE(strip_gene_version)) "version" else "exact",
         strip_cell_suffix = isTRUE(strip_cell_suffix),
+        strip_cell_prefix = isTRUE(strip_cell_prefix),
         strip_gene_version = isTRUE(strip_gene_version),
         velocity_source = "import",
         velocity_method = "precomputed",
