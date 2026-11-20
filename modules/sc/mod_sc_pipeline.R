@@ -41,6 +41,88 @@
   dm@eigenvectors[, seq_len(n_out), drop = FALSE]
 }
 
+# Résumé QC honnête pour le pipeline manuel (testable hors Shiny).
+# Ne fabrique aucun chiffre : lit exclusivement qc_snapshot, obj et les
+# paramètres réellement soumis au run.
+.sc_pipeline_qc_summary <- function(qc_snapshot = NULL, params = NULL,
+                                    obj = NULL, tr = NULL) {
+  tr_fn <- if (is.function(tr)) tr else function(k) k
+  empty_res <- list(
+    status = "none", n_before = NA_integer_, n_retained = NA_integer_,
+    n_removed = NA_integer_, n_features = NA_integer_, n_doublets = 0L,
+    pct_retained = NA_real_, counts_text = NULL, thresholds_text = NULL,
+    doublets_text = NULL, text = NULL
+  )
+  if (!is.data.frame(qc_snapshot) || nrow(qc_snapshot) == 0L ||
+      !all(c("Cellules_avant", "Cellules_apres") %in% names(qc_snapshot))) {
+    return(empty_res)
+  }
+
+  n_before <- sum(as.integer(qc_snapshot$Cellules_avant), na.rm = TRUE)
+  n_after_qc <- sum(as.integer(qc_snapshot$Cellules_apres), na.rm = TRUE)
+  has_doublets_col <- "Doublets_exclus" %in% names(qc_snapshot)
+  n_doublets <- if (has_doublets_col) {
+    sum(as.integer(qc_snapshot$Doublets_exclus), na.rm = TRUE)
+  } else {
+    0L
+  }
+  n_retained <- if (!is.null(obj) && is.numeric(ncol(obj)) && length(ncol(obj)) == 1L) {
+    as.integer(ncol(obj))
+  } else {
+    as.integer(max(0L, n_after_qc - n_doublets))
+  }
+  n_removed <- max(0L, as.integer(n_before) - as.integer(n_retained))
+  pct_retained <- if (n_before > 0L) round(100 * n_retained / n_before, 1) else NA_real_
+  n_features <- if (!is.null(obj) && is.numeric(nrow(obj)) && length(nrow(obj)) == 1L) {
+    as.integer(nrow(obj))
+  } else {
+    NA_integer_
+  }
+
+  pct_str <- if (is.na(pct_retained)) "" else paste0(" (", format(pct_retained, nsmall = 1), "%)")
+  counts_text <- paste0(
+    format(n_retained, big.mark = " "), " / ", format(n_before, big.mark = " "), pct_str,
+    sprintf(tr_fn(" — cellules retirées : %s, conservées : %s."),
+            format(n_removed), format(n_retained)),
+    if (!is.na(n_features)) paste0(" | ", tr_fn("Gènes"), " : ", format(n_features, big.mark = " ")) else ""
+  )
+
+  thresholds_text <- if (!is.null(params) && !is.null(params$qc_min_gene) &&
+                         !is.null(params$qc_max_gene) && !is.null(params$qc_mt)) {
+    sprintf("nFeature_RNA > %s · nFeature_RNA < %s · %% Mito < %s%%",
+            format(params$qc_min_gene), format(params$qc_max_gene), format(params$qc_mt))
+  } else {
+    NULL
+  }
+
+  doublets_text <- if (has_doublets_col) {
+    dbl_base <- sprintf(tr_fn("✓ Doublets : %d cellule(s) exclue(s)."), n_doublets)
+    cutoff <- params$doublet_score_cutoff
+    if (!is.null(cutoff) && is.finite(suppressWarnings(as.numeric(cutoff)))) {
+      paste0(dbl_base, " (score > ", format(cutoff), ")")
+    } else {
+      dbl_base
+    }
+  } else {
+    NULL
+  }
+
+  all_lines <- Filter(Negate(is.null), list(counts_text, thresholds_text, doublets_text))
+  list(
+    status = "applied",
+    n_before = as.integer(n_before),
+    n_retained = as.integer(n_retained),
+    n_removed = as.integer(n_removed),
+    n_features = n_features,
+    n_doublets = as.integer(n_doublets),
+    pct_retained = pct_retained,
+    counts_text = counts_text,
+    thresholds_text = thresholds_text,
+    doublets_text = doublets_text,
+    text = paste(all_lines, collapse = "\n")
+  )
+}
+
 # Audit 2026-09-27 §1.8 : graine DÉCLARÉE pour les étapes stochastiques
 # (UMAP / t-SNE) — restaurée après chaque appel (withr::with_seed), donc deux
 # exécutions du pipeline produisent les mêmes embeddings sans fuiter l'état
@@ -168,6 +250,7 @@ mod_sc_pipeline_ui <- function(id) {
     # (mesuré E2E : « Progress$new() ne montre rien pendant la phase t-SNE/
     # finale »). Alimentée par le serveur ci-dessous (.tl_set/.tl_end).
     uiOutput(ns("pipeline_timeline")),
+    uiOutput(ns("qc_summary_label")),
     hr(),
     h6(i18n$t("Gros Dataset — Backend Disque (BPCells)"), style="font-weight:bold;"),
     selectInput(ns("bpcells_mode"), i18n$t("Mode"),
@@ -347,6 +430,24 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
                  rows)
     })
 
+    qc_summary_rv <- shiny::reactiveVal(NULL)
+    last_params_rv <- shiny::reactiveVal(NULL)
+    output$qc_summary_label <- renderUI({
+      info <- qc_summary_rv()
+      if (is.null(info) || !identical(info$status, "applied")) return(NULL)
+      shiny::div(
+        class = "alert alert-info mt-1",
+        style = "font-size:0.82em; padding:8px 12px;",
+        shiny::div(shiny::tags$strong("QC : "), info$counts_text),
+        if (!is.null(info$thresholds_text)) {
+          shiny::div(class = "text-muted mt-1", info$thresholds_text)
+        },
+        if (!is.null(info$doublets_text)) {
+          shiny::div(class = "text-muted mt-1", info$doublets_text)
+        }
+      )
+    })
+
     # ── P1-6a : ExtendedTask + mirai (pattern auto-pipeline mod_sc.R) ───────
     # Pool UNIQUE de l'application (ensure_app_daemons → init_spatial_daemons,
     # preload APP_DAEMON_SOURCE_FILES dont sc_pipeline.R) ; bind_task_button
@@ -389,6 +490,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
     # Applique le résultat du cœur dans la session (async ET repli synchrone) :
     .apply_manual_result <- function(res) {
       if (!isTRUE(res$ok)) {
+        qc_summary_rv(NULL)
         for (n in res$notifications) {
           showNotification(n$msg, type = n$type, duration = 6)
         }
@@ -420,6 +522,9 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         showNotification(n$msg, type = n$type, duration = if (identical(n$type, "warning")) 8 else 6)
       }
       if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("pipeline_step_complete")
+      qc_summary_rv(.sc_pipeline_qc_summary(res$qc_snapshot,
+                                            params = shiny::isolate(last_params_rv()),
+                                            obj = res$obj, tr = .tr))
       .tl_end(ok = TRUE)
       showNotification(.tr("✓ Pipeline terminé"), type = "message")
     }
@@ -446,6 +551,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         seed = .SC_PIPELINE_SEED
       )
 
+      last_params_rv(params)
       pool_ok <- isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE))
       if (!is.null(manual_task) && pool_ok) {
         .tl_set("qc")
@@ -498,6 +604,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         if (identical(st, "success")) {
           .apply_manual_result(manual_task$result())
         } else if (identical(st, "error")) {
+          qc_summary_rv(NULL)
           # échec hors cœur (daemon mort, timeout) : pas de ligne [TL] END —
           # l'étape faillible = la dernière « running » de la timeline.
           tl <- timeline_rv()
