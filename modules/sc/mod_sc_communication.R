@@ -2084,6 +2084,31 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       .round_comm_dt(dt, df)
     })
 
+    # Panier L-R (W2.2 §11.8 Gem #5) : lignes DT sélectionnées, sinon
+    # interactions filtrées -> shared_rv$ccc_gene_basket (affichage seul).
+    observe({
+      if (is.null(shared_rv)) return(invisible(NULL))
+      res <- comm_state$result
+      if (is.null(res)) return(invisible(NULL))
+      basket <- tryCatch({
+        if (!exists("build_communication_basket_selection", mode = "function")) {
+          NULL
+        } else {
+          tbl <- comm_filtered()$table
+          idx <- input$comm_table_filtered_rows_selected
+          if (length(idx) > 0L && is.data.frame(tbl)) {
+            tbl <- tbl[intersect(as.integer(idx), seq_len(nrow(tbl))), , drop = FALSE]
+          }
+          sel_cols <- intersect(c("sender", "receiver", "ligand", "receptor", "pathway"),
+                                colnames(tbl))
+          sel <- lapply(stats::setNames(sel_cols, sel_cols),
+                        function(cn) unique(as.character(tbl[[cn]])))
+          if (is.data.frame(tbl) && nrow(tbl) == 0L) sel <- list(ligand = "\u0001none")
+          build_communication_basket_selection(res, selection = sel)
+        }
+      }, error = function(e) NULL)
+      shared_rv$ccc_gene_basket <- basket
+    })
     .parse_top_n <- function(val) {
       if (!is.null(val) && is.finite(val) && val > 0) as.integer(val) else NULL
     }
