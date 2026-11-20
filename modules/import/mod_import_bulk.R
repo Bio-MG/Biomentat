@@ -155,6 +155,89 @@
   )
 }
 
+#' Detect expression matrix scale and RNA-seq DE eligibility at import (W2.4).
+#'
+#' Pure helper (no Shiny session): delegates to `bulk_counts_transformed_signature()`
+#' when available (with a self-contained fallback for isolated unit tests) and
+#' enriches the result with `de_allowed`, `is_raw_counts`, `has_negative`,
+#' `has_fractional`, `is_tpm_like`, and `all_zero`.
+#'
+#' @param mat Numeric matrix or data.frame (features x samples).
+#' @return Named list with `verdict`, `de_allowed`, `is_raw_counts`,
+#'   `has_negative`, `has_fractional`, `is_tpm_like`, `all_zero`, and signature metrics.
+.bulk_detect_matrix_scale <- function(mat) {
+  invalid <- list(
+    verdict = "unknown", de_allowed = FALSE, is_raw_counts = FALSE,
+    has_negative = FALSE, has_fractional = FALSE, is_tpm_like = FALSE,
+    all_zero = FALSE, n_values = 0L, n_non_integer = 0L,
+    frac_integer = NA_real_, max_dev = NA_real_,
+    frac_unit_interval = NA_real_, median_colsum = NA_real_,
+    message = "entr\u00e9e invalide (matrice num\u00e9rique requise)"
+  )
+  if (is.null(mat)) return(invalid)
+  if (is.data.frame(mat)) {
+    mat <- as.data.frame(mat, check.names = FALSE, stringsAsFactors = FALSE)
+    for (cc in colnames(mat)) {
+      if (is.character(mat[[cc]])) mat[[cc]] <- suppressWarnings(as.numeric(mat[[cc]]))
+    }
+  }
+  if (!is.matrix(mat)) mat <- tryCatch(as.matrix(mat), error = function(e) NULL)
+  if (is.null(mat) || !is.numeric(mat) || nrow(mat) == 0L || ncol(mat) == 0L) {
+    return(invalid)
+  }
+  vals <- as.vector(mat)
+  fin <- vals[is.finite(vals)]
+  if (length(fin) == 0L) return(invalid)
+
+  has_neg <- any(fin < 0)
+  is_int <- abs(fin - round(fin)) < 1e-8
+  n_non_int <- sum(!is_int)
+  has_frac <- n_non_int > 0L
+  all_zero <- !has_neg && !has_frac && all(fin == 0)
+
+  sig <- if (exists("bulk_counts_transformed_signature", mode = "function")) {
+    tryCatch(bulk_counts_transformed_signature(mat), error = function(e) NULL)
+  } else NULL
+
+  if (is.null(sig) || identical(sig$verdict, "unknown")) {
+    nz <- fin[fin > 0]
+    frac_unit <- if (length(nz) > 0L) mean(nz < 1) else 0
+    cs <- colSums(mat)
+    cs_pos <- cs[is.finite(cs) & cs > 0]
+    med_cs <- if (length(cs_pos) > 0L) stats::median(cs_pos) else NA_real_
+    tpm_like <- !has_neg && has_frac && isTRUE(frac_unit >= 0.01) &&
+      is.finite(med_cs) && med_cs >= 5e5 && med_cs <= 5e6
+    verdict <- if (has_neg) "transformed_generic"
+               else if (!has_frac) "raw"
+               else if (tpm_like) "tpm_fpkm_likely"
+               else "transformed_generic"
+    msg <- if (has_neg) {
+      "\u26a0\ufe0f Cette matrice ne ressemble PAS \u00e0 des counts bruts (valeurs n\u00e9gatives pr\u00e9sentes)."
+    } else if (identical(verdict, "tpm_fpkm_likely")) {
+      "\u26a0\ufe0f Matrice TPM/FPKM/CPM PROBABLE \u00e0 l'import : fournissez des counts bruts."
+    } else if (has_frac) {
+      "\u26a0\ufe0f Matrice continue d\u00e9tect\u00e9e \u00e0 l'import : fournissez la matrice de counts bruts."
+    } else {
+      "counts bruts (toutes les valeurs finies sont enti\u00e8res >= 0)"
+    }
+    sig <- list(
+      verdict = verdict, n_values = length(fin), n_non_integer = n_non_int,
+      frac_integer = mean(is_int),
+      max_dev = if (has_frac) max(abs(fin[!is_int] - round(fin[!is_int]))) else NA_real_,
+      frac_unit_interval = frac_unit, median_colsum = med_cs, message = msg
+    )
+  }
+
+  is_raw <- identical(sig$verdict, "raw") && !has_neg && !has_frac
+  sig$is_raw_counts  <- is_raw
+  sig$has_negative   <- has_neg
+  sig$has_fractional <- has_frac
+  sig$is_tpm_like    <- identical(sig$verdict, "tpm_fpkm_likely")
+  sig$all_zero       <- all_zero
+  sig$de_allowed     <- is_raw && !all_zero
+  sig
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # UI
 # ─────────────────────────────────────────────────────────────────────────────
@@ -802,21 +885,35 @@ mod_import_bulk_server <- function(id, global_data) {
                          data_type       = "generic_omics",
                          modality        = prep$modality,
                          is_count_matrix = FALSE,
+                         de_allowed      = TRUE,
                          generic_omics   = prep,
                          timestamp       = Sys.time())
       } else {
         counts_matrix <- as.matrix(counts)
+        raw_scale     <- .bulk_detect_matrix_scale(counts_matrix)
         gene_counts   <- rowSums(counts_matrix, na.rm = TRUE)
-        keep_genes    <- gene_counts >= min_counts
+        keep_genes    <- if (isTRUE(raw_scale$is_raw_counts)) {
+          gene_counts >= min_counts
+        } else {
+          rep(TRUE, nrow(counts_matrix))
+        }
         counts_matrix <- counts_matrix[keep_genes, , drop = FALSE]
         add_log(sprintf(.tr(" → Gènes filtrés: %d retirés, %d conservés"),
                       sum(!keep_genes), sum(keep_genes)))
+        post_scale <- if (isTRUE(raw_scale$is_raw_counts)) {
+          .bulk_detect_matrix_scale(counts_matrix)
+        } else {
+          raw_scale
+        }
 
-        bulk_obj <- list(counts    = counts_matrix,
-                         metadata  = NULL,
-                         project   = project_name,
-                         type      = "bulk",
-                         timestamp = Sys.time())
+        bulk_obj <- list(counts       = counts_matrix,
+                         metadata     = NULL,
+                         project      = project_name,
+                         type         = "bulk",
+                         data_type    = "rna_counts",
+                         de_allowed   = isTRUE(post_scale$de_allowed) && nrow(counts_matrix) > 0L,
+                         matrix_scale = post_scale,
+                         timestamp    = Sys.time())
       }
 
       if (!is.null(metadata)) {
@@ -852,6 +949,9 @@ mod_import_bulk_server <- function(id, global_data) {
       }
       sig <- tryCatch(bulk_counts_transformed_signature(obj$counts),
                       error = function(e) NULL)
+      if (is.null(sig) || identical(sig$verdict, "unknown")) {
+        sig <- obj$matrix_scale %||% .bulk_detect_matrix_scale(obj$counts)
+      }
       if (is.null(sig) || identical(sig$verdict, "raw") ||
           identical(sig$verdict, "unknown")) return(invisible(NULL))
       add_log(paste("⚠️", sig$message))
@@ -1932,11 +2032,13 @@ mod_import_bulk_server <- function(id, global_data) {
             for (cc in extra_cols) aligned_meta[[cc]] <- metadata[[cc]][idx]
           }
           
+          scale_info <- .bulk_detect_matrix_scale(counts_mat)
           list(
             counts_mat    = counts_mat,
             metadata      = aligned_meta,
             id_type       = merged_id_type,
-            de_ok         = validation$de_ok,
+            de_ok         = isTRUE(validation$de_ok) && isTRUE(scale_info$de_allowed),
+            matrix_scale  = scale_info,
             val_messages  = validation$messages
           )
         }, error = function(e) {
@@ -1958,6 +2060,7 @@ mod_import_bulk_server <- function(id, global_data) {
           # Extra slots used by downstream modules
           gene_id_type  = result$id_type,
           de_allowed    = result$de_ok,
+          matrix_scale  = result$matrix_scale,
           import_mode   = "per_sample"
         )
         global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
