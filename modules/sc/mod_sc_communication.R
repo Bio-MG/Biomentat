@@ -422,7 +422,10 @@ mod_sc_communication_output_ui <- function(id) {
                 plotOutput(ns("ccc_comp_flow_plot"), height = "380px"),
                 DT::dataTableOutput(ns("ccc_comp_ranknet"), height = "auto", fill = FALSE),
                 h6(i18n$t("Matrice de similarité des réseaux (opt-in TS_CCC_SIMILARITY=1)"), class = "m-2 text-muted"),
-                DT::dataTableOutput(ns("ccc_comp_similarity"), height = "auto", fill = FALSE))
+                DT::dataTableOutput(ns("ccc_comp_similarity"), height = "auto", fill = FALSE),
+                tags$hr(class = "my-3"),
+                plotOutput(ns("ccc_cond_diff_plot"), height = "420px"),
+                DT::dataTableOutput(ns("ccc_cond_diff_table"), height = "auto", fill = FALSE))
       ),
       nav_menu(i18n$t("Contextes multi-modaux"),
       # ── Contextes V1.x (roadmap CCC avancée : contrainte/ordre/contexte —
@@ -1157,7 +1160,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                        .tr("Run"), idx, format(Sys.time(), "%H:%M"),
                        format(canonical$engine$n_pathways_significant %||% 0L))
         reg[[lbl]] <- list(label = lbl, object = canonical$cellchat_object,
-                           ts = Sys.time())
+                           result = canonical, ts = Sys.time())
         comm_state$ccc_registry <- reg
         # Lane 3 : le registre vit AUSSI dans l'état partagé — le snapshot de
         # session l'embarque (Comparaison CC-2 survive au reload).
@@ -1694,7 +1697,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
           lbl <- sprintf("%s (%d)", base_lbl, suffix)
           suffix <- suffix + 1L
         }
-        reg[[lbl]] <- list(label = lbl, object = res_c$cellchat_object, ts = Sys.time())
+        reg[[lbl]] <- list(label = lbl, object = res_c$cellchat_object,
+                           result = res_c, ts = Sys.time())
       }
       comm_state$ccc_registry <- reg
       shared_rv$communication_ccc_registry <- reg
@@ -2460,6 +2464,81 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       ts_datatable(df[, c("condition", setdiff(colnames(df), "condition")), drop = FALSE],
                    page_length = 10L, filename_base = "sc_comm_ccc_similarity",
                    filter = "none", scroll_x = TRUE)
+    })
+
+    # ── W2.2 §11.8 Gem #1 : comparaison différentielle Condition A vs B ─────
+    ccc_cond_diff_res <- reactive({
+      if (!exists("build_communication_condition_diff", mode = "function")) {
+        return(NULL)
+      }
+      tryCatch({
+        pair <- NULL
+        reg <- comm_state$ccc_registry
+        if (is.list(reg) && length(reg) >= 2L) {
+          pick <- input$ccc_comp_pick %||% character(0)
+          pick <- intersect(as.character(pick), names(reg))
+          if (length(pick) < 2L) pick <- utils::tail(names(reg), 2L)
+          e1 <- reg[[pick[1L]]]
+          e2 <- reg[[pick[2L]]]
+          r1 <- if (is.list(e1)) e1$result else NULL
+          r2 <- if (is.list(e2)) e2$result else NULL
+          if (is.list(r1) && is.list(r2)) {
+            pair <- list(
+              res_a = r1,
+              res_b = r2,
+              label_a = as.character(e1$label %||% pick[1L])[1L],
+              label_b = as.character(e2$label %||% pick[2L])[1L]
+            )
+          }
+        }
+        if (is.null(pair)) {
+          col <- comm_state$collection
+          if (is.list(col) && is.list(col$results) && length(col$results) >= 2L) {
+            nms <- names(col$results)
+            if (is.null(nms)) nms <- sprintf("Cond_%d", seq_along(col$results))
+            pair <- list(
+              res_a = col$results[[1L]],
+              res_b = col$results[[2L]],
+              label_a = as.character(nms[1L])[1L],
+              label_b = as.character(nms[2L])[1L]
+            )
+          }
+        }
+        if (is.null(pair)) return(NULL)
+        build_communication_condition_diff(
+          res_a = pair$res_a,
+          res_b = pair$res_b,
+          label_a = pair$label_a,
+          label_b = pair$label_b
+        )
+      }, error = function(e) NULL)
+    })
+
+    output$ccc_cond_diff_plot <- renderPlot({
+      state_get(shared_rv, "comm_tabs_current")
+      if (!exists("plot_communication_condition_diff", mode = "function")) {
+        return(NULL)
+      }
+      df <- ccc_cond_diff_res()
+      req(df)
+      tryCatch(
+        plot_communication_condition_diff(df, top_n = 25L),
+        error = function(e) .error_plot(e)
+      )
+    })
+
+    output$ccc_cond_diff_table <- DT::renderDataTable({
+      state_get(shared_rv, "comm_tabs_current")
+      df <- ccc_cond_diff_res()
+      req(df)
+      dt <- ts_datatable(
+        as.data.frame(df),
+        page_length = 15L,
+        filename_base = "sc_comm_condition_diff",
+        filter = "none",
+        scroll_x = TRUE
+      )
+      .round_comm_dt(dt, df)
     })
 
     output$comm_schema <- DT::renderDataTable({
