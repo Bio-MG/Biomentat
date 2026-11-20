@@ -401,7 +401,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     observeEvent(velocity_status_rv(), {
       .velocity_log(velocity_status_rv())
     }, ignoreInit = FALSE)
-    output$velocity_log <- renderText({ paste(velocity_log_rv(), collapse = "\n") })
+    output$velocity_log <- renderText({ .vel_sanitize_text(paste(velocity_log_rv(), collapse = "\n")) })
 
     # ── CCC_NAV_DRAWER vague B jalon J3 (2026-11-12) : tiroir « Navigation » ──
     # Pattern 5f0a906 + bc9c09a, généralisé comme Milo/scCODA/Vues croisées.
@@ -714,21 +714,52 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     # l'opérateur a changé le dropdown entre-temps.
     scvelo_ctx <- reactiveValues(canon = NULL, sel_red = NULL)
 
+    .vel_sanitize_text <- function(x) {
+      if (!is.character(x) || length(x) == 0L) return(x)
+      if (exists(".ts_nul_free_text", mode = "function")) {
+        return(.ts_nul_free_text(x))
+      }
+      vapply(x, function(s) {
+        if (is.null(s) || !length(s)) return("")
+        out <- tryCatch({
+          r <- charToRaw(s)
+          if (any(r == as.raw(0L))) rawToChar(r[r != as.raw(0L)]) else s
+        }, error = function(e) "")
+        enc2utf8(out)
+      }, character(1L), USE.NAMES = FALSE)
+    }
+
+    .vel_sanitize_payload <- function(obj) {
+      if (is.character(obj)) {
+        res <- .vel_sanitize_text(obj)
+        names(res) <- if (!is.null(names(obj))) .vel_sanitize_text(names(obj)) else NULL
+        return(res)
+      }
+      if (is.list(obj)) {
+        for (i in seq_along(obj)) {
+          obj[[i]] <- .vel_sanitize_payload(obj[[i]])
+        }
+        if (!is.null(names(obj))) names(obj) <- .vel_sanitize_text(names(obj))
+      }
+      obj
+    }
+
     .vel_scvelo_fail <- function(e) {
       # P0.4 lane 1 (2026-11-13) : l'échec opt-in laisse un état PERSISTANT
       # (velocity_state$optin_error + statut) — même surface pour le repli
       # synchrone et l'achèvement async.
+      msg_clean <- .vel_sanitize_text(conditionMessage(e))
       velocity_state$optin_error <- list(
         class = class(e)[[1L]],
-        message = conditionMessage(e),
+        message = msg_clean,
         when = format(Sys.time(), "%H:%M:%S")
       )
       message(sprintf("[velocity] inférence scVelo opt-in refusée [%s] : %s",
                       velocity_state$optin_error$class,
                       velocity_state$optin_error$message))
       velocity_status_rv(paste0(.tr("Inférence scVelo (opt-in) refusée :"),
-                                " ", conditionMessage(e)))
-      showNotification(paste(.tr("Inférence scVelo (opt-in) refusée :"), conditionMessage(e)),
+                                " ", msg_clean))
+      showNotification(paste(.tr("Inférence scVelo (opt-in) refusée :"), msg_clean),
                        type = "error", duration = 12)
     }
 
@@ -822,14 +853,15 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         st <- scvelo_task$status()
         if (identical(st, "success")) {
           tryCatch({
-            .apply_scvelo_result(scvelo_task$result(), scvelo_ctx$sel_red, scvelo_ctx$canon)
+            res_clean <- .vel_sanitize_payload(scvelo_task$result())
+            .apply_scvelo_result(res_clean, scvelo_ctx$sel_red, scvelo_ctx$canon)
           }, error = function(e) {
             .vel_scvelo_fail(e)
           })
         } else if (identical(st, "error")) {
           err <- tryCatch(scvelo_task$result(), error = function(e) e)
           .vel_scvelo_fail(if (inherits(err, "error")) err else
-            errorCondition(as.character(err), class = c("error", "condition")))
+            errorCondition(.vel_sanitize_text(as.character(err)), class = c("error", "condition")))
         }
       })
     }
