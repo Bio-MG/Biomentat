@@ -586,7 +586,44 @@ mod_import_sc_server <- function(id, global_data) {
       add_log(sprintf("  🧬 %s", sprintf(
         .tr("Intersection : %d gènes communs à TOUS les échantillons — %d gènes zéro-remplis dans au moins un échantillon."),
         n_common, nrow(merged_obj) - n_common)))
-      invisible(list(union = as.integer(nrow(merged_obj)), common = as.integer(n_common)))
+      loss_summary <- if (exists("summarize_merge_gene_loss", mode = "function")) {
+        tryCatch(
+          summarize_merge_gene_loss(lapply(objs, rownames), merged_genes = rownames(merged_obj)),
+          error = function(e) NULL
+        )
+      } else {
+        NULL
+      }
+      if (!is.null(loss_summary)) {
+        if (isTRUE(loss_summary$total_lost_vs_union > 0L)) {
+          ps <- loss_summary$per_sample
+          lost_idx <- which(ps$n_lost > 0L)
+          per_sample_txt <- if (length(lost_idx) > 0L) {
+            paste(sprintf("%s=-%d (%.1f%%)", ps$sample[lost_idx], ps$n_lost[lost_idx], ps$pct_lost[lost_idx]),
+                  collapse = ", ")
+          } else {
+            ""
+          }
+          summary_msg <- sprintf(
+            "Gene loss: %d/%d retained vs union (%d lost)%s",
+            loss_summary$total_retained, loss_summary$total_union,
+            loss_summary$total_lost_vs_union,
+            if (nzchar(per_sample_txt)) paste0(" — ", per_sample_txt) else ""
+          )
+          add_log(paste("  🧬", summary_msg))
+          .notify_sc(summary_msg, type = "warning", duration = 8)
+        } else {
+          add_log(sprintf(
+            "  🧬 Gene loss: %d/%d retained vs union (0 lost)",
+            loss_summary$total_retained, loss_summary$total_union
+          ))
+        }
+      }
+      invisible(list(
+        union = as.integer(nrow(merged_obj)),
+        common = as.integer(n_common),
+        gene_loss = loss_summary
+      ))
     }
 
     observeEvent(input$btn_cancel_import_a, import_cancel(TRUE))
