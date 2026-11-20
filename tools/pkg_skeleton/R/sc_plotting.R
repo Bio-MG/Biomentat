@@ -290,3 +290,142 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   stop(errorCondition(paste0("Type de visualisation non supporté: ", type), class = "sc_plotting_error"))
 }
 
+# =============================================================================
+# Adaptive UMAP Render Budget & Stratified Subsampling (W1.1 #13)
+# =============================================================================
+
+.validate_sc_budget_int <- function(val, name, min_val = 0L) {
+  if (length(val) != 1L || !is.numeric(val) || is.na(val) || !is.finite(val) || val < min_val) {
+    stop(errorCondition(paste0(name, " doit être un entier >= ", min_val),
+                        class = "sc_plotting_error"))
+  }
+  as.integer(val)
+}
+
+#' Compute adaptive UMAP rendering budget for large single-cell datasets.
+#'
+#' Pure helper deciding whether interactive rendering should subsample
+#' (`should_subsample`) or rasterize (`use_raster`), along with the target
+#' point count and subsampling fraction.
+#'
+#' @param n_cells          Non-negative integer number of cells.
+#' @param max_interactive  Maximum point count for interactive vector rendering
+#'                         before subsampling is triggered (default 25000L).
+#' @param raster_threshold Cell count above which rasterization (`raster = TRUE`)
+#'                         is recommended (default 50000L).
+#' @return Named list with `n_cells`, `max_interactive`, `raster_threshold`,
+#'         `should_subsample`, `use_raster`, `target_points`,
+#'         `subsample_fraction`, and `mode` (`"full"`, `"subsampled"`, or `"raster"`).
+sc_umap_render_budget <- function(n_cells, max_interactive = 25000L, raster_threshold = 50000L) {
+  n_cells          <- .validate_sc_budget_int(n_cells, "n_cells", 0L)
+  max_interactive  <- .validate_sc_budget_int(max_interactive, "max_interactive", 1L)
+  raster_threshold <- .validate_sc_budget_int(raster_threshold, "raster_threshold", 1L)
+
+  should_subsample <- n_cells > max_interactive
+  use_raster       <- n_cells > raster_threshold
+  target_points    <- if (should_subsample) max_interactive else n_cells
+  frac             <- if (n_cells == 0L) 1 else min(1, max_interactive / n_cells)
+  mode             <- if (use_raster) "raster" else if (should_subsample) "subsampled" else "full"
+
+  list(
+    n_cells            = n_cells,
+    max_interactive    = max_interactive,
+    raster_threshold   = raster_threshold,
+    should_subsample   = should_subsample,
+    use_raster         = use_raster,
+    target_points      = target_points,
+    subsample_fraction = frac,
+    mode               = mode
+  )
+}
+
+#' Stratified deterministic subsampling of UMAP cell indices.
+#'
+#' When `n_cells <= max_points`, returns `seq_len(n_cells)`. Otherwise samples
+#' `max_points` unique sorted indices. When `groups` is provided, guarantees
+#' at least one cell per cluster (whenever `length(unique(groups)) <= max_points`)
+#' and allocates the remaining budget proportionally via largest-remainder.
+#'
+#' @param n_cells    Non-negative integer number of cells.
+#' @param max_points Positive integer target point budget (default 25000L).
+#' @param groups     Optional vector/factor of length `n_cells` giving cluster
+#'                   or group labels for stratified sampling.
+#' @param seed       Integer RNG seed for deterministic sampling (default 42L).
+#'                   Pass `NULL` to use the current RNG state.
+#' @return Sorted integer vector of selected 1-based cell indices.
+sc_subsample_umap_indices <- function(n_cells, max_points = 25000L, groups = NULL, seed = 42L) {
+  n_cells    <- .validate_sc_budget_int(n_cells, "n_cells", 0L)
+  max_points <- .validate_sc_budget_int(max_points, "max_points", 1L)
+  if (!is.null(seed)) {
+    seed <- .validate_sc_budget_int(seed, "seed", -.Machine$integer.max)
+  }
+  if (!is.null(groups) && length(groups) != n_cells) {
+    stop(errorCondition(paste0("groups doit avoir une longueur égale à n_cells (", n_cells, ")"),
+                        class = "sc_plotting_error"))
+  }
+
+  if (n_cells == 0L) return(integer(0))
+  if (n_cells <= max_points) return(seq_len(n_cells))
+
+  if (!is.null(seed)) {
+    old_seed <- if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+    } else {
+      NULL
+    }
+    on.exit({
+      if (is.null(old_seed)) {
+        if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+          rm(".Random.seed", envir = .GlobalEnv)
+        }
+      } else {
+        assign(".Random.seed", old_seed, envir = .GlobalEnv)
+      }
+    }, add = TRUE)
+    set.seed(seed)
+  }
+
+  if (is.null(groups)) {
+    return(sort(sample.int(n_cells, size = max_points, replace = FALSE)))
+  }
+
+  grp_chr <- as.character(groups)
+  grp_chr[is.na(grp_chr)] <- "<NA>"
+  grp_split <- split(seq_len(n_cells), grp_chr)
+  k <- length(grp_split)
+
+  if (k > max_points) {
+    chosen_groups <- sample.int(k, size = max_points, replace = FALSE)
+    picked <- vapply(grp_split[chosen_groups], function(idx) {
+      if (length(idx) == 1L) idx else idx[sample.int(length(idx), size = 1L)]
+    }, integer(1))
+    return(sort(unname(picked)))
+  }
+
+  # Base allocation of 1 cell per group preserves rare/singleton clusters.
+  sizes <- lengths(grp_split)
+  alloc <- rep(1L, k)
+  rem   <- max_points - k
+  cap   <- sizes - 1L
+  total_cap <- sum(cap)
+
+  if (rem > 0L && total_cap > 0L) {
+    raw_extra   <- rem * (cap / total_cap)
+    extra_floor <- pmin(cap, as.integer(floor(raw_extra)))
+    alloc       <- alloc + extra_floor
+    leftover    <- rem - sum(extra_floor)
+    if (leftover > 0L) {
+      eligible <- which((sizes - alloc) > 0L)
+      ord      <- eligible[order(raw_extra[eligible] - extra_floor[eligible], decreasing = TRUE)]
+      bump     <- ord[seq_len(min(leftover, length(ord)))]
+      alloc[bump] <- alloc[bump] + 1L
+    }
+  }
+
+  selected <- unlist(Map(function(idx, n_take) {
+    if (n_take >= length(idx)) idx else idx[sample.int(length(idx), size = n_take, replace = FALSE)]
+  }, grp_split, alloc), use.names = FALSE)
+
+  sort(as.integer(selected))
+}
+
