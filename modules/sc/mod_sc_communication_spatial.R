@@ -192,6 +192,20 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
     observeEvent(input$spc_nperm,     .spc_publish_view(), ignoreInit = TRUE)
     observeEvent(input$spc_pair,      .spc_publish_view(), ignoreInit = TRUE)
 
+    # W1.3 Lot 1 : en mode 2D (distances non physiques), griser Rayon/Permutations
+    observe({
+      is_2d <- identical(input$spc_source %||% "reduction", "reduction")
+      if (requireNamespace("shinyjs", quietly = TRUE)) {
+        if (is_2d) {
+          shinyjs::disable("spc_radius")
+          shinyjs::disable("spc_nperm")
+        } else {
+          shinyjs::enable("spc_radius")
+          shinyjs::enable("spc_nperm")
+        }
+      }
+    })
+
     output$spc_spatial_info <- renderText({
       b <- global_data$spatial_obj
       n <- if (!is.null(b) && !is.null(b$coords)) nrow(b$coords) else 0L
@@ -326,6 +340,12 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
               ctx$status, ctx$qc$n_cells_matched, ctx$qc$n_pairs_unmapped)
     })
 
+    .spc_drop_all_na_cols <- function(df) {
+      if (!is.data.frame(df) || ncol(df) == 0L || nrow(df) == 0L) return(df)
+      keep <- vapply(df, function(col) !all(is.na(col)), logical(1L))
+      df[, keep, drop = FALSE]
+    }
+
     output$spc_table <- DT::renderDataTable({
       .ctx_tab_guard()
       ctx <- spc_ctx()
@@ -334,7 +354,7 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
       # natif DT via extra_options — la table défile DANS son conteneur
       # 320px (UI, ligne 45) au lieu de déborder sur le fluidRow des plots.
       # scrollX reste hors défaut (2H/O28).
-      ts_datatable(ctx$pair_table, page_length = 15L,
+      ts_datatable(.spc_drop_all_na_cols(ctx$pair_table), page_length = 15L,
                    filename_base = "sc_comm_spatial_pair_table", filter = "none",
                    extra_options = list(scrollY = "260px", scrollCollapse = TRUE))
     })
