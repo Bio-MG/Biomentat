@@ -66,6 +66,27 @@
   TRUE
 }
 
+# Isolation inter-fichiers (shard) : un test antérieur du même shard peut avoir
+# sourcé `spatial_async.R` dans `globalenv()`, exposant `ensure_app_daemons()`.
+# Dans `mod_sc_velocity_server()`, cela bascule `velocity_scvelo_run` sur la
+# branche asynchrone (`scvelo_task$invoke`) au lieu du repli synchrone attendu
+# par ces tests `testServer()` (qui ne pompent pas `later::run_now()` et dont
+# le stub `sc_velocity_scvelo_available` vit dans `globalenv()` du processus
+# principal). On masque `ensure_app_daemons` à `FALSE` et on restaure à la sortie.
+.velopt_with_sync_pool <- function(expr) {
+  has_orig <- exists("ensure_app_daemons", envir = globalenv(), inherits = FALSE)
+  orig <- if (has_orig) get("ensure_app_daemons", envir = globalenv(), inherits = FALSE) else NULL
+  assign("ensure_app_daemons", function() FALSE, envir = globalenv())
+  on.exit({
+    if (has_orig) {
+      assign("ensure_app_daemons", orig, envir = globalenv())
+    } else if (exists("ensure_app_daemons", envir = globalenv(), inherits = FALSE)) {
+      rm("ensure_app_daemons", envir = globalenv())
+    }
+  }, add = TRUE)
+  force(expr)
+}
+
 # ---------------------------------------------------------------------------
 # (A) Contrats source — anti-coercition dense + gene_vectors OFF par défaut
 # ---------------------------------------------------------------------------
@@ -159,33 +180,35 @@ test_that("P0.4 lane1 : échec opt-in => optin_error persistant + statut avec ra
 
   gd <- shiny::reactiveValues(sc_obj = seu, language = "fr", i18n = NULL)
   shared <- shiny::reactiveValues()
-  shiny::testServer(mod_sc_velocity_server, args = list(global_data = gd,
-                                                        shared_rv = shared), {
-    session$setInputs(
-      velocity_import_mode = "rds",
-      velocity_rds_file = data.frame(name = "vel.rds", datapath = rds_path,
-                                     stringsAsFactors = FALSE),
-      velocity_orientation = "auto_strict",
-      velocity_strip_cell_suffix = FALSE,
-      velocity_strip_gene_version = FALSE,
-      velocity_allow_low_overlap = FALSE,
-      velocity_reduction = "umap"
-    )
-    session$setInputs(velocity_validate = 1L)
-    session$flushReact()
-    expect_identical(velocity_state$result$status, "valid_no_vectors")
+  .velopt_with_sync_pool(
+    shiny::testServer(mod_sc_velocity_server, args = list(global_data = gd,
+                                                          shared_rv = shared), {
+      session$setInputs(
+        velocity_import_mode = "rds",
+        velocity_rds_file = data.frame(name = "vel.rds", datapath = rds_path,
+                                       stringsAsFactors = FALSE),
+        velocity_orientation = "auto_strict",
+        velocity_strip_cell_suffix = FALSE,
+        velocity_strip_gene_version = FALSE,
+        velocity_allow_low_overlap = FALSE,
+        velocity_reduction = "umap"
+      )
+      session$setInputs(velocity_validate = 1L)
+      session$flushReact()
+      expect_identical(velocity_state$result$status, "valid_no_vectors")
 
-    session$setInputs(velocity_scvelo_run = 1L)
-    session$flushReact()
+      session$setInputs(velocity_scvelo_run = 1L)
+      session$flushReact()
 
-    # RED (avant fix) : l'échec ne laissait AUCUNE trace persistante
-    expect_false(is.null(velocity_state$optin_error))
-    expect_true(is.character(velocity_state$optin_error$message) &&
-                  nzchar(velocity_state$optin_error$message))
-    expect_match(velocity_status_rv() %||% "", "refus", fixed = TRUE)
-    # l'état consommé par Communication ne prétend toujours pas aux vecteurs
-    expect_identical(shared$velocity_result$status, "valid_no_vectors")
-  })
+      # RED (avant fix) : l'échec ne laissait AUCUNE trace persistante
+      expect_false(is.null(velocity_state$optin_error))
+      expect_true(is.character(velocity_state$optin_error$message) &&
+                    nzchar(velocity_state$optin_error$message))
+      expect_match(velocity_status_rv() %||% "", "refus", fixed = TRUE)
+      # l'état consommé par Communication ne prétend toujours pas aux vecteurs
+      expect_identical(shared$velocity_result$status, "valid_no_vectors")
+    })
+  )
 })
 
 # ---------------------------------------------------------------------------
@@ -209,32 +232,34 @@ test_that("P0.4 lane1 : opt-in réel publie les vecteurs (status valid + shared_
 
   gd <- shiny::reactiveValues(sc_obj = seu, language = "fr", i18n = NULL)
   shared <- shiny::reactiveValues()
-  shiny::testServer(mod_sc_velocity_server, args = list(global_data = gd,
-                                                        shared_rv = shared), {
-    session$setInputs(
-      velocity_import_mode = "rds",
-      velocity_rds_file = data.frame(name = "vel.rds", datapath = rds_path,
-                                     stringsAsFactors = FALSE),
-      velocity_orientation = "auto_strict",
-      velocity_strip_cell_suffix = FALSE,
-      velocity_strip_gene_version = FALSE,
-      velocity_allow_low_overlap = FALSE,
-      velocity_reduction = "umap"
-    )
-    session$setInputs(velocity_validate = 1L)
-    session$flushReact()
-    expect_identical(velocity_state$result$status, "valid_no_vectors")
+  .velopt_with_sync_pool(
+    shiny::testServer(mod_sc_velocity_server, args = list(global_data = gd,
+                                                          shared_rv = shared), {
+      session$setInputs(
+        velocity_import_mode = "rds",
+        velocity_rds_file = data.frame(name = "vel.rds", datapath = rds_path,
+                                       stringsAsFactors = FALSE),
+        velocity_orientation = "auto_strict",
+        velocity_strip_cell_suffix = FALSE,
+        velocity_strip_gene_version = FALSE,
+        velocity_allow_low_overlap = FALSE,
+        velocity_reduction = "umap"
+      )
+      session$setInputs(velocity_validate = 1L)
+      session$flushReact()
+      expect_identical(velocity_state$result$status, "valid_no_vectors")
 
-    session$setInputs(velocity_scvelo_run = 1L)
-    session$flushReact()
+      session$setInputs(velocity_scvelo_run = 1L)
+      session$flushReact()
 
-    res <- shared$velocity_result
-    expect_false(is.null(res))
-    expect_identical(res$status, "valid")
-    expect_false(is.null(res$velocity_vectors))
-    expect_identical(rownames(res$velocity_vectors),
-                     as.character(velocity_state$validated$cell_names))
-    # l'état moteur est resté propre
-    expect_null(velocity_state$optin_error)
-  })
+      res <- shared$velocity_result
+      expect_false(is.null(res))
+      expect_identical(res$status, "valid")
+      expect_false(is.null(res$velocity_vectors))
+      expect_identical(rownames(res$velocity_vectors),
+                       as.character(velocity_state$validated$cell_names))
+      # l'état moteur est resté propre
+      expect_null(velocity_state$optin_error)
+    })
+  )
 })

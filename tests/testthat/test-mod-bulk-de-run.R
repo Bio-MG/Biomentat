@@ -149,10 +149,13 @@
   }
 
   # ── D4(a) : les coutumes du bloc piloté asynchrone ──────────────────────────
-  # `ensure_app_daemons` est volontairement ABSENT : le tryCatch du bloc rend
-  # FALSE, donc les tests ci-dessus exercent le REPLI SYNCHRONE (déclaré), qui
-  # conserve le comportement observable de l'ancien bloc (fermeture en ligne).
+  # Isolation inter-fichiers (shard) : `e` hérite de `globalenv()`, où un test
+  # antérieur du même shard peut déjà avoir sourcé `spatial_async.R` (et donc
+  # défini `ensure_app_daemons()`). Lier explicitement `FALSE` ici garantit que
+  # les tests (a)-(h) exercent de façon déterministe le REPLI SYNCHRONE
+  # (déclaré), tandis que les tests D4(a) écrasent explicitement par `TRUE`.
   # Les définitions réelles sont importées par AST — jamais re-copiées.
+  e$ensure_app_daemons <- function() FALSE
   e$de_drive_job <- new.env(parent = emptyenv())
   e$de_drive_job$cell <- NULL
   e$invoked <- list()
