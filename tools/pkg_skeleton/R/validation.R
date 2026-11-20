@@ -228,7 +228,15 @@ validate_bulk_design <- function(metadata, condition_col, covariates = character
   }
 
   for (cov in covariates) {
-    if (check_design_confounding(metadata, condition_col, cov)) {
+    if (cov %in% colnames(metadata) && is.numeric(metadata[[cov]])) {
+      cc <- check_design_cancor(metadata, condition_col, cov)
+      if (isTRUE(cc$confounded)) {
+        problems <- c(problems, sprintf(
+          "La covariable numérique '%s' est fortement confondue avec '%s' (|cor| = %.2f > 0.90) - son effet ne peut pas être estimé séparément. Retirez-la ou vérifiez votre plan d'expérience.",
+          cov, condition_col, cc$correlation
+        ))
+      }
+    } else if (check_design_confounding(metadata, condition_col, cov)) {
       problems <- c(problems, sprintf(
         "La covariable '%s' est entièrement confondue avec '%s' - son effet ne peut pas être estimé séparément (design non plein rang). Retirez-la ou vérifiez votre plan d'expérience.",
         cov, condition_col
