@@ -67,7 +67,9 @@ communication_views_public_api <- function() {
     "plot_communication_lr_expression",
     # W2.2 §11.8 Gem #1 : comparaison différentielle Condition A vs B.
     "build_communication_condition_diff",
-    "plot_communication_condition_diff"
+    "plot_communication_condition_diff",
+    # W2.2 §11.8 Gem #5 : sélection click-to-basket / filtrage croisé.
+    "build_communication_basket_selection"
   )
 }
 
@@ -2392,7 +2394,9 @@ plot_communication_lr_expression <- function(lr_expr_result) {
 )
 
 #' Valider un communication_result canonique pour la comparaison différentielle
-.diff_validate_comm_result <- function(res, arg_name) {
+.diff_validate_comm_result <- function(res,
+                                       arg_name,
+                                       caller = "build_communication_condition_diff()") {
   tryCatch(
     assert_communication_result(
       res,
@@ -2400,23 +2404,23 @@ plot_communication_lr_expression <- function(lr_expr_result) {
     ),
     error = function(e) {
       .views_stop(sprintf(
-        "build_communication_condition_diff() : '%s' invalide (%s).",
-        arg_name, conditionMessage(e)
+        "%s : '%s' invalide (%s).",
+        caller, arg_name, conditionMessage(e)
       ))
     }
   )
   if (!is.data.frame(res$canonical_table)) {
     .views_stop(sprintf(
-      "build_communication_condition_diff() : '%s$canonical_table' doit être un data.frame.",
-      arg_name
+      "%s : '%s$canonical_table' doit être un data.frame.",
+      caller, arg_name
     ))
   }
   req_cols <- c("sender", "receiver", "ligand", "receptor", "score")
   missing_cols <- setdiff(req_cols, colnames(res$canonical_table))
   if (length(missing_cols) > 0L) {
     .views_stop(sprintf(
-      "build_communication_condition_diff() : colonnes absentes dans '%s$canonical_table' : %s.",
-      arg_name, paste(missing_cols, collapse = ", ")
+      "%s : colonnes absentes dans '%s$canonical_table' : %s.",
+      caller, arg_name, paste(missing_cols, collapse = ", ")
     ))
   }
   src <- res$source_method %||% res$source %||%
@@ -2424,8 +2428,8 @@ plot_communication_lr_expression <- function(lr_expr_result) {
   src <- as.character(src)[1L]
   if (is.na(src) || !nzchar(trimws(src))) {
     .views_stop(sprintf(
-      "build_communication_condition_diff() : '%s' ne porte aucune source_method identifiable.",
-      arg_name
+      "%s : '%s' ne porte aucune source_method identifiable.",
+      caller, arg_name
     ))
   }
   list(result = res, source_method = trimws(src))
@@ -2742,6 +2746,83 @@ plot_communication_condition_diff <- function(diff_res, top_n = 25L) {
       plot.caption = ggplot2::element_text(size = 8.5, colour = "grey35")
     )
 }
+
+#' Construire une sélection panier L-R par filtrage croisé (W2.2 §11.8 Gem #5)
+#'
+#' Extrait les paires uniques `(ligand, receptor, sender, receiver, pathway,
+#' score)` depuis un `communication_result` canonique, applique un filtrage
+#' optionnel par sélection cliquée (`sender`, `receiver`, `ligand`, `receptor`,
+#' `pathway`), trie par `score` décroissant, plafonne à `max_items` et retourne
+#' les symboles de gènes uniques (`genes`), la table `pairs` et `n_selected`.
+#'
+#' @param res Résultat canonique `communication_result`.
+#' @param selection `NULL` ou liste nommée pouvant contenir `sender`,
+#'   `receiver`, `ligand`, `receptor` et/ou `pathway` (vecteurs character).
+#' @param max_items Nombre maximal de paires retournées (entier >= 1, défaut
+#'   `50L`).
+#' @return Liste `list(genes = character(), pairs = data.frame(),
+#'   n_selected = integer(1))`.
+#' @export
+build_communication_basket_selection <- function(res,
+                                                 selection = NULL,
+                                                 max_items = 50L) {
+  if (!is.null(selection) && !is.list(selection)) {
+    .views_stop("build_communication_basket_selection() : 'selection' doit être NULL ou une liste nommée.")
+  }
+  if (!is.numeric(max_items) || length(max_items) != 1L ||
+      !is.finite(max_items) || max_items < 1) {
+    .views_stop("build_communication_basket_selection() : 'max_items' doit être un entier >= 1.")
+  }
+  max_n <- as.integer(max_items)
+
+  val <- .diff_validate_comm_result(
+    res, "res",
+    caller = "build_communication_basket_selection()"
+  )
+  pairs <- .diff_extract_pairs(val$result)
+  cols <- c("ligand", "receptor", "sender", "receiver", "pathway", "score")
+  pairs <- pairs[, cols, drop = FALSE]
+
+  if (!is.null(selection) && nrow(pairs) > 0L) {
+    filter_fields <- c("sender", "receiver", "ligand", "receptor", "pathway")
+    for (fld in filter_fields) {
+      raw_vals <- selection[[fld]]
+      if (is.null(raw_vals)) next
+      vals <- as.character(raw_vals)
+      vals <- vals[!is.na(vals) & nzchar(vals)]
+      if (length(vals) > 0L) {
+        pairs <- pairs[pairs[[fld]] %in% vals, , drop = FALSE]
+      }
+    }
+  }
+
+  if (nrow(pairs) > 0L) {
+    score_ord <- ifelse(is.finite(pairs$score), pairs$score, -Inf)
+    ord <- order(
+      -score_ord,
+      pairs$sender,
+      pairs$receiver,
+      pairs$ligand,
+      pairs$receptor
+    )
+    pairs <- pairs[ord, , drop = FALSE]
+    if (nrow(pairs) > max_n) {
+      pairs <- pairs[seq_len(max_n), , drop = FALSE]
+    }
+    rownames(pairs) <- NULL
+  }
+
+  raw_genes <- c(pairs$ligand, pairs$receptor)
+  raw_genes <- raw_genes[!is.na(raw_genes) & nzchar(trimws(raw_genes))]
+  genes <- unique(raw_genes)
+
+  list(
+    genes = genes,
+    pairs = pairs,
+    n_selected = as.integer(nrow(pairs))
+  )
+}
+
 
 
 
