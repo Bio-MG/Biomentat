@@ -69,6 +69,62 @@ communication_perturbation_contract_fields <- function() {
   ))
 }
 
+# Cibles acceptees par build_communication_perturbation() : surface figee
+# V1.x-D + extensions W2.2 §5.4 (pathway entier, population sender+receiver).
+.pert_allowed_targets <- function() {
+  c(communication_perturbation_targets(), "pathway", "population")
+}
+
+.pert_value_label <- function(value) {
+  paste(as.character(value), collapse = ", ")
+}
+
+# Resolution stricte des lignes ciblees (matching exact uniquement, zero flou).
+.pert_resolve_target_hits <- function(base_table, target, values_clean) {
+  if (identical(target, "population")) {
+    pool <- stats::na.omit(unique(c(
+      as.character(base_table$sender_node),
+      as.character(base_table$receiver_node)
+    )))
+    missing_vals <- setdiff(values_clean, pool)
+    if (length(missing_vals) > 0L) {
+      .pert_stop(sprintf(
+        paste0("build_communication_perturbation() : valeur(s) '%s' absente(s) des ",
+               "populations (aucun matching flou). Valeurs disponibles (%d) : %s"),
+        paste(missing_vals, collapse = ", "), length(pool),
+        paste(utils::head(sort(pool), 12), collapse = ", ")
+      ))
+    }
+    return(
+      (!is.na(base_table$sender_node) & base_table$sender_node %in% values_clean) |
+        (!is.na(base_table$receiver_node) & base_table$receiver_node %in% values_clean)
+    )
+  }
+
+  target_col <- switch(target,
+    ligand = "ligand", receptor = "receptor", interaction = "interaction",
+    sender = "sender_node", receiver = "receiver_node", pathway = "pathway"
+  )
+  if (!target_col %in% names(base_table)) {
+    .pert_stop(sprintf(
+      "build_communication_perturbation() : colonne cible '%s' absente de la table canonique.",
+      target_col
+    ))
+  }
+  col_vals <- as.character(base_table[[target_col]])
+  pool <- stats::na.omit(unique(col_vals))
+  missing_vals <- setdiff(values_clean, pool)
+  if (length(missing_vals) > 0L) {
+    .pert_stop(sprintf(
+      paste0("build_communication_perturbation() : valeur '%s' absente de la ",
+             "colonne '%s' (aucun matching flou). Valeurs disponibles (%d) : %s"),
+      paste(missing_vals, collapse = ", "), target, length(pool),
+      paste(utils::head(sort(pool), 12), collapse = ", ")
+    ))
+  }
+  !is.na(col_vals) & (col_vals %in% values_clean)
+}
+
 # Coalescence noeud = identité harmonisée sinon label brut (implémentation
 # propre au fichier).
 .pert_node_keys <- function(table) {
@@ -100,6 +156,13 @@ communication_perturbation_contract_fields <- function() {
 # Totaux par paire (scores importés uniquement — NA conservés s'il n'y a
 # aucun score, jamais de zéro fabriqué).
 .pert_pair_totals <- function(table) {
+  if (nrow(table) == 0L) {
+    return(data.frame(
+      sender_node = character(0), receiver_node = character(0),
+      n_interactions = integer(0), score_total = numeric(0),
+      n_with_score = integer(0), stringsAsFactors = FALSE
+    ))
+  }
   pairs <- unique(paste(table$sender_node, table$receiver_node, sep = "\r"))
   do.call(rbind, lapply(pairs, function(k) {
     sp <- strsplit(k, "\r", fixed = TRUE)[[1L]]
@@ -117,6 +180,13 @@ communication_perturbation_contract_fields <- function() {
 
 # Totaux par nœud (sortant + entrant), mêmes règles de NA.
 .pert_node_totals <- function(table) {
+  if (nrow(table) == 0L) {
+    return(data.frame(
+      node = character(0), out_interactions = integer(0),
+      in_interactions = integer(0), out_score_total = numeric(0),
+      in_score_total = numeric(0), stringsAsFactors = FALSE
+    ))
+  }
   nodes <- sort(unique(c(table$sender_node, table$receiver_node)))
   do.call(rbind, lapply(nodes, function(nd) {
     out_rows <- table[table$sender_node == nd, ]
@@ -143,12 +213,17 @@ communication_perturbation_contract_fields <- function() {
 #'
 #' Cibles (`communication_perturbation_targets()`) : ligand, récepteur,
 #' interaction (chaîne exacte « ligand -> récepteur » de la table canonique),
-#' population sender, population receiver (nœuds coalescents).
+#' population sender, population receiver (nœuds coalescents), plus les
+#' extensions W2.2 §5.4 `pathway` (voie entière) et `population` (rôles sender
+#' et receiver simultanés). `value` accepte un vecteur caractère (longueur >= 1)
+#' pour les perturbations multi-cibles simultanées.
 #'
 #' @param communication_result Résultat canonique (assert_communication_result).
-#' @param target Une des communication_perturbation_targets().
-#' @param value Valeur exacte de la cible dans la table (jamais de matching
-#'   flou : valeur absente = erreur, aucune supposition).
+#' @param target Une des communication_perturbation_targets(), ou `"pathway"` /
+#'   `"population"`.
+#' @param value Valeur(s) exacte(s) de la cible dans la table (vecteur
+#'   caractère non vide ; jamais de matching flou : toute valeur absente =
+#'   erreur, aucune supposition).
 #' @param mode "remove" (suppression des lignes ciblées) ou "attenuate"
 #'   (score := score * factor, lignes conservées et flagees).
 #' @param factor Facteur d'atténuation (0 < factor < 1 ; requis en mode
@@ -164,19 +239,21 @@ build_communication_perturbation <- function(communication_result,
                                              factor = 0.5,
                                              filtered_table = NULL) {
   r <- assert_communication_result(communication_result, context = "perturbation in silico")
-  if (!is.character(target) || length(target) != 1L || !target %in% communication_perturbation_targets()) {
+  allowed_targets <- .pert_allowed_targets()
+  if (!is.character(target) || length(target) != 1L || !target %in% allowed_targets) {
     .pert_stop(sprintf(
       "build_communication_perturbation() : 'target' doit être une des valeurs [%s].",
-      paste(communication_perturbation_targets(), collapse = ", ")
+      paste(allowed_targets, collapse = ", ")
     ))
   }
   if (!is.character(mode) || length(mode) != 1L || !mode %in% c("remove", "attenuate")) {
     .pert_stop("build_communication_perturbation() : 'mode' doit être \"remove\" ou \"attenuate\".")
   }
 
-  if (!is.character(value) || length(value) != 1L || is.na(value) || !nzchar(value)) {
-    .pert_stop("build_communication_perturbation() : 'value' doit être une chaîne non vide (valeur exacte de la cible).")
+  if (!is.character(value) || length(value) < 1L || any(is.na(value)) || !all(nzchar(value))) {
+    .pert_stop("build_communication_perturbation() : 'value' doit être un vecteur caractère non vide sans NA ni chaîne vide.")
   }
+  values_clean <- unique(value)
   if (identical(mode, "attenuate")) {
     if (!is.numeric(factor) || length(factor) != 1L || is.na(factor) ||
         factor <= 0 || factor >= 1) {
@@ -192,28 +269,7 @@ build_communication_perturbation <- function(communication_result,
   base_table <- .pert_node_keys(
     if (is.null(filtered_table)) r$canonical_table else as.data.frame(filtered_table)
   )
-  # Colonne cible (nœuds coalescents pour les populations).
-  target_col <- switch(target,
-    ligand = "ligand", receptor = "receptor", interaction = "interaction",
-    sender = "sender_node", receiver = "receiver_node"
-  )
-  if (!target_col %in% names(base_table)) {
-    .pert_stop(sprintf(
-      "build_communication_perturbation() : colonne cible '%s' absente de la table canonique.",
-      target_col
-    ))
-  }
-  pool <- stats::na.omit(unique(as.character(base_table[[target_col]])))
-  if (!value %in% pool) {
-    .pert_stop(sprintf(
-      paste0("build_communication_perturbation() : valeur '%s' absente de la ",
-             "colonne '%s' (aucun matching flou). Valeurs disponibles (%d) : %s"),
-      value, target, length(pool),
-      paste(utils::head(sort(pool), 12), collapse = ", ")
-    ))
-  }
-
-  hit <- !is.na(base_table[[target_col]]) & base_table[[target_col]] == value
+  hit <- .pert_resolve_target_hits(base_table, target, values_clean)
   pert_table <- base_table
   n_removed <- 0L
   n_attenuated <- 0L
@@ -321,8 +377,9 @@ build_communication_perturbation <- function(communication_result,
     analysis_id = "sc-communication-perturbation",
     method = "in_silico_network_perturbation_first_order",
     parameters = list(
-      target = target, value = value, mode = mode,
+      target = target, value = values_clean, mode = mode,
       factor = if (identical(mode, "attenuate")) factor else NA_real_,
+      n_targets = length(values_clean),
       n_removed = as.integer(n_removed), n_attenuated = as.integer(n_attenuated),
       parent_analysis_id = r$analysis_id,
       label = "in_silico_not_ko"
@@ -341,12 +398,14 @@ build_communication_perturbation <- function(communication_result,
     parent_analysis_id = r$analysis_id,
     source_method = r$source_method,
     target = target,
-    value = value,
+    value = values_clean,
     mode = mode,
     params = list(
       factor = if (identical(mode, "attenuate")) factor else NA_real_,
       order = "first_order_no_propagation",
-      label = "IN SILICO PERTURBATION"
+      label = "IN SILICO PERTURBATION",
+      n_targets = length(values_clean),
+      multi_target = length(values_clean) > 1L
     ),
     baseline_summary = baseline_summary,
     perturbed_summary = perturbed_summary,
@@ -403,7 +462,7 @@ plot_communication_perturbation_delta <- function(context, top_n = 20L) {
     ggplot2::labs(
       x = "Δ score total importé (baseline → perturbé)", y = NULL,
       title = sprintf("Effet de la perturbation [%s = %s, %s]",
-                      context$target, context$value, context$mode),
+                      context$target, .pert_value_label(context$value), context$mode),
       subtitle = paste(strwrap(.pert_banner(), width = 76), collapse = "\n")
     )
 }
@@ -453,7 +512,7 @@ plot_communication_perturbation_nodes <- function(context) {
     ggplot2::labs(
       x = "Total de score importé (sortant + entrant)", y = NULL,
       title = sprintf("Nœuds : baseline vs perturbé [%s = %s]",
-                      context$target, context$value),
+                      context$target, .pert_value_label(context$value)),
       subtitle = paste(strwrap(.pert_banner(), width = 76), collapse = "\n")
     )
 }
@@ -475,7 +534,7 @@ build_communication_perturbation_export <- function(context) {
     parent_analysis_id = rep(context$parent_analysis_id, n),
     timestamp_utc = rep(context$timestamp_utc, n),
     target = rep(context$target, n),
-    value = rep(context$value, n),
+    value = rep(.pert_value_label(context$value), n),
     mode = rep(context$mode, n),
     factor = rep(context$params$factor, n),
     label = rep("IN SILICO PERTURBATION", n),
