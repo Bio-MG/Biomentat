@@ -379,7 +379,8 @@ plot_communication_dotplot <- function(communication_result, filtered_table = NU
 #' @export
 plot_communication_pathway_heatmap <- function(communication_result,
                                                filtered_table = NULL,
-                                               seurat_obj = NULL) {
+                                               seurat_obj = NULL,
+                                               top_n_pathways = NULL) {
   r <- assert_communication_result(
     communication_result, seurat_obj = seurat_obj,
     context = "heatmap pathways"
@@ -415,6 +416,17 @@ plot_communication_pathway_heatmap <- function(communication_result,
       stringsAsFactors = FALSE
     )
   ))
+
+  if (!is.null(top_n_pathways) && is.finite(top_n_pathways) && top_n_pathways > 0L) {
+    pw_rank <- tapply(
+      ifelse(is.na(agg$mean_score), agg$n_interactions, agg$mean_score),
+      agg$pathway, sum, na.rm = TRUE
+    )
+    if (length(pw_rank) > top_n_pathways) {
+      keep_pw <- names(sort(pw_rank, decreasing = TRUE))[seq_len(as.integer(top_n_pathways))]
+      agg <- agg[agg$pathway %in% keep_pw, , drop = FALSE]
+    }
+  }
 
   ggplot2::ggplot(agg, ggplot2::aes(x = pair_label, y = pathway,
                                     fill = mean_score)) +
@@ -719,23 +731,48 @@ build_communication_filtered_export <- function(communication_result,
 #'   indeg, role) — colonnes du contrat CC-1.
 #' @return objet ggplot.
 #' @export
-plot_communication_roles_dot <- function(roles_table) {
+plot_communication_roles_dot <- function(roles_table,
+                                         hide_minor = FALSE,
+                                         top_n_pathways = NULL) {
   if (!is.data.frame(roles_table) ||
       !all(c("pathway", "group", "outdeg", "indeg", "role") %in%
            colnames(roles_table))) {
     .views_stop("plot_communication_roles_dot() : table roles CC-1 requise (pathway, group, outdeg, indeg, role).")
   }
   df <- roles_table
+  if (isTRUE(hide_minor)) {
+    df <- df[as.character(df$role) != "minor" & (df$outdeg > 0 | df$indeg > 0), , drop = FALSE]
+  }
+  if (!is.null(top_n_pathways) && is.finite(top_n_pathways) && top_n_pathways > 0L && nrow(df) > 0L) {
+    pw_deg <- tapply(pmax(df$outdeg, df$indeg, na.rm = TRUE), df$pathway, max, na.rm = TRUE)
+    if (length(pw_deg) > top_n_pathways) {
+      keep_pw <- names(sort(pw_deg, decreasing = TRUE))[seq_len(as.integer(top_n_pathways))]
+      df <- df[df$pathway %in% keep_pw, , drop = FALSE]
+    }
+  }
+  if (nrow(df) == 0L) {
+    return(.communication_empty_view_plot(
+      "Aucun role actif a afficher apres filtrage.",
+      "Roles de signalisation par voie (CellChat)", ""
+    ))
+  }
   df$pathway <- factor(df$pathway, levels = rev(sort(unique(df$pathway))))
   df$role <- factor(df$role,
                     levels = c("sender", "receiver", "mediator", "minor"))
   ggplot2::ggplot(df, ggplot2::aes(x = .data$group, y = .data$pathway)) +
     ggplot2::geom_point(ggplot2::aes(size = pmax(.data$outdeg, .data$indeg),
-                                    color = .data$role), alpha = 0.85) +
+                                    color = .data$role,
+                                    alpha = .data$role)) +
     ggplot2::scale_color_manual(values = c(sender = "#2166AC",
                                            receiver = "#B2182B",
                                            mediator = "#4D4D4D",
                                            minor = "#BDBDBD"),
+                                drop = FALSE) +
+    ggplot2::scale_alpha_manual(values = c(sender = 0.9,
+                                           receiver = 0.9,
+                                           mediator = 0.9,
+                                           minor = 0.25),
+                                guide = "none",
                                 drop = FALSE) +
     ggplot2::labs(x = NULL, y = NULL,
                   size = "degré pondéré",
@@ -743,7 +780,8 @@ plot_communication_roles_dot <- function(roles_table) {
                   title = "Rôles de signalisation par voie (CellChat)") +
     ggplot2::theme_minimal(base_size = 12) +
     ggplot2::theme(legend.position = "right",
-                   panel.grid.minor = ggplot2::element_blank())
+                   panel.grid.minor = ggplot2::element_blank(),
+                   axis.text.x = ggplot2::element_text(angle = 35, hjust = 1))
 }
 
 #' Synthèse multi-modale des contextes CCC (filtrage exploratoire)

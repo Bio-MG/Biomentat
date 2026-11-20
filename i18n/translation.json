@@ -14092,6 +14092,18 @@
     {
       "fr": "Réserve méthodologique PK-3 : la correction BH globale est recalculée sur l'union post-cutoff des termes retenus et dépend donc des seuils amont de chaque moteur.",
       "en": "PK-3 methodological caveat: global BH adjustment is recomputed over the post-cutoff union of retained terms and therefore depends on each engine's upstream thresholds."
+    },
+    {
+      "fr": "Masquer les rôles « minor » / inactifs",
+      "en": "Hide 'minor' / inactive roles"
+    },
+    {
+      "fr": "Top N voies (Centralité, 0 = toutes)",
+      "en": "Top N pathways (Centrality, 0 = all)"
+    },
+    {
+      "fr": "Top N voies (Heatmap, 0 = toutes)",
+      "en": "Top N pathways (Heatmap, 0 = all)"
     }
   ]
 }

@@ -325,6 +325,10 @@ mod_sc_communication_output_ui <- function(id) {
                   column(6, downloadButton(ns("dl_comm_dotplot_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
                   column(6, downloadButton(ns("dl_comm_dotplot_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
       nav_panel(i18n$t("Heatmap pathways"), value = "ccc_tab_heatmap",
+                div(class = "m-2",
+                    numericInput(ns("comm_heatmap_top_n"),
+                                 i18n$t("Top N voies (Heatmap, 0 = toutes)"),
+                                 value = 25L, min = 0L, max = 200L, step = 5L, width = "240px")),
                 plotOutput(ns("comm_heatmap"), fill = TRUE),
                 fluidRow(
                   column(6, downloadButton(ns("dl_comm_heatmap_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
@@ -337,6 +341,13 @@ mod_sc_communication_output_ui <- function(id) {
       nav_panel(i18n$t("Centralité"), value = "ccc_tab_centralite",
                 div(class = "small text-muted m-2",
                     i18n$t("Centralité dérivée du réseau, descriptive — ce n'est pas un contrôle biologique.")),
+                fluidRow(class = "mx-2 align-items-center",
+                  column(6, checkboxInput(ns("comm_centrality_hide_minor"),
+                                          i18n$t("Masquer les rôles « minor » / inactifs"),
+                                          value = FALSE)),
+                  column(6, numericInput(ns("comm_centrality_top_n"),
+                                         i18n$t("Top N voies (Centralité, 0 = toutes)"),
+                                         value = 25L, min = 0L, max = 200L, step = 5L, width = "240px"))),
                 # P0.4 harmonisation (2026-11-14, demande opérateur) : plot
                 # AU-DESSUS de la table — synthèse graphique d'abord, détail
                 # tabulaire ensuite (règle homogène sur tous les panneaux
@@ -933,11 +944,23 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     # valeurs saisies ne sont jamais écrasées (seuls label/min/max bougent).
     observeEvent(comm_state$result, {
       r <- comm_state$result
+      has_shinyjs <- requireNamespace("shinyjs", quietly = TRUE)
+      .toggle_filter <- function(input_id, enabled) {
+        if (!has_shinyjs) return(invisible(NULL))
+        tryCatch(
+          if (isTRUE(enabled)) shinyjs::enable(input_id) else shinyjs::disable(input_id),
+          error = function(e) NULL
+        )
+      }
+      f_score_id <- paste0("comm_f_", "score_min")
+      f_rank_id  <- paste0("comm_f_", "rank_max")
       if (is.null(r)) {
         updateNumericInput(session, "comm_f_score_min",
                            label = .tr("Score minimum (importé)"), min = 0)
         updateNumericInput(session, "comm_f_rank_max",
                            label = .tr("Rang maximum (importé)"), min = 0)
+        .toggle_filter(f_score_id, TRUE)
+        .toggle_filter(f_rank_id, TRUE)
         return()
       }
       src <- as.character(r$source_method %||% NA_character_)
@@ -955,6 +978,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                              label = .tr("Rang agrégé [1 - N] (1 = plus significatif)"),
                              min = 1, max = rank_max)
         }
+        .toggle_filter(f_score_id, FALSE)
+        .toggle_filter(f_rank_id, TRUE)
       } else if (identical(src, "cellphonedb")) {
         updateNumericInput(session, "comm_f_score_min",
                            label = .tr("Moyenne d'expression [0.0 - Max]"),
@@ -962,6 +987,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         updateNumericInput(session, "comm_f_rank_max",
                            label = .tr("Rang maximum — sans objet pour CellPhoneDB (utiliser le score)"),
                            min = 0)
+        .toggle_filter(f_score_id, TRUE)
+        .toggle_filter(f_rank_id, FALSE)
       } else {
         # cellchat (import, objet ou moteur) et défaut : probabilité [0.0 - 1.0].
         updateNumericInput(session, "comm_f_score_min",
@@ -970,6 +997,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         updateNumericInput(session, "comm_f_rank_max",
                            label = .tr("Rang maximum — sans objet pour CellChat (utiliser le score)"),
                            min = 0)
+        .toggle_filter(f_score_id, TRUE)
+        .toggle_filter(f_rank_id, FALSE)
       }
     })
 
@@ -1997,9 +2026,17 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     output$comm_heatmap <- renderPlot({
       req(comm_state$result)
       .check_fingerprint()
+      top_n <- if (!is.null(input$comm_heatmap_top_n) &&
+                   is.finite(input$comm_heatmap_top_n) &&
+                   input$comm_heatmap_top_n > 0) {
+        as.integer(input$comm_heatmap_top_n)
+      } else {
+        NULL
+      }
       tryCatch(
         plot_communication_pathway_heatmap(comm_state$result, comm_filtered()$table,
-                                           seurat_obj = .view_object()),
+                                           seurat_obj = .view_object(),
+                                           top_n_pathways = top_n),
         error = function(e) .error_plot(e)
       )
     })
@@ -2020,8 +2057,12 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     comm_centrality_df <- reactive({
       req(comm_state$result)
       roles <- comm_state$result$cellchat_roles
-      if (!is.null(roles) && is.data.frame(roles) && nrow(roles) > 0L) roles
+      df <- if (!is.null(roles) && is.data.frame(roles) && nrow(roles) > 0L) roles
       else build_communication_centrality(comm_state$result, comm_filtered()$table)
+      if (isTRUE(input$comm_centrality_hide_minor) && is.data.frame(df) && "role" %in% colnames(df)) {
+        df <- df[as.character(df$role) != "minor", , drop = FALSE]
+      }
+      df
     })
 
     output$comm_centrality <- DT::renderDataTable({
@@ -2046,7 +2087,18 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       req(comm_state$result)
       roles <- comm_state$result$cellchat_roles
       if (!is.null(roles) && is.data.frame(roles) && nrow(roles) > 0L) {
-        plot_communication_roles_dot(roles)
+        top_n <- if (!is.null(input$comm_centrality_top_n) &&
+                     is.finite(input$comm_centrality_top_n) &&
+                     input$comm_centrality_top_n > 0) {
+          as.integer(input$comm_centrality_top_n)
+        } else {
+          NULL
+        }
+        plot_communication_roles_dot(
+          roles,
+          hide_minor = isTRUE(input$comm_centrality_hide_minor),
+          top_n_pathways = top_n
+        )
       } else {
         .tr("Roles CellChat indisponibles (voie import ou centralite non calculee) — vue derivee seule.")
       }
