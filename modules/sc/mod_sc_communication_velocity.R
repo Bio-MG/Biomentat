@@ -170,6 +170,33 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
       setNames(as.character(meta[[col]]), rownames(meta))
     }
 
+    # W2.2 §4.3 : directionnalité (alignement T_ij + corrélation vitesse-récepteur).
+    # Descriptif uniquement (aucune causalité). T_ij n'est JAMAIS fabriquée ici :
+    # uniquement lue si présente dans le résultat velocity ; toute absence => NULL.
+    # Résultat publié dans session$userData$vel_directionality (aucun nouveau texte UI).
+    vel_directionality <- reactiveVal(NULL)
+    .vel_directional <- function(vr, idents) {
+      if (!exists("compute_communication_velocity_directionality", mode = "function")) return(NULL)
+      tryCatch({
+        tm <- vr$transition_matrix
+        if (is.null(tm) || !(is.matrix(tm) || inherits(tm, "Matrix"))) tm <- NULL
+        rexpr <- tryCatch({
+          tbl <- comm_state$result$canonical_table
+          recs <- unique(as.character(tbl$receptor))
+          obj <- global_data$sc_obj
+          mat <- SeuratObject::GetAssayData(obj, layer = "data")
+          recs <- intersect(recs[!is.na(recs)], rownames(mat))
+          if (length(recs) > 0L) mat[recs, , drop = FALSE] else NULL
+        }, error = function(e) NULL)
+        has_vec <- !is.null(vr$velocity_vectors)
+        if (is.null(tm) && (is.null(rexpr) || !has_vec)) return(NULL)
+        compute_communication_velocity_directionality(
+          comm_state$result, velocity_result = vr, cell_identities = idents,
+          transition_matrix = tm, receptor_expr = rexpr
+        )
+      }, error = function(e) NULL)
+    }
+
     .vel_compute_ctx <- function() {
       .guard_stale()
       tryCatch({
@@ -196,6 +223,8 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
         })
         vel_ctx(ctx)
         vel_src(comm_state$result)
+        vel_directionality(.vel_directional(vr, idents))
+        session$userData$vel_directionality <- vel_directionality()
         # PAS 1 (idéation saves 2026-11-17) : les params qui ONT PRODUIT ce
         # contexte sont publiés pour le snapshot — au restore, l'auto-calcul
         # (Lane 3b) recompose le MÊME contexte avec ces params.
