@@ -37,6 +37,12 @@ mod_sc_communication_ui <- function(id) {
          i18n$t("Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat / LIANA dans l'application. "),
         i18n$t("Aucun score recompose. Les scores de sources differentes ne sont pas comparables.")),
 
+    accordion(
+      id = ns("comm_config_accordion"),
+      open = "comm_config_panel",
+      accordion_panel(
+        title = tagList(icon("sliders"), " ", i18n$t("Source des resultats")),
+        value = "comm_config_panel",
     # Le moteur natif (CC-5) n'est pas un repli mais la voie NORMALE : il est
     # donc propose EN TETE et SELECTIONNE par defaut (decision utilisateur du
     # 2026-09-16). Les quatre sources d'import restent disponibles, dans leur
@@ -191,6 +197,8 @@ mod_sc_communication_ui <- function(id) {
                    i18n$t("Lancer CellChat par condition (CC-2)"),
                    class = "btn-outline-primary w-100 mt-2",
                    icon = icon("layer-group"))
+    )
+      )
     ),
     div(class = "small text-muted mt-1", textOutput(ns("comm_status"))),
     hr(),
@@ -999,6 +1007,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       }
       f_score_id <- paste0("comm_f_", "score_min")
       f_rank_id  <- paste0("comm_f_", "rank_max")
+      f_pmax_id <- "comm_f_pmax"
       if (is.null(r)) {
         updateNumericInput(session, "comm_f_score_min",
                            label = .tr("Score minimum (importé)"), min = 0)
@@ -1006,10 +1015,13 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                            label = .tr("Rang maximum (importé)"), min = 0)
         .toggle_filter(f_score_id, TRUE)
         .toggle_filter(f_rank_id, TRUE)
+        .toggle_filter(f_pmax_id, TRUE)
         return()
       }
       src <- as.character(r$source_method %||% NA_character_)
       t <- tryCatch(r$canonical_table, error = function(e) NULL)
+      has_pval <- !is.null(t) && "p_value" %in% colnames(t) && any(is.finite(t$p_value))
+      .toggle_filter(f_pmax_id, has_pval)
       score_max <- if (!is.null(t) && "score" %in% colnames(t) && any(!is.na(t$score)))
         suppressWarnings(max(t$score, na.rm = TRUE)) else NA_real_
       rank_max <- if (!is.null(t) && "rank" %in% colnames(t) && any(!is.na(t$rank)))
@@ -1081,6 +1093,17 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       # 3E (O28) : un nouveau depot invalide les propositions en attente.
       prop_rv(NULL)
       .prop_apply_pending_rv(NULL)
+    }
+
+    .collapse_config_panel <- function() {
+      tryCatch(
+        bslib::accordion_panel_close(
+          "comm_config_accordion",
+          values = "comm_config_panel",
+          session = session
+        ),
+        error = function(e) NULL
+      )
     }
 
     # Depot d'un resultat canonique : IDENTIQUE pour les deux voies (import =
@@ -1346,6 +1369,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
           ))
         }
         comm_status_rv(paste0("[", .status_label(canonical$status), "]\n", msg))
+        .collapse_config_panel()
         showNotification(.tr("Import communication valide."), type = "message", duration = 4)
         # ── 3E (O28) : signal VISIBLE quand l'exact match laisse des labels
         # non mappés (le constat 3E est que cet échec restait discret) —
@@ -1453,6 +1477,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         eng$database, eng$database_version, format(eng$seed), format(eng$nboot)
       )
       comm_status_rv(paste0("[", .status_label(result$status), "]\n", msg))
+      .collapse_config_panel()
       showNotification(.tr("Calcul CellChat termine."), type = "message", duration = 4)
     }
 
@@ -1885,6 +1910,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         n = length(keys), c = nrow(condition_summary)
       )
       comm_status_rv(paste0("[", as.character(collection$status %||% NA_character_), "]\n", msg))
+      .collapse_config_panel()
       showNotification(.tr("Calcul LIANA termine."), type = "message", duration = 4)
     }
 
@@ -2214,15 +2240,15 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     output$comm_centrality_plot <- renderPlot({
       req(comm_state$result)
       roles <- comm_state$result$cellchat_roles
-      if (!is.null(roles) && is.data.frame(roles) && nrow(roles) > 0L) {
-        plot_communication_roles_dot(
-          roles,
-          hide_minor = isTRUE(input$comm_centrality_hide_minor),
-          top_n_pathways = .parse_top_n(input$comm_centrality_top_n)
-        )
-      } else {
+      validate(need(
+        !is.null(roles) && is.data.frame(roles) && nrow(roles) > 0L,
         .tr("Roles CellChat indisponibles (voie import ou centralite non calculee) — vue derivee seule.")
-      }
+      ))
+      plot_communication_roles_dot(
+        roles,
+        hide_minor = isTRUE(input$comm_centrality_hide_minor),
+        top_n_pathways = .parse_top_n(input$comm_centrality_top_n)
+      )
     })
 
     output$comm_centrality_quadrant_plot <- renderPlot({
