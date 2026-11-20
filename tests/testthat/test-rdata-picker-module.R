@@ -7,6 +7,9 @@
 # =============================================================================
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||%
+source_project_file("tools/pkg_skeleton/R/defaults.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 suppressPackageStartupMessages({
   library(shiny)       # testServer, reactiveVal
   library(bslib)       # layout_columns

@@ -104,10 +104,14 @@ test_that("mod_import_sc_server : aucun scan au cold-boot, scan a la demande et 
   writeLines("%%MatrixMarket", file.path(bad_dir, "matrix.mtx"))
 
   old_ds <- Sys.getenv("TRANSCRIPTO_DATASETS_DIR", unset = NA_character_)
+  old_cfg <- Sys.getenv("BIOMENTAT_DATASET_DIRS_CONFIG", unset = NA_character_)
+  tmp_cfg <- tempfile(fileext = ".json")
   on.exit({
     if (is.na(old_ds)) Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR") else Sys.setenv(TRANSCRIPTO_DATASETS_DIR = old_ds)
+    if (is.na(old_cfg)) Sys.unsetenv("BIOMENTAT_DATASET_DIRS_CONFIG") else Sys.setenv(BIOMENTAT_DATASET_DIRS_CONFIG = old_cfg)
+    unlink(tmp_cfg, force = TRUE)
   }, add = TRUE)
-  Sys.setenv(TRANSCRIPTO_DATASETS_DIR = root)
+  Sys.setenv(TRANSCRIPTO_DATASETS_DIR = root, BIOMENTAT_DATASET_DIRS_CONFIG = tmp_cfg)
 
   gd <- .scu_env()
   shiny::testServer(mod_import_sc_server, args = list(global_data = gd), expr = {
@@ -183,10 +187,14 @@ test_that("mod_import_sc_server : uncompressed 10x_v3 et gzipped 10x_v2 se charg
   v2_before <- sort(list.files(v2_dir))
 
   old_ds <- Sys.getenv("TRANSCRIPTO_DATASETS_DIR", unset = NA_character_)
+  old_cfg <- Sys.getenv("BIOMENTAT_DATASET_DIRS_CONFIG", unset = NA_character_)
+  tmp_cfg <- tempfile(fileext = ".json")
   on.exit({
     if (is.na(old_ds)) Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR") else Sys.setenv(TRANSCRIPTO_DATASETS_DIR = old_ds)
+    if (is.na(old_cfg)) Sys.unsetenv("BIOMENTAT_DATASET_DIRS_CONFIG") else Sys.setenv(BIOMENTAT_DATASET_DIRS_CONFIG = old_cfg)
+    unlink(tmp_cfg, force = TRUE)
   }, add = TRUE)
-  Sys.setenv(TRANSCRIPTO_DATASETS_DIR = root)
+  Sys.setenv(TRANSCRIPTO_DATASETS_DIR = root, BIOMENTAT_DATASET_DIRS_CONFIG = tmp_cfg)
 
   gd <- .scu_env()
   shiny::testServer(mod_import_sc_server, args = list(global_data = gd), expr = {
@@ -242,10 +250,14 @@ test_that(".charger_sc_dataset preserve orig.ident sur un Seurat .rds pre-fusion
   saveRDS(default_obj, file.path(root, "plain_default.rds"))
 
   old_ds <- Sys.getenv("TRANSCRIPTO_DATASETS_DIR", unset = NA_character_)
+  old_cfg <- Sys.getenv("BIOMENTAT_DATASET_DIRS_CONFIG", unset = NA_character_)
+  tmp_cfg <- tempfile(fileext = ".json")
   on.exit({
     if (is.na(old_ds)) Sys.unsetenv("TRANSCRIPTO_DATASETS_DIR") else Sys.setenv(TRANSCRIPTO_DATASETS_DIR = old_ds)
+    if (is.na(old_cfg)) Sys.unsetenv("BIOMENTAT_DATASET_DIRS_CONFIG") else Sys.setenv(BIOMENTAT_DATASET_DIRS_CONFIG = old_cfg)
+    unlink(tmp_cfg, force = TRUE)
   }, add = TRUE)
-  Sys.setenv(TRANSCRIPTO_DATASETS_DIR = root)
+  Sys.setenv(TRANSCRIPTO_DATASETS_DIR = root, BIOMENTAT_DATASET_DIRS_CONFIG = tmp_cfg)
 
   gd <- .scu_env()
   shiny::testServer(mod_import_sc_server, args = list(global_data = gd), expr = {
