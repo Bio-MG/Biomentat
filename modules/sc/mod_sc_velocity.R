@@ -398,6 +398,8 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
 
 
 
+    velocity_bundle <- NULL
+
     velocity_state <- reactiveValues(
       inputs = NULL,
       validated = NULL,
@@ -569,6 +571,27 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         .velocity_log(.tr("Objet Seurat mis à jour (empreinte identique) — résultats velocity conservés."))
         return()
       }
+      cached_bundle <- velocity_bundle
+      if (is.null(cached_bundle) && !is.null(shared_rv)) {
+        cached_bundle <- shared_rv$velocity_bundle
+      }
+      if (!is.null(new_fp) && is.list(cached_bundle) &&
+          identical(new_fp, cached_bundle$fingerprint) &&
+          !is.null(cached_bundle$result)) {
+        ps <- cached_bundle$panel_state %||% list()
+        ps$result <- cached_bundle$result %||% ps$result
+        ps$umap_vectors <- cached_bundle$umap_vectors %||% ps$umap_vectors
+        if (!is.null(shared_rv)) {
+          shared_rv$velocity_result <- ps$result
+        }
+        .velocity_rehydrate_panel_state(
+          ps,
+          fp = cached_bundle$fingerprint,
+          default_msg = .tr("Objet Seurat mis à jour (empreinte identique) — résultats velocity conservés.")
+        )
+        .velocity_log(.tr("Objet Seurat mis à jour (empreinte identique) — résultats velocity conservés."))
+        return()
+      }
       velocity_state$inputs <- NULL
       velocity_state$validated <- NULL
       velocity_state$result <- NULL
@@ -630,15 +653,8 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     # purges du cycle de chargement (epoch mod_sc + sc_obj ci-dessus, cf.
     # session_results_pending). Les datapath des fileInput (inputs) ne
     # voyagent JAMAIS (temporaires) ; les caches sont dérivés, recréés.
-    observeEvent(shared_rv$velocity_restore, {
-      pay <- shared_rv$velocity_restore
-      shared_rv$velocity_restore <- NULL  # one-shot
-      if (!is.list(pay)) return()
-      # Le résultat consommé (Communication/viz/rapport) est restauré même
-      # sans état de panneau (snapshots lane 3 v1).
-      shared_rv$velocity_result <- pay$velocity_result
-      st <- pay$panel_state
-      if (is.null(st) || !is.list(st)) return()
+    .velocity_rehydrate_panel_state <- function(st, fp = NULL, default_msg = NULL) {
+      if (is.null(st) || !is.list(st)) return(invisible(FALSE))
       velocity_state$validated           <- st$validated
       velocity_state$result              <- st$result
       velocity_state$alignment           <- st$alignment
@@ -647,8 +663,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       velocity_state$embedding_alignment <- st$embedding_alignment
       velocity_state$vector_validation   <- st$vector_validation
       # garde d'obsolescence : fingerprint recalculé SUR l'objet restauré.
-      velocity_state$object_fingerprint <-
-        if (!is.null(global_data$sc_obj)) velocity_object_fingerprint(global_data$sc_obj) else NULL
+      velocity_state$object_fingerprint  <- fp
       velocity_state$inputs <- NULL
       velocity_state$plot_cache <- list()
       velocity_state$export_cache <- list()
@@ -662,10 +677,28 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       # être peuplé SINON req(input$velocity_gene) laisse le phase portrait
       # vide après reload — même helper que la validation.
       .velocity_refresh_gene_selector()
-      restore_msg <- st$status_msg %||% .tr("État velocity restauré depuis la session sauvegardée — ni ré-inféré ni recalculé.")
+      restore_msg <- st$status_msg %||% default_msg
       velocity_state$status_msg <- restore_msg
       velocity_status_rv(restore_msg)
       .velocity_publish_state()
+      invisible(TRUE)
+    }
+
+    observeEvent(shared_rv$velocity_restore, {
+      pay <- shared_rv$velocity_restore
+      shared_rv$velocity_restore <- NULL  # one-shot
+      if (!is.list(pay)) return()
+      # Le résultat consommé (Communication/viz/rapport) est restauré même
+      # sans état de panneau (snapshots lane 3 v1).
+      shared_rv$velocity_result <- pay$velocity_result
+      st <- pay$panel_state
+      if (is.null(st) || !is.list(st)) return()
+      fp <- if (!is.null(global_data$sc_obj)) velocity_object_fingerprint(global_data$sc_obj) else NULL
+      .velocity_rehydrate_panel_state(
+        st,
+        fp = fp,
+        default_msg = .tr("État velocity restauré depuis la session sauvegardée — ni ré-inféré ni recalculé.")
+      )
     }, ignoreNULL = TRUE)
 
     # Helper to check fingerprint before plot/export — etat derive
@@ -689,8 +722,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       probe <- .velocity_drive_probe_fields(velocity_state)
       velocity_state$has_vectors <- probe$has_vectors
       velocity_state$optin_status <- probe$optin_status
-      if (is.null(shared_rv)) return(invisible(NULL))
-      shared_rv$velocity_panel_state <- list(
+      panel_state <- list(
         result              = velocity_state$result,
         validated           = velocity_state$validated,
         alignment           = velocity_state$alignment,
@@ -704,6 +736,20 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         status_msg          = velocity_state$status_msg,
         source_label        = velocity_state$source_label
       )
+      if (!is.null(velocity_state$result) && !is.null(velocity_state$object_fingerprint)) {
+        bundle <- list(
+          fingerprint  = velocity_state$object_fingerprint,
+          result       = velocity_state$result,
+          umap_vectors = velocity_state$umap_vectors,
+          panel_state  = panel_state
+        )
+        velocity_bundle <<- bundle
+        if (!is.null(shared_rv)) {
+          shared_rv$velocity_bundle <- bundle
+        }
+      }
+      if (is.null(shared_rv)) return(invisible(NULL))
+      shared_rv$velocity_panel_state <- panel_state
       invisible(NULL)
     }
 
