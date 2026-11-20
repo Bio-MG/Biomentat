@@ -417,12 +417,21 @@ plot_communication_dotplot <- function(communication_result, filtered_table = NU
 #' @param communication_result Resultat canonique.
 #' @param filtered_table Table filtree ou NULL (table complete).
 #' @param seurat_obj Objet Seurat courant optionnel (peremption).
+#' @param top_n_pathways,top_n Entier optionnel : plafond de pathways (top_n
+#'   est un alias, top_n_pathways prioritaire).
+#' @param role "both" (paires sender->receiver, defaut), "outgoing" (par
+#'   sender) ou "incoming" (par receiver) ; les roles agreges cumulent les
+#'   scores importes (legende "Score cumule").
 #' @return ggplot.
 #' @export
 plot_communication_pathway_heatmap <- function(communication_result,
                                                filtered_table = NULL,
                                                seurat_obj = NULL,
-                                               top_n_pathways = NULL) {
+                                               top_n_pathways = NULL,
+                                               role = c("both", "outgoing", "incoming"),
+                                               top_n = NULL) {
+  role <- match.arg(role)
+  if (is.null(top_n_pathways)) top_n_pathways <- top_n
   r <- assert_communication_result(
     communication_result, seurat_obj = seurat_obj,
     context = "heatmap pathways"
@@ -448,15 +457,24 @@ plot_communication_pathway_heatmap <- function(communication_result,
     ))
   }
 
-  table$pair_label <- paste(table$sender_node, table$receiver_node, sep = " \u2192 ")
+  table$pair_label <- switch(
+    role,
+    both = paste(table$sender_node, table$receiver_node, sep = " \u2192 "),
+    outgoing = table$sender_node,
+    incoming = table$receiver_node
+  )
+  cumul <- role != "both"
   agg <- do.call(rbind, lapply(
     split(table, paste(table$pathway, table$pair_label, sep = "\r")),
-    function(sub) data.frame(
-      pathway = sub$pathway[1L], pair_label = sub$pair_label[1L],
-      mean_score = if (any(!is.na(sub$score))) mean(sub$score, na.rm = TRUE) else NA_real_,
-      n_interactions = nrow(sub),
-      stringsAsFactors = FALSE
-    )
+    function(sub) {
+      sc <- sub$score[!is.na(sub$score)]
+      data.frame(
+        pathway = sub$pathway[1L], pair_label = sub$pair_label[1L],
+        mean_score = if (!length(sc)) NA_real_ else if (cumul) sum(sc) else mean(sc),
+        n_interactions = nrow(sub),
+        stringsAsFactors = FALSE
+      )
+    }
   ))
 
   if (!is.null(top_n_pathways) && is.finite(top_n_pathways) && top_n_pathways > 0L) {
@@ -475,7 +493,7 @@ plot_communication_pathway_heatmap <- function(communication_result,
     ggplot2::geom_tile(colour = "white") +
     ggplot2::scale_fill_gradient(low = "#F7F4F0", high = "#B2182B",
                                  na.value = "grey90",
-                                 name = "Score moyen importe") +
+                                 name = if (cumul) "Score cumul\u00e9" else "Score moyen importe") +
     ggplot2::theme_minimal() +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
     ggplot2::labs(
@@ -492,8 +510,8 @@ plot_communication_pathway_heatmap <- function(communication_result,
 #'
 #' Noeuds = identites harmonisees (sinon labels bruts) sur un cercle ; aretes =
 #' paires sender-receiver aggregatees, largeur/transparence par poids importe,
-#' fleche orientee sender -> receiver. Les auto-interactions ne sont pas
-#' dessinables sur le cercle : elles sont comptabilisees dans le sous-titre.
+#' fleche orientee sender -> receiver. Les auto-interactions (autocrine)
+#' sont dessinees en boucle coloree au noeud ; aretes colorees par sender.
 #' VUE DESCRIPTIVE — aucune lecture causale.
 #'
 #' @param communication_result Resultat canonique.
@@ -514,9 +532,7 @@ plot_communication_circle <- function(communication_result, filtered_table = NUL
   )
   subtitle_base <- .communication_score_caption(r)
   n_self <- sum(table$sender_node == table$receiver_node)
-  edges_table <- table[table$sender_node != table$receiver_node, , drop = FALSE]
-
-  if (nrow(edges_table) == 0L) {
+  if (nrow(table) == 0L) {
     return(.communication_empty_view_plot(
       sprintf(
         paste0("Aucune arete dessinable : %d interaction(s) dans la ",
@@ -528,14 +544,20 @@ plot_communication_circle <- function(communication_result, filtered_table = NUL
     ))
   }
 
-  agg <- .communication_agg_pairs(edges_table)
+  agg_all <- .communication_agg_pairs(table)
+  is_self <- agg_all$sender_node == agg_all$receiver_node
+  agg_self <- agg_all[is_self, , drop = FALSE]
+  agg <- agg_all[!is_self, , drop = FALSE]
   has_rank <- "mean_rank" %in% colnames(agg) &&
     any(is.finite(agg$mean_rank))
-  has_score <- any(!is.na(agg$sum_score))
-  agg$weight <- if (has_rank) agg$n_interactions else if (has_score) agg$sum_score else agg$n_interactions
+  has_score <- any(!is.na(agg_all$sum_score))
+  .wt <- function(a) if (has_rank) a$n_interactions else if (has_score) a$sum_score else a$n_interactions
+  agg$weight <- .wt(agg)
+  agg_self$weight <- .wt(agg_self)
   agg <- .communication_top_n_rows(agg, top_n_edges, agg$weight, agg$n_interactions)
 
-  nodes <- sort(unique(c(agg$sender_node, agg$receiver_node)))
+  nodes <- sort(unique(c(agg$sender_node, agg$receiver_node,
+                         agg_self$sender_node)))
   n_nodes <- length(nodes)
   angle <- seq(0, 2 * pi, length.out = n_nodes + 1L)[seq_len(n_nodes)]
   node_pos <- data.frame(
@@ -548,7 +570,10 @@ plot_communication_circle <- function(communication_result, filtered_table = NUL
   # courbure deterministe, echantillonnage fixe.
   n_pts <- 40L
   t_seq <- seq(0, 1, length.out = n_pts)
-  edge_df <- do.call(rbind, lapply(seq_len(nrow(agg)), function(i) {
+  edge_df <- do.call(rbind, c(list(data.frame(
+    edge_id = integer(0), t = numeric(0), x = numeric(0), y = numeric(0),
+    weight = numeric(0), sender = character(0), stringsAsFactors = FALSE
+  )), lapply(seq_len(nrow(agg)), function(i) {
     p1 <- node_pos[node_pos$node == agg$sender_node[i], c("x", "y")]
     p2 <- node_pos[node_pos$node == agg$receiver_node[i], c("x", "y")]
     ctrl <- (p1 + p2) * 0.35
@@ -558,13 +583,39 @@ plot_communication_circle <- function(communication_result, filtered_table = NUL
       x = (1 - t_seq)^2 * p1$x + 2 * (1 - t_seq) * t_seq * ctrl$x + t_seq^2 * p2$x,
       y = (1 - t_seq)^2 * p1$y + 2 * (1 - t_seq) * t_seq * ctrl$y + t_seq^2 * p2$y,
       weight = agg$weight[i],
+      sender = agg$sender_node[i],
       stringsAsFactors = FALSE
     )
-  }))
+  })))
+
+  # Auto-boucles : petit cercle radial au-dela du noeud (sender = receiver).
+  loop_df <- data.frame(
+    loop_id = integer(0), x = numeric(0), y = numeric(0),
+    weight = numeric(0), sender = character(0), stringsAsFactors = FALSE
+  )
+  if (nrow(agg_self) > 0L) {
+    th <- seq(0, 2 * pi, length.out = 41L)
+    loop_df <- do.call(rbind, lapply(seq_len(nrow(agg_self)), function(i) {
+      p <- node_pos[node_pos$node == agg_self$sender_node[i], c("x", "y")]
+      rad <- 0.09
+      cx <- p$x * 1.1; cy <- p$y * 1.1
+      if (n_nodes == 1L) { cx <- 0; cy <- 0.1 }
+      data.frame(
+        loop_id = i, x = cx + rad * cos(th), y = cy + rad * sin(th),
+        weight = agg_self$weight[i], sender = agg_self$sender_node[i],
+        stringsAsFactors = FALSE
+      )
+    }))
+  }
+  node_cols <- stats::setNames(
+    grDevices::hcl.colors(max(n_nodes, 2L), "Dark 3")[seq_len(n_nodes)], nodes
+  )
+  agg_w <- rbind(agg[, c("sender_node", "receiver_node", "weight")],
+                 agg_self[, c("sender_node", "receiver_node", "weight")])
 
   node_tot <- do.call(rbind, lapply(node_pos$node, function(nd) {
-    out_w <- sum(agg$weight[agg$sender_node == nd], na.rm = TRUE)
-    in_w <- sum(agg$weight[agg$receiver_node == nd], na.rm = TRUE)
+    out_w <- sum(agg_w$weight[agg_w$sender_node == nd], na.rm = TRUE)
+    in_w <- sum(agg_w$weight[agg_w$receiver_node == nd], na.rm = TRUE)
     data.frame(node = nd, total = out_w + in_w, stringsAsFactors = FALSE)
   }))
   node_pos$total <- node_tot$total[match(node_pos$node, node_tot$node)]
@@ -573,20 +624,29 @@ plot_communication_circle <- function(communication_result, filtered_table = NUL
     ggplot2::geom_path(
       data = edge_df,
       ggplot2::aes(x = x, y = y, group = edge_id,
-                   linewidth = weight, alpha = weight),
+                   linewidth = weight, alpha = weight, colour = sender),
       lineend = "round",
       arrow = grid::arrow(length = grid::unit(7, "pt"), type = "closed")
     ) +
+    ggplot2::geom_path(
+      data = loop_df,
+      ggplot2::aes(x = x, y = y, group = loop_id,
+                   linewidth = weight, alpha = weight, colour = sender),
+      lineend = "round"
+    ) +
     ggplot2::geom_point(
       data = node_pos,
-      ggplot2::aes(x = x, y = y, size = total),
-      colour = "#2166AC", alpha = 0.9
+      ggplot2::aes(x = x, y = y, size = total, colour = node),
+      alpha = 0.9, show.legend = FALSE
     ) +
     ggplot2::geom_text(
       data = node_pos,
-      ggplot2::aes(x = x * 1.18, y = y * 1.18, label = node),
+      ggplot2::aes(x = x * 1.3, y = y * 1.3, label = node,
+                   hjust = ifelse(x > 0.2, 0, ifelse(x < -0.2, 1, 0.5))),
       size = 3.4
     ) +
+    ggplot2::scale_colour_manual(values = node_cols, name = "Sender") +
+    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = 0.25)) +
     ggplot2::scale_linewidth(range = c(0.2, 2.4), name = if (has_rank) "Nb interactions" else if (has_score) "Poids (score importe)" else "Nb interactions") +
     ggplot2::scale_alpha(range = c(0.25, 0.9), guide = "none") +
     ggplot2::scale_size(range = c(3, 9), guide = "none") +
@@ -595,7 +655,7 @@ plot_communication_circle <- function(communication_result, filtered_table = NUL
     ggplot2::labs(
       title = "Reseau sender-receiver (resultats importes)",
       subtitle = sprintf(
-        paste0("%s — %d arete(s) ; %d auto-interaction(s) non dessinees. ",
+        paste0("%s — %d arete(s) ; %d auto-interaction(s) dessinee(s) en boucle. ",
                "Vue descriptive : aucune causalite.%s"),
         subtitle_base, nrow(agg), n_self,
         if (has_rank)
