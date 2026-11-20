@@ -2440,4 +2440,17 @@ if (requireNamespace("later", quietly = TRUE)) {
 
 # Lancement de l'application
 
+# Teardown applicatif (arret de l'app, pas seulement d'une session) : ferme le
+# pool mirai sans jamais lever (mirai absent / deja arrete) et supprime le
+# pidfile de session s'il existe (BIOMENTAT_SESSION_PIDFILE).
+shiny::onStop(function() {
+  if (requireNamespace("mirai", quietly = TRUE)) {
+    try(mirai::daemons(0), silent = TRUE)
+  }
+  pidfile <- Sys.getenv("BIOMENTAT_SESSION_PIDFILE", unset = "")
+  if (nzchar(pidfile) && file.exists(pidfile)) {
+    try(unlink(pidfile), silent = TRUE)
+  }
+})
+
 shinyApp(ui, server)
