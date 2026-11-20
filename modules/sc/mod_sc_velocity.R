@@ -14,6 +14,41 @@
 # analysis_id. Une figure ne cree, n'infere et ne repare jamais un resultat.
 # =============================================================================
 
+# Pure internal snapshot helper for drive observability (W1.1 #1).
+# Returns a bounded descriptor with logical scalar `has_vectors` and
+# character scalar `optin_status` in {idle, running, done, error, unavailable}.
+.velocity_drive_probe_fields <- function(velocity_state, optin_status = NULL) {
+  valid_statuses <- c("idle", "running", "done", "error", "unavailable")
+  has_vectors <- if (is.null(velocity_state)) {
+    FALSE
+  } else {
+    isTRUE(!is.null(velocity_state$umap_vectors))
+  }
+  resolved_status <- NULL
+  if (is.character(optin_status) && length(optin_status) == 1L &&
+      !is.na(optin_status) && optin_status %in% valid_statuses) {
+    resolved_status <- optin_status
+  } else if (!is.null(velocity_state)) {
+    st_val <- velocity_state$optin_status
+    if (is.character(st_val) && length(st_val) == 1L &&
+        !is.na(st_val) && st_val %in% valid_statuses) {
+      resolved_status <- st_val
+    } else if (!is.null(velocity_state$optin_error)) {
+      resolved_status <- "error"
+    } else if (identical(velocity_state$vector_validation$field, "scvelo_optin") &&
+               isTRUE(velocity_state$vector_validation$ok)) {
+      resolved_status <- "done"
+    }
+  }
+  if (is.null(resolved_status)) {
+    resolved_status <- if (is.null(velocity_state)) "unavailable" else "idle"
+  }
+  list(
+    has_vectors = has_vectors,
+    optin_status = resolved_status
+  )
+}
+
 mod_sc_velocity_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -374,7 +409,12 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       vector_validation = NULL,
       plot_cache = list(),
       export_cache = list(),
-      object_fingerprint = NULL
+      object_fingerprint = NULL,
+      has_vectors = FALSE,
+      optin_status = "idle",
+      optin_error = NULL,
+      status_msg = NULL,
+      source_label = NULL
     )
 
     observeEvent(global_data$language, {
@@ -540,12 +580,17 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       velocity_state$plot_cache <- list()
       velocity_state$export_cache <- list()
       velocity_state$object_fingerprint <- NULL
+      velocity_state$has_vectors <- FALSE
+      velocity_state$optin_status <- "idle"
+      velocity_state$optin_error <- NULL
+      velocity_state$source_label <- NULL
+      velocity_optin_banner_rv(NULL)
       # Lane 3b : l'état publié pour le snapshot est périmé avec l'objet.
       shared_rv$velocity_panel_state <- NULL
 
-      velocity_status_rv(
-        .tr("Objet Seurat modifie : reimportez et validez les donnees velocity.")
-      )
+      reset_msg <- .tr("Objet Seurat modifie : reimportez et validez les donnees velocity.")
+      velocity_state$status_msg <- reset_msg
+      velocity_status_rv(reset_msg)
 
       updateSelectizeInput(
         session,
@@ -607,11 +652,20 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       velocity_state$inputs <- NULL
       velocity_state$plot_cache <- list()
       velocity_state$export_cache <- list()
+      velocity_state$optin_error <- NULL
+      velocity_state$has_vectors <- !is.null(st$umap_vectors)
+      velocity_state$optin_status <- st$optin_status %||%
+        if (identical(st$vector_validation$field, "scvelo_optin") &&
+            isTRUE(st$vector_validation$ok)) "done" else "idle"
+      velocity_state$source_label <- st$source_label %||% NULL
       # Retour opérateur « phase portrait isn't » : le sélecteur de gène doit
       # être peuplé SINON req(input$velocity_gene) laisse le phase portrait
       # vide après reload — même helper que la validation.
       .velocity_refresh_gene_selector()
-      velocity_status_rv(.tr("État velocity restauré depuis la session sauvegardée — ni ré-inféré ni recalculé."))
+      restore_msg <- st$status_msg %||% .tr("État velocity restauré depuis la session sauvegardée — ni ré-inféré ni recalculé.")
+      velocity_state$status_msg <- restore_msg
+      velocity_status_rv(restore_msg)
+      .velocity_publish_state()
     }, ignoreNULL = TRUE)
 
     # Helper to check fingerprint before plot/export — etat derive
@@ -632,6 +686,9 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     # l'état partagé — le snapshot de session l'embarque (le panneau retrouve
     # ses matrices validées au reload, pas seulement le résultat consommé).
     .velocity_publish_state <- function() {
+      probe <- .velocity_drive_probe_fields(velocity_state)
+      velocity_state$has_vectors <- probe$has_vectors
+      velocity_state$optin_status <- probe$optin_status
       if (is.null(shared_rv)) return(invisible(NULL))
       shared_rv$velocity_panel_state <- list(
         result              = velocity_state$result,
@@ -641,7 +698,11 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         partial_embedding   = velocity_state$partial_embedding,
         embedding_alignment = velocity_state$embedding_alignment,
         vector_validation   = velocity_state$vector_validation,
-        object_fingerprint  = velocity_state$object_fingerprint
+        object_fingerprint  = velocity_state$object_fingerprint,
+        has_vectors         = probe$has_vectors,
+        optin_status        = probe$optin_status,
+        status_msg          = velocity_state$status_msg,
+        source_label        = velocity_state$source_label
       )
       invisible(NULL)
     }
@@ -772,11 +833,14 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         message = msg_clean,
         when = format(Sys.time(), "%H:%M:%S")
       )
+      velocity_state$optin_status <- "error"
       message(sprintf("[velocity] inférence scVelo opt-in refusée [%s] : %s",
                       velocity_state$optin_error$class,
                       velocity_state$optin_error$message))
-      velocity_status_rv(paste0(.tr("Inférence scVelo (opt-in) refusée :"),
-                                " ", msg_clean))
+      err_status <- paste0(.tr("Inférence scVelo (opt-in) refusée :"), " ", msg_clean)
+      velocity_state$status_msg <- err_status
+      velocity_status_rv(err_status)
+      .velocity_publish_state()
       showNotification(paste(.tr("Inférence scVelo (opt-in) refusée :"), msg_clean),
                        type = "error", duration = 12)
     }
@@ -814,12 +878,15 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       velocity_state$result <- canonical2
       shared_rv$velocity_result <- canonical2
       provenance_append(shared_rv, inferred$provenance)
-      .velocity_publish_state()
       velocity_optin_banner_rv(.tr(inferred$banner))
-      velocity_status_rv(.tr("Vecteurs inférés (scVelo opt-in) — affichage mis à jour."))
+      done_status <- .tr("Vecteurs inférés (scVelo opt-in) — affichage mis à jour.")
+      velocity_state$status_msg <- done_status
+      velocity_status_rv(done_status)
       # P0.4 lane 1 (2026-11-13) : succès => on efface toute trace d'un
       # échec opt-in antérieur (l'état honnête reflète la DERNIÈRE tentative).
       velocity_state$optin_error <- NULL
+      velocity_state$optin_status <- "done"
+      .velocity_publish_state()
       showNotification(.tr("Vecteurs calculés via scVelo (opt-in)."), type = "message", duration = 6)
     }
 
@@ -849,13 +916,20 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         # ASYNC : le calcul Python part en daemon — la session reste réactive.
         scvelo_ctx$canon <- canon
         scvelo_ctx$sel_red <- sel_red
-        showNotification(
-          .tr("Inférence scVelo (opt-in) en daemon — la session reste réactive, comptez quelques dizaines de secondes…"),
-          type = "message", duration = 6)
+        velocity_state$optin_error <- NULL
+        velocity_state$optin_status <- "running"
+        run_status <- .tr("Inférence scVelo (opt-in) en daemon — la session reste réactive, comptez quelques dizaines de secondes…")
+        velocity_state$status_msg <- run_status
+        velocity_status_rv(run_status)
+        .velocity_publish_state()
+        showNotification(run_status, type = "message", duration = 6)
         scvelo_task$invoke(canon, emb, params)
       } else {
         # Repli synchrone TRACÉ (jamais muet — convention run_job) ; la
         # notification persistante lane 1 reste retirée par on.exit.
+        velocity_state$optin_error <- NULL
+        velocity_state$optin_status <- "running"
+        .velocity_publish_state()
         showNotification(.tr("Worker mirai indisponible — exécution synchrone : l'interface restera bloquée pendant le calcul."),
                          type = "warning", duration = 8)
         nid_optin <- showNotification(
@@ -876,7 +950,10 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     if (!is.null(scvelo_task)) {
       observeEvent(scvelo_task$status(), {
         st <- scvelo_task$status()
-        if (identical(st, "success")) {
+        if (identical(st, "running")) {
+          velocity_state$optin_status <- "running"
+          .velocity_publish_state()
+        } else if (identical(st, "success")) {
           tryCatch({
             res_clean <- .vel_sanitize_payload(scvelo_task$result())
             .apply_scvelo_result(res_clean, scvelo_ctx$sel_red, scvelo_ctx$canon)
@@ -967,6 +1044,10 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       velocity_state$embedding_alignment <- NULL
       velocity_state$vector_validation <- NULL
       velocity_state$umap_vectors <- NULL
+      velocity_state$has_vectors <- FALSE
+      velocity_state$optin_status <- "idle"
+      velocity_state$optin_error <- NULL
+      velocity_optin_banner_rv(NULL)
 
       sel_red <- input$velocity_reduction %||% "umap"
       orchestration_warnings <- character(0)
@@ -1038,10 +1119,19 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       # R/sc/sc_velocity.R. La provenance est PRODUITE dans l'objet (regle 7
       # AGENTS.md) puis appendee a l'etat partage ; consolidation reservee au
       # rapport (macro-step 4F).
+      resolved_files <- source_files %||% .collect_input_files(mode)
+      file_label <- if (length(resolved_files)) {
+        first_val <- resolved_files[[mode]] %||% resolved_files[[1L]]
+        if (is.character(first_val) && length(first_val) == 1L && nzchar(first_val)) first_val else mode
+      } else {
+        mode
+      }
+      src_label <- sprintf("%s (%s)", file_label, mode)
+
       canonical <- finalize_velocity_result(
         validated           = validated,
         input_mode          = mode,
-        input_files         = source_files %||% .collect_input_files(mode),
+        input_files         = resolved_files,
         seurat_obj          = global_data$sc_obj,
         assay_used          = NULL,
         requested_reduction = sel_red,
@@ -1060,9 +1150,6 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
 
       provenance_append(shared_rv, canonical$provenance)
 
-      # Lane 3b : publication panneau (validate succès).
-      .velocity_publish_state()
-
       # 10. Populate gene selector — 2D (O28) — helper partagé avec la
       # réhydratation lane 3b (zéro voie parallèle).
       .velocity_refresh_gene_selector()
@@ -1074,13 +1161,14 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         paste0(
           "Validation OK : %d cellules, %d genes. ",
           "Orientation : %s. Alignement cellules : %s. ",
-          "Alignement genes : %s."
+          "Alignement genes : %s. Source : %s."
         ),
         validated$n_cells_matched,
         validated$n_genes_matched,
         validated$orientation,
         validated$cell_match_mode,
-        validated$gene_match_mode
+        validated$gene_match_mode,
+        src_label
       )
       if (is.null(vector_matrix) && !is.null(velocity_state$partial_embedding)) {
         msg <- paste(
@@ -1090,7 +1178,12 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         )
       }
       msg <- paste0("[", .status_label(canonical$status), "]\n", msg)
+      velocity_state$source_label <- src_label
+      velocity_state$status_msg <- msg
       velocity_status_rv(msg)
+      # Lane 3b : publication panneau (validate succès) — après mise à jour de
+      # source_label / status_msg / has_vectors / optin_status.
+      .velocity_publish_state()
       showNotification(.tr("Validation velocity reussie."), type = "message", duration = 4)
       invisible(NULL)
     }
@@ -1109,11 +1202,21 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     drive_velocity_state <- function() {
       res <- tryCatch(shiny::isolate(velocity_state$result), error = function(e) NULL)
       obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+      probe <- tryCatch(
+        shiny::isolate(.velocity_drive_probe_fields(velocity_state)),
+        error = function(e) .velocity_drive_probe_fields(NULL)
+      )
+      status_msg <- tryCatch(shiny::isolate(velocity_state$status_msg), error = function(e) NULL)
+      source_label <- tryCatch(shiny::isolate(velocity_state$source_label), error = function(e) NULL)
       list(module = TS_DRIVE_SC_VELOCITY_IMPORT_MODULE,
            has_result = !is.null(res),
            status = if (is.null(res)) NULL else res$status,
            n_cells_matched = if (is.null(res)) NULL else res$n_cells_matched,
-           has_seurat = !is.null(obj))
+           has_seurat = !is.null(obj),
+           has_vectors = probe$has_vectors,
+           optin_status = probe$optin_status,
+           status_msg = status_msg,
+           source_label = source_label)
     }
     # Garde défensive (motif ExtendedTask ci-dessus) : la couche drive
     # (drive_allowlist.R) est sourcée par global.R avant les modules — mais
@@ -1159,11 +1262,24 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       }
       tryCatch({
         .velocity_ingest(mode, read_fn, source_files = source_files)
+        probe <- .velocity_drive_probe_fields(velocity_state)
         list(ok = TRUE, status = "applied", errors = character(0),
-             warnings = warnings)
+             warnings = warnings,
+             has_vectors = probe$has_vectors,
+             optin_status = probe$optin_status,
+             source_label = velocity_state$source_label,
+             status_msg = velocity_state$status_msg)
       }, error = function(e) {
+        err_msg <- conditionMessage(e)
+        err_status <- paste(.tr("Erreur validation velocity :"), err_msg)
+        velocity_state$status_msg <- err_status
+        velocity_status_rv(err_status)
+        showNotification(err_status, type = "error", duration = 8)
+        probe <- .velocity_drive_probe_fields(velocity_state)
         list(ok = FALSE, status = "error",
-             errors = conditionMessage(e), warnings = warnings)
+             errors = err_msg, warnings = warnings,
+             has_vectors = probe$has_vectors,
+             optin_status = probe$optin_status)
       })
     }, state = drive_velocity_state)
 
@@ -1270,11 +1386,11 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
 
 
       }, error = function(e) {
-        velocity_status_rv(
-          paste(.tr("Erreur validation velocity :"), conditionMessage(e))
-        )
+        err_status <- paste(.tr("Erreur validation velocity :"), conditionMessage(e))
+        velocity_state$status_msg <- err_status
+        velocity_status_rv(err_status)
         showNotification(
-          paste(.tr("Erreur validation velocity :"), conditionMessage(e)),
+          err_status,
           type = "error",
           duration = 8
         )
