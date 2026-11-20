@@ -51,7 +51,8 @@ mod_sc_communication_trajectory_ui <- function(id) {
              fluidRow(
                column(6, downloadButton(ns("dl_trj_curves_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
                column(6, downloadButton(ns("dl_trj_curves_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
-      column(6, plotOutput(ns("trj_heatmap"), height = "340px"),
+      column(6, div(style = "max-height:520px;overflow-y:auto;",
+                    plotOutput(ns("trj_heatmap"), height = "auto")),
              fluidRow(
                column(4, downloadButton(ns("dl_trj_heat_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
                column(4, downloadButton(ns("dl_trj_heat_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")),
@@ -435,11 +436,64 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
       )
     })
 
+    .trj_heatmap_prepare_ctx <- function(ctx, max_pairs = 30L) {
+      pb <- ctx$pair_bin_table
+      if (!is.data.frame(pb) || nrow(pb) == 0L) {
+        return(list(ctx = ctx, n_pairs = 0L, n_total = 0L, capped = FALSE))
+      }
+      lin_pb <- if ("lineage" %in% names(pb)) as.character(pb$lineage) else rep(NA_character_, nrow(pb))
+      lin_pb[is.na(lin_pb)] <- ""
+      pb_keys <- paste(pb$sender_node, pb$receiver_node, lin_pb, sep = "\r")
+      uniq_keys <- unique(pb_keys)
+      n_total <- length(uniq_keys)
+      if (n_total <= max_pairs) {
+        return(list(ctx = ctx, n_pairs = n_total, n_total = n_total, capped = FALSE))
+      }
+      ranked_keys <- uniq_keys
+      ps <- ctx$pair_summary
+      if (is.data.frame(ps) && nrow(ps) > 0L) {
+        lin_ps <- if ("lineage" %in% names(ps)) as.character(ps$lineage) else rep(NA_character_, nrow(ps))
+        lin_ps[is.na(lin_ps)] <- ""
+        ps_keys <- paste(ps$sender_node, ps$receiver_node, lin_ps, sep = "\r")
+        sc <- suppressWarnings(as.numeric(ps$mean_imported_score))
+        ord <- order(sc, decreasing = TRUE, na.last = TRUE)
+        ranked_keys <- unique(c(ps_keys[ord], uniq_keys))
+      }
+      keep_keys <- utils::head(intersect(ranked_keys, uniq_keys), max_pairs)
+      ctx$pair_bin_table <- pb[pb_keys %in% keep_keys, , drop = FALSE]
+      list(ctx = ctx, n_pairs = length(keep_keys), n_total = n_total, capped = TRUE)
+    }
+
+    .trj_heatmap_height <- function(n_pairs) {
+      n <- as.integer(n_pairs %||% 0L)
+      if (is.na(n) || n <= 0L) return(340L)
+      as.integer(max(340L, 120L + 22L * n))
+    }
+
+    .trj_heatmap_plot <- function(ctx, max_pairs = 30L) {
+      prep <- .trj_heatmap_prepare_ctx(ctx, max_pairs = max_pairs)
+      p <- plot_communication_trajectory_heatmap(prep$ctx)
+      y_size <- if (prep$n_pairs > 20L) 7.5 else if (prep$n_pairs > 12L) 8.5 else 9.5
+      p <- p + ggplot2::theme(axis.text.y = ggplot2::element_text(size = y_size))
+      if (isTRUE(prep$capped)) {
+        sub_base <- p$labels$subtitle %||% ""
+        p <- p + ggplot2::labs(subtitle = sprintf("%s | Top %d/%d", sub_base, prep$n_pairs, prep$n_total))
+      }
+      p
+    }
+
     output$trj_heatmap <- renderPlot({
       .ctx_tab_guard()
       ctx <- trj_ctx()
       req(ctx)
-      tryCatch(plot_communication_trajectory_heatmap(ctx), error = function(e) .error_plot(e))
+      tryCatch(.trj_heatmap_plot(ctx), error = function(e) .error_plot(e))
+    }, height = function() {
+      ctx <- trj_ctx()
+      if (is.null(ctx) || !is.data.frame(ctx$pair_bin_table) || nrow(ctx$pair_bin_table) == 0L) {
+        return(340L)
+      }
+      prep <- .trj_heatmap_prepare_ctx(ctx)
+      .trj_heatmap_height(prep$n_pairs)
     })
 
     output$trj_pair_summary <- DT::renderDataTable({
@@ -520,10 +574,10 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
       plot_communication_trajectory_curves(trj_ctx(), pr$sender, pr$receiver, lineage = pr$lineage)
     })
     .fig_download("dl_trj_heat_png", "communication_trajectory_heatmap", function() {
-      plot_communication_trajectory_heatmap(trj_ctx())
+      .trj_heatmap_plot(trj_ctx())
     })
     .fig_download("dl_trj_heat_pdf", "communication_trajectory_heatmap", function() {
-      plot_communication_trajectory_heatmap(trj_ctx())
+      .trj_heatmap_plot(trj_ctx())
     })
 
     invisible(NULL)
