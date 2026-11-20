@@ -61,7 +61,10 @@ communication_views_public_api <- function() {
     "build_communication_consensus",
     "plot_communication_consensus",
     # W2.2 §11.8 Gem #4 : vue alluviale 3 tiers Sender -> Pathway/Ligand -> Receiver.
-    "plot_communication_alluvial"
+    "plot_communication_alluvial",
+    # W2.2 §11.8 Gem #3 : vérification descriptive d'expression L-R single-cell.
+    "build_communication_lr_expression",
+    "plot_communication_lr_expression"
   )
 }
 
@@ -1998,6 +2001,381 @@ plot_communication_alluvial <- function(communication_result,
         "%s — %d flux, %d %s(s). %s",
         subtitle_base, nrow(agg), nrow(t_mid), tolower(mid_label), weight_note
       )
+    )
+}
+
+# =============================================================================
+# W2.2 §11.8 Gem #3 : vérification descriptive d'expression L-R single-cell
+# =============================================================================
+
+.LR_EPISTEMIC_NOTE <- paste0(
+  "V\u00e9rification descriptive d'expression L-R \u2014 la co-expression ",
+  "ne prouve pas une interaction physique ni causale"
+)
+
+.lr_validate_nonempty_str <- function(val, arg_name) {
+  if (!is.character(val) || length(val) != 1L || is.na(val) || !nzchar(trimws(val))) {
+    .views_stop(sprintf(
+      "build_communication_lr_expression() : '%s' doit etre une chaine non vide.",
+      arg_name
+    ))
+  }
+  trimws(val)
+}
+
+.lr_parse_subunits <- function(x, arg_name) {
+  parts <- unlist(strsplit(as.character(x), "[_:+&,]"))
+  parts <- trimws(parts)
+  parts <- parts[nzchar(parts)]
+  parts <- parts[!duplicated(parts)]
+  if (length(parts) == 0L) {
+    .views_stop(sprintf(
+      "build_communication_lr_expression() : aucune sous-unite valide dans '%s'.",
+      arg_name
+    ))
+  }
+  parts
+}
+
+.lr_extract_seurat_data <- function(seurat_obj, assay, layer) {
+  if (inherits(seurat_obj, "Seurat")) {
+    meta <- seurat_obj@meta.data
+    assays_avail <- names(seurat_obj@assays)
+    if (length(assays_avail) == 0L) {
+      .views_stop("build_communication_lr_expression() : aucun assay disponible dans l'objet Seurat.")
+    }
+    assay_use <- if (is.null(assay)) {
+      da <- tryCatch(SeuratObject::DefaultAssay(seurat_obj), error = function(e) NULL)
+      if (is.character(da) && length(da) == 1L && da %in% assays_avail) da else assays_avail[1L]
+    } else {
+      .lr_validate_nonempty_str(assay, "assay")
+    }
+    if (!assay_use %in% assays_avail) {
+      .views_stop(sprintf(
+        "build_communication_lr_expression() : assay '%s' introuvable (disponibles : %s).",
+        assay_use, paste(assays_avail, collapse = ", ")
+      ))
+    }
+    mat <- tryCatch(
+      SeuratObject::LayerData(seurat_obj, assay = assay_use, layer = layer),
+      error = function(e) NULL
+    )
+    if (is.null(mat)) {
+      mat <- tryCatch(
+        SeuratObject::GetAssayData(seurat_obj, assay = assay_use, layer = layer),
+        error = function(e) NULL
+      )
+    }
+    if (is.null(mat)) {
+      mat <- tryCatch(
+        SeuratObject::GetAssayData(seurat_obj, assay = assay_use, slot = layer),
+        error = function(e) NULL
+      )
+    }
+    if (is.null(mat) || (!is.matrix(mat) && !inherits(mat, "Matrix"))) {
+      .views_stop(sprintf(
+        "build_communication_lr_expression() : couche '%s' indisponible dans l'assay '%s'.",
+        layer, assay_use
+      ))
+    }
+    return(list(expr = mat, meta = meta, assay = assay_use))
+  }
+
+  if (is.list(seurat_obj) && !is.data.frame(seurat_obj)) {
+    meta <- seurat_obj$meta.data %||% seurat_obj$metadata %||% seurat_obj$meta
+    mat <- seurat_obj$expr %||% seurat_obj$expression %||%
+      seurat_obj$matrix %||% seurat_obj[[layer]] %||%
+      seurat_obj$data %||% seurat_obj$counts
+    if (!is.data.frame(meta) || is.null(mat) ||
+        (!is.matrix(mat) && !inherits(mat, "Matrix"))) {
+      .views_stop(
+        "build_communication_lr_expression() : liste compatible requise (matrice + meta.data)."
+      )
+    }
+    assay_use <- if (is.null(assay)) NA_character_ else .lr_validate_nonempty_str(assay, "assay")
+    return(list(expr = mat, meta = meta, assay = assay_use))
+  }
+
+  if (is.matrix(seurat_obj) || inherits(seurat_obj, "Matrix")) {
+    meta <- attr(seurat_obj, "meta.data")
+    if (!is.data.frame(meta)) {
+      .views_stop(
+        "build_communication_lr_expression() : attribut 'meta.data' requis sur une matrice."
+      )
+    }
+    assay_use <- if (is.null(assay)) NA_character_ else .lr_validate_nonempty_str(assay, "assay")
+    return(list(expr = seurat_obj, meta = meta, assay = assay_use))
+  }
+
+  .views_stop(
+    "build_communication_lr_expression() : objet Seurat ou structure compatible requis."
+  )
+}
+
+.lr_align_cells <- function(expr, meta) {
+  if (!is.null(colnames(expr)) && !is.null(rownames(meta))) {
+    common <- intersect(colnames(expr), rownames(meta))
+    if (length(common) == 0L) {
+      .views_stop(
+        "build_communication_lr_expression() : aucune cellule commune entre expression et meta.data."
+      )
+    }
+    return(list(
+      expr = expr[, common, drop = FALSE],
+      meta = meta[common, , drop = FALSE]
+    ))
+  }
+  if (ncol(expr) == nrow(meta)) {
+    return(list(expr = expr, meta = meta))
+  }
+  .views_stop(
+    "build_communication_lr_expression() : dimensions incompatibles entre expression et meta.data."
+  )
+}
+
+.lr_summarize_gene_pop <- function(expr, gene, role, population, cell_idx) {
+  n_cells <- as.integer(length(cell_idx))
+  gene_found <- gene %in% rownames(expr)
+  if (!gene_found || n_cells == 0L) {
+    return(data.frame(
+      gene = gene,
+      role = role,
+      population = population,
+      n_cells = n_cells,
+      pct_expressing = NA_real_,
+      mean_expr = NA_real_,
+      mean_expr_nonzero = NA_real_,
+      gene_found = gene_found,
+      stringsAsFactors = FALSE
+    ))
+  }
+  vals <- as.numeric(expr[gene, cell_idx])
+  vals <- vals[is.finite(vals)]
+  if (length(vals) == 0L) {
+    return(data.frame(
+      gene = gene,
+      role = role,
+      population = population,
+      n_cells = n_cells,
+      pct_expressing = NA_real_,
+      mean_expr = NA_real_,
+      mean_expr_nonzero = NA_real_,
+      gene_found = TRUE,
+      stringsAsFactors = FALSE
+    ))
+  }
+  pos <- vals > 0
+  data.frame(
+    gene = gene,
+    role = role,
+    population = population,
+    n_cells = n_cells,
+    pct_expressing = 100 * sum(pos) / length(vals),
+    mean_expr = mean(vals),
+    mean_expr_nonzero = if (any(pos)) mean(vals[pos]) else NA_real_,
+    gene_found = TRUE,
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Verification descriptive d'expression single-cell Ligand-Recepteur
+#'
+#' Extrait la matrice d'expression pour les sous-unites du ligand et du
+#' recepteur chez les cellules Sender et Receiver, sans jamais fabriquer de
+#' valeurs pour les genes absents.
+#'
+#' @param seurat_obj Objet Seurat ou liste/matrice compatible avec `meta.data`.
+#' @param sender Identite de la population emettrice.
+#' @param receiver Identite de la population receptrice.
+#' @param ligand Chaine ligand (mono-gene ou complexe ex. "ITGA4_ITGB1").
+#' @param receptor Chaine recepteur (mono-gene ou complexe).
+#' @param identity_column Colonne de `meta.data` identifiant les populations.
+#' @param assay Assay Seurat optionnel (defaut = DefaultAssay).
+#' @param layer Couche d'expression (defaut = "data").
+#' @return Liste structuree : `table`, `qc`, `params`, `epistemic_note`.
+#' @export
+build_communication_lr_expression <- function(seurat_obj,
+                                              sender,
+                                              receiver,
+                                              ligand,
+                                              receptor,
+                                              identity_column,
+                                              assay = NULL,
+                                              layer = "data") {
+  sender_str <- .lr_validate_nonempty_str(sender, "sender")
+  receiver_str <- .lr_validate_nonempty_str(receiver, "receiver")
+  ligand_str <- .lr_validate_nonempty_str(ligand, "ligand")
+  receptor_str <- .lr_validate_nonempty_str(receptor, "receptor")
+  id_col <- .lr_validate_nonempty_str(identity_column, "identity_column")
+  layer_str <- .lr_validate_nonempty_str(layer, "layer")
+
+  extracted <- .lr_extract_seurat_data(seurat_obj, assay = assay, layer = layer_str)
+  if (!id_col %in% colnames(extracted$meta)) {
+    .views_stop(sprintf(
+      "build_communication_lr_expression() : colonne '%s' absente de meta.data.",
+      id_col
+    ))
+  }
+  aligned <- .lr_align_cells(extracted$expr, extracted$meta)
+  expr <- aligned$expr
+  meta <- aligned$meta
+
+  ligand_subunits <- .lr_parse_subunits(ligand_str, "ligand")
+  receptor_subunits <- .lr_parse_subunits(receptor_str, "receptor")
+
+  cell_ids <- as.character(meta[[id_col]])
+  sender_idx <- which(!is.na(cell_ids) & cell_ids == sender_str)
+  receiver_idx <- which(!is.na(cell_ids) & cell_ids == receiver_str)
+
+  gene_specs <- rbind(
+    data.frame(gene = ligand_subunits, role = "Ligand", stringsAsFactors = FALSE),
+    data.frame(gene = receptor_subunits, role = "Receptor", stringsAsFactors = FALSE)
+  )
+  pop_specs <- list(
+    list(name = "Sender", idx = sender_idx),
+    list(name = "Receiver", idx = receiver_idx)
+  )
+
+  rows <- vector("list", nrow(gene_specs) * length(pop_specs))
+  k <- 1L
+  for (i in seq_len(nrow(gene_specs))) {
+    for (p in pop_specs) {
+      rows[[k]] <- .lr_summarize_gene_pop(
+        expr = expr,
+        gene = gene_specs$gene[i],
+        role = gene_specs$role[i],
+        population = p$name,
+        cell_idx = p$idx
+      )
+      k <- k + 1L
+    }
+  }
+  tbl <- do.call(rbind, rows)
+  rownames(tbl) <- NULL
+
+  uniq_genes <- unique(c(ligand_subunits, receptor_subunits))
+  found_mask <- uniq_genes %in% rownames(expr)
+  rec_rows <- tbl[tbl$role == "Receptor" & tbl$population == "Receiver", , drop = FALSE]
+  all_rec_expr <- isTRUE(
+    nrow(rec_rows) > 0L &&
+      all(rec_rows$gene_found %in% TRUE) &&
+      all(!is.na(rec_rows$pct_expressing) & rec_rows$pct_expressing > 0)
+  )
+
+  list(
+    table = tbl,
+    qc = list(
+      n_sender_cells = as.integer(length(sender_idx)),
+      n_receiver_cells = as.integer(length(receiver_idx)),
+      n_ligand_subunits = as.integer(length(ligand_subunits)),
+      n_receptor_subunits = as.integer(length(receptor_subunits)),
+      n_genes_found = as.integer(sum(found_mask)),
+      n_genes_missing = as.integer(sum(!found_mask)),
+      all_receptor_subunits_expressed = all_rec_expr
+    ),
+    params = list(
+      sender = sender_str,
+      receiver = receiver_str,
+      ligand = ligand_str,
+      receptor = receptor_str,
+      ligand_subunits = ligand_subunits,
+      receptor_subunits = receptor_subunits,
+      identity_column = id_col,
+      assay = extracted$assay,
+      layer = layer_str,
+      is_autocrine = identical(sender_str, receiver_str)
+    ),
+    epistemic_note = .LR_EPISTEMIC_NOTE
+  )
+}
+
+#' DotPlot 2 lignes (Sender / Receiver) de verification d'expression L-R
+#'
+#' @param lr_expr_result Resultat produit par
+#'   `build_communication_lr_expression()`.
+#' @return Objet `ggplot2` (ou graphique d'etat vide explicite).
+#' @export
+plot_communication_lr_expression <- function(lr_expr_result) {
+  req_cols <- c(
+    "gene", "role", "population", "n_cells",
+    "pct_expressing", "mean_expr", "gene_found"
+  )
+  if (!is.list(lr_expr_result) ||
+      !is.data.frame(lr_expr_result$table) ||
+      !all(req_cols %in% colnames(lr_expr_result$table))) {
+    .views_stop(
+      "plot_communication_lr_expression() : resultat valide issu de build_communication_lr_expression() requis."
+    )
+  }
+
+  epistemic_note <- as.character(
+    lr_expr_result$epistemic_note %||% .LR_EPISTEMIC_NOTE
+  )[1L]
+  sender_lbl <- as.character(lr_expr_result$params$sender %||% "Sender")[1L]
+  receiver_lbl <- as.character(lr_expr_result$params$receiver %||% "Receiver")[1L]
+  title_str <- sprintf("Expression L-R : %s -> %s", sender_lbl, receiver_lbl)
+
+  tbl <- lr_expr_result$table
+  if (nrow(tbl) == 0L ||
+      !any(tbl$gene_found %in% TRUE) ||
+      all(is.na(tbl$pct_expressing))) {
+    return(.communication_empty_view_plot(
+      "Aucun gene L-R detecte ou aucune cellule disponible.",
+      title_str,
+      epistemic_note
+    ))
+  }
+
+  gene_levels <- unique(c(
+    tbl$gene[tbl$role == "Ligand"],
+    tbl$gene[tbl$role == "Receptor"]
+  ))
+  tbl$gene <- factor(tbl$gene, levels = gene_levels)
+  tbl$role <- factor(tbl$role, levels = c("Ligand", "Receptor"))
+  tbl$population <- factor(tbl$population, levels = c("Receiver", "Sender"))
+
+  lig_str <- as.character(lr_expr_result$params$ligand %||% "")[1L]
+  rec_str <- as.character(lr_expr_result$params$receptor %||% "")[1L]
+  layer_str <- as.character(lr_expr_result$params$layer %||% "data")[1L]
+  subtitle_str <- sprintf(
+    "Ligand : %s | Recepteur : %s (couche : %s)",
+    lig_str, rec_str, layer_str
+  )
+
+  ggplot2::ggplot(
+    tbl,
+    ggplot2::aes(x = .data$gene, y = .data$population)
+  ) +
+    ggplot2::geom_point(
+      ggplot2::aes(size = .data$pct_expressing, colour = .data$mean_expr),
+      na.rm = TRUE
+    ) +
+    ggplot2::facet_grid(. ~ role, scales = "free_x", space = "free_x") +
+    ggplot2::scale_x_discrete(drop = FALSE) +
+    ggplot2::scale_size_continuous(
+      range = c(1.5, 9),
+      limits = c(0, 100),
+      name = "% cellules > 0"
+    ) +
+    ggplot2::scale_colour_gradient(
+      low = "#E0ECF4",
+      high = "#08519C",
+      name = "Expression moyenne",
+      na.value = "grey85"
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      panel.grid.major = ggplot2::element_line(colour = "grey92"),
+      strip.text = ggplot2::element_text(face = "bold"),
+      axis.text.x = ggplot2::element_text(angle = 30, hjust = 1),
+      plot.caption = ggplot2::element_text(size = 8.5, colour = "grey35")
+    ) +
+    ggplot2::labs(
+      title = title_str,
+      subtitle = subtitle_str,
+      x = NULL,
+      y = NULL,
+      caption = epistemic_note
     )
 }
 
