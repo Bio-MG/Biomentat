@@ -84,11 +84,15 @@ tools/pkg_skeleton/R/spatial_deconv_prep.R
 tools/pkg_skeleton/R/spatial_deconv_tasks.R
 tools/pkg_skeleton/R/spatial_export.R
 tools/pkg_skeleton/R/spatial_report.R
+tools/pkg_skeleton/R/spatial_roi_de.R
+tools/pkg_skeleton/R/spatial_banksy.R
+tools/pkg_skeleton/R/spatial_milo.R
 tools/pkg_skeleton/R/report_collector.R
 tools/pkg_skeleton/R/report_validator.R
 tools/pkg_skeleton/R/report_render.R
 tools/pkg_skeleton/R/report_bundle.R
 modules/import/mod_rdata_picker.R
+modules/import/mod_dataset_dirs_options.R
 modules/import/mod_import_sc.R
 modules/import/mod_import_bulk.R
 modules/import/mod_import_spatial.R

@@ -1695,6 +1695,9 @@ packs_convergence_content <- function(ns, convergence_data, tr) {
     tags$div(class = "small text-muted", style = "margin: 6px 15px;",
              icon("info-circle"), " ",
              tr("BH globale sur l'union des tests (toutes librairies confondues) + effondrement de redondance (similarité de Jaccard enrichplot) — 1 cluster = 1 vote.")),
+    tags$div(class = "small text-warning", style = "margin: 4px 15px 8px 15px;",
+             icon("exclamation-triangle"), " ",
+             tr("Réserve méthodologique PK-3 : la correction BH globale est recalculée sur l'union post-cutoff des termes retenus et dépend donc des seuils amont de chaque moteur.")),
     DTOutput(ns("convergence_table"))
   )
 }

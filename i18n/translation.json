@@ -14088,6 +14088,10 @@
     {
       "fr": "Spatial: Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation spatiale → Multi-echantillons (integration Harmony conjointe, asynchrone) → Export (paquet .zip / script R reproductible)",
       "en": "Spatial: Auto pipeline (1 click) OR QC → Clustering (BANKSY, async) → Deconvolution (RCTD/Label Transfer/STdeconvolve, async) → Spatial visualization → Multi-sample (joint Harmony integration, async) → Export (.zip bundle / reproducible R script)"
+    },
+    {
+      "fr": "Réserve méthodologique PK-3 : la correction BH globale est recalculée sur l'union post-cutoff des termes retenus et dépend donc des seuils amont de chaque moteur.",
+      "en": "PK-3 methodological caveat: global BH adjustment is recomputed over the post-cutoff union of retained terms and therefore depends on each engine's upstream thresholds."
     }
   ]
 }

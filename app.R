@@ -273,6 +273,9 @@ source("tools/pkg_skeleton/R/spatial_deconv_prep.R")
 source("tools/pkg_skeleton/R/spatial_deconv_tasks.R")
 source("tools/pkg_skeleton/R/spatial_export.R")
 source("tools/pkg_skeleton/R/spatial_report.R")
+source("tools/pkg_skeleton/R/spatial_roi_de.R")
+source("tools/pkg_skeleton/R/spatial_banksy.R")
+source("tools/pkg_skeleton/R/spatial_milo.R")
 
 # ── Bloc 08 : R/reports → paquet (compilateur consolidé) ─────────────────────
 # 4F / Stage 17 — COMPILATEUR d'etat + de provenance ; APRES tous les domaines
