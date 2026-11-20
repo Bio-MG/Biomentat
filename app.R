@@ -506,6 +506,33 @@ ui_static <- page_navbar(
           });
         }, 1000);
       })();")),
+    # W1.2 #3b : close open nav_menu Bootstrap dropdowns on Escape or outside click.
+    tags$head(tags$script(HTML(
+      "(function(){
+        function closeOpenNavDropdowns(){
+          document.querySelectorAll('.nav-item.dropdown [data-bs-toggle=\"dropdown\"][aria-expanded=\"true\"], .nav-item.dropdown .dropdown-toggle.show').forEach(function(toggle){
+            try {
+              if (window.bootstrap && window.bootstrap.Dropdown) {
+                var inst = window.bootstrap.Dropdown.getInstance(toggle) || window.bootstrap.Dropdown.getOrCreateInstance(toggle);
+                if (inst && typeof inst.hide === 'function') inst.hide();
+              }
+            } catch (e) {}
+            toggle.classList.remove('show');
+            toggle.setAttribute('aria-expanded', 'false');
+          });
+          document.querySelectorAll('.nav-item.dropdown .dropdown-menu.show').forEach(function(menu){
+            menu.classList.remove('show');
+          });
+        }
+        document.addEventListener('keydown', function(e){
+          if (e.key === 'Escape' || e.key === 'Esc') closeOpenNavDropdowns();
+        });
+        document.addEventListener('click', function(e){
+          if (e.target && typeof e.target.closest === 'function' && e.target.closest('.nav-item.dropdown')) return;
+          closeOpenNavDropdowns();
+        });
+      })();"
+    ))),
     uiOutput("drive_badge"),
     # Chantier 6 (2026-11-08) : bannière last-wins multi-onglets — quand le
     # protocole drive vit mais que CETTE page n'est pas la session nommée par
