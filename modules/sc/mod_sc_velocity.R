@@ -795,16 +795,25 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
 
     .vel_sanitize_text <- function(x) {
       if (!is.character(x) || length(x) == 0L) return(x)
-      if (exists(".ts_nul_free_text", mode = "function")) {
-        return(.ts_nul_free_text(x))
+      out <- if (exists(".ts_nul_free_text", mode = "function")) {
+        .ts_nul_free_text(x)
+      } else {
+        vapply(x, function(s) {
+          if (is.null(s) || !length(s)) return("")
+          res <- tryCatch({
+            r <- charToRaw(s)
+            if (any(r == as.raw(0L))) rawToChar(r[r != as.raw(0L)]) else s
+          }, error = function(e) "")
+          enc2utf8(res)
+        }, character(1L), USE.NAMES = FALSE)
       }
-      vapply(x, function(s) {
-        if (is.null(s) || !length(s)) return("")
-        out <- tryCatch({
-          r <- charToRaw(s)
-          if (any(r == as.raw(0L))) rawToChar(r[r != as.raw(0L)]) else s
-        }, error = function(e) "")
-        enc2utf8(out)
+      vapply(out, function(s) {
+        if (is.na(s) || !nzchar(s)) return(if (is.na(s)) "" else s)
+        if (!validUTF8(s)) {
+          s <- iconv(s, from = "UTF-8", to = "UTF-8", sub = "byte")
+          if (is.na(s)) s <- ""
+        }
+        enc2utf8(s)
       }, character(1L), USE.NAMES = FALSE)
     }
 
@@ -977,8 +986,15 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
           })
         } else if (identical(st, "error")) {
           err <- tryCatch(scvelo_task$result(), error = function(e) e)
-          .vel_scvelo_fail(if (inherits(err, "error")) err else
-            errorCondition(.vel_sanitize_text(as.character(err)), class = c("error", "condition")))
+          err_raw <- if (inherits(err, "condition")) {
+            conditionMessage(err)
+          } else {
+            paste(as.character(unlist(.vel_sanitize_payload(err), use.names = FALSE)), collapse = " ")
+          }
+          err_msg <- enc2utf8(.vel_sanitize_text(paste(as.character(err_raw), collapse = " ")))
+          if (length(err_msg) == 0L || is.na(err_msg[[1L]])) err_msg <- ""
+          err_cls <- if (inherits(err, "error")) class(err) else c("error", "condition")
+          .vel_scvelo_fail(errorCondition(err_msg[[1L]], class = err_cls))
         }
       })
     }
