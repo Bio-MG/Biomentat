@@ -64,7 +64,10 @@ communication_views_public_api <- function() {
     "plot_communication_alluvial",
     # W2.2 §11.8 Gem #3 : vérification descriptive d'expression L-R single-cell.
     "build_communication_lr_expression",
-    "plot_communication_lr_expression"
+    "plot_communication_lr_expression",
+    # W2.2 §11.8 Gem #1 : comparaison différentielle Condition A vs B.
+    "build_communication_condition_diff",
+    "plot_communication_condition_diff"
   )
 }
 
@@ -2376,6 +2379,367 @@ plot_communication_lr_expression <- function(lr_expr_result) {
       x = NULL,
       y = NULL,
       caption = epistemic_note
+    )
+}
+
+# =============================================================================
+# W2.2 §11.8 Gem #1 : comparaison différentielle Condition A vs Condition B
+# =============================================================================
+
+.DIFF_EPISTEMIC_NOTE <- paste0(
+  "Comparaison différentielle descriptive intra-outil (delta_score et log2_fc ",
+  "avec pseudocount) — aucune inférence causale ni comparaison inter-outils"
+)
+
+#' Valider un communication_result canonique pour la comparaison différentielle
+.diff_validate_comm_result <- function(res, arg_name) {
+  tryCatch(
+    assert_communication_result(
+      res,
+      context = sprintf("comparaison différentielle (%s)", arg_name)
+    ),
+    error = function(e) {
+      .views_stop(sprintf(
+        "build_communication_condition_diff() : '%s' invalide (%s).",
+        arg_name, conditionMessage(e)
+      ))
+    }
+  )
+  if (!is.data.frame(res$canonical_table)) {
+    .views_stop(sprintf(
+      "build_communication_condition_diff() : '%s$canonical_table' doit être un data.frame.",
+      arg_name
+    ))
+  }
+  req_cols <- c("sender", "receiver", "ligand", "receptor", "score")
+  missing_cols <- setdiff(req_cols, colnames(res$canonical_table))
+  if (length(missing_cols) > 0L) {
+    .views_stop(sprintf(
+      "build_communication_condition_diff() : colonnes absentes dans '%s$canonical_table' : %s.",
+      arg_name, paste(missing_cols, collapse = ", ")
+    ))
+  }
+  src <- res$source_method %||% res$source %||%
+    unique(as.character(res$canonical_table$source_method %||% NA_character_))[1L]
+  src <- as.character(src)[1L]
+  if (is.na(src) || !nzchar(trimws(src))) {
+    .views_stop(sprintf(
+      "build_communication_condition_diff() : '%s' ne porte aucune source_method identifiable.",
+      arg_name
+    ))
+  }
+  list(result = res, source_method = trimws(src))
+}
+
+#' Extraire et dédoublonner les paires (sender, receiver, ligand, receptor)
+.diff_extract_pairs <- function(res) {
+  tbl <- res$canonical_table
+  if (nrow(tbl) == 0L) {
+    return(data.frame(
+      key = character(0),
+      sender = character(0),
+      receiver = character(0),
+      ligand = character(0),
+      receptor = character(0),
+      pathway = character(0),
+      score = numeric(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+  tbl <- .communication_node_keys(tbl)
+  sender_vec <- as.character(tbl$sender_node)
+  receiver_vec <- as.character(tbl$receiver_node)
+  ligand_vec <- as.character(tbl$ligand)
+  receptor_vec <- as.character(tbl$receptor)
+  pathway_vec <- if ("pathway" %in% colnames(tbl)) {
+    as.character(tbl$pathway)
+  } else {
+    rep(NA_character_, nrow(tbl))
+  }
+  score_vec <- suppressWarnings(as.numeric(tbl$score))
+  score_vec[!is.finite(score_vec)] <- NA_real_
+
+  keys <- paste(sender_vec, receiver_vec, ligand_vec, receptor_vec, sep = "\r")
+  # Dédoublonnage déterministe : conserver le score maximal par paire L-R
+  if (any(duplicated(keys))) {
+    ord_val <- ifelse(is.na(score_vec), -Inf, score_vec)
+    ord <- order(-ord_val, seq_along(ord_val))
+    keys <- keys[ord]
+    sender_vec <- sender_vec[ord]
+    receiver_vec <- receiver_vec[ord]
+    ligand_vec <- ligand_vec[ord]
+    receptor_vec <- receptor_vec[ord]
+    pathway_vec <- pathway_vec[ord]
+    score_vec <- score_vec[ord]
+    keep <- !duplicated(keys)
+    keys <- keys[keep]
+    sender_vec <- sender_vec[keep]
+    receiver_vec <- receiver_vec[keep]
+    ligand_vec <- ligand_vec[keep]
+    receptor_vec <- receptor_vec[keep]
+    pathway_vec <- pathway_vec[keep]
+    score_vec <- score_vec[keep]
+  }
+
+  data.frame(
+    key = keys,
+    sender = sender_vec,
+    receiver = receiver_vec,
+    ligand = ligand_vec,
+    receptor = receptor_vec,
+    pathway = pathway_vec,
+    score = score_vec,
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Comparaison différentielle CCC entre deux conditions (W2.2 §11.8 Gem #1)
+#'
+#' Compare deux `communication_result` canoniques issus du MÊME outil
+#' (`source_method`), joint les interactions sur `(sender, receiver, ligand,
+#' receptor)`, et calcule `delta_score = score_b - score_a` ainsi que
+#' `log2_fc = log2((score_b + pseudocount) / (score_a + pseudocount))`.
+#' Refuse toute comparaison inter-outils via `.views_stop()`.
+#'
+#' @param res_a Résultat canonique `communication_result` pour la condition A.
+#' @param res_b Résultat canonique `communication_result` pour la condition B.
+#' @param label_a Libellé de la condition A (défaut `"Condition A"`).
+#' @param label_b Libellé de la condition B (défaut `"Condition B"`).
+#' @param pseudocount Pseudocount strictement positif pour `log2_fc`
+#'   (défaut `1e-6`).
+#' @return `data.frame` (classe `c("ccc_condition_diff", "data.frame")`) trié
+#'   par `abs(delta_score)` décroissant, avec attributs `source_method`,
+#'   `label_a`, `label_b`, `pseudocount`, `epistemic_note` et `qc`.
+#' @export
+build_communication_condition_diff <- function(res_a,
+                                               res_b,
+                                               label_a = "Condition A",
+                                               label_b = "Condition B",
+                                               pseudocount = 1e-6) {
+  if (!is.character(label_a) || length(label_a) != 1L ||
+      is.na(label_a) || !nzchar(trimws(label_a))) {
+    .views_stop("build_communication_condition_diff() : 'label_a' doit être une chaîne non vide.")
+  }
+  if (!is.character(label_b) || length(label_b) != 1L ||
+      is.na(label_b) || !nzchar(trimws(label_b))) {
+    .views_stop("build_communication_condition_diff() : 'label_b' doit être une chaîne non vide.")
+  }
+  if (!is.numeric(pseudocount) || length(pseudocount) != 1L ||
+      !is.finite(pseudocount) || pseudocount <= 0) {
+    .views_stop("build_communication_condition_diff() : 'pseudocount' doit être un numérique fini > 0.")
+  }
+  label_a <- trimws(label_a)
+  label_b <- trimws(label_b)
+  pc <- as.numeric(pseudocount)
+
+  val_a <- .diff_validate_comm_result(res_a, "res_a")
+  val_b <- .diff_validate_comm_result(res_b, "res_b")
+
+  if (!identical(tolower(val_a$source_method), tolower(val_b$source_method))) {
+    .views_stop(sprintf(
+      paste0(
+        "build_communication_condition_diff() : comparaison inter-outils refusée ",
+        "('%s' vs '%s') — les scores bruts ne sont pas comparables entre outils."
+      ),
+      val_a$source_method, val_b$source_method
+    ))
+  }
+
+  df_a <- .diff_extract_pairs(val_a$result)
+  df_b <- .diff_extract_pairs(val_b$result)
+  all_keys <- unique(c(df_a$key, df_b$key))
+
+  if (length(all_keys) == 0L) {
+    empty_df <- data.frame(
+      sender = character(0),
+      receiver = character(0),
+      ligand = character(0),
+      receptor = character(0),
+      pathway = character(0),
+      score_a = numeric(0),
+      score_b = numeric(0),
+      delta_score = numeric(0),
+      log2_fc = numeric(0),
+      presence = character(0),
+      stringsAsFactors = FALSE
+    )
+    attr(empty_df, "source_method") <- val_a$source_method
+    attr(empty_df, "label_a") <- label_a
+    attr(empty_df, "label_b") <- label_b
+    attr(empty_df, "pseudocount") <- pc
+    attr(empty_df, "epistemic_note") <- .DIFF_EPISTEMIC_NOTE
+    attr(empty_df, "qc") <- list(n_total = 0L, n_both = 0L, n_only_a = 0L, n_only_b = 0L)
+    class(empty_df) <- c("ccc_condition_diff", "data.frame")
+    return(empty_df)
+  }
+
+  idx_a <- match(all_keys, df_a$key)
+  idx_b <- match(all_keys, df_b$key)
+  in_a <- !is.na(idx_a)
+  in_b <- !is.na(idx_b)
+
+  sender <- ifelse(in_a, df_a$sender[idx_a], df_b$sender[idx_b])
+  receiver <- ifelse(in_a, df_a$receiver[idx_a], df_b$receiver[idx_b])
+  ligand <- ifelse(in_a, df_a$ligand[idx_a], df_b$ligand[idx_b])
+  receptor <- ifelse(in_a, df_a$receptor[idx_a], df_b$receptor[idx_b])
+
+  pw_a <- ifelse(in_a, df_a$pathway[idx_a], NA_character_)
+  pw_b <- ifelse(in_b, df_b$pathway[idx_b], NA_character_)
+  pathway <- ifelse(!is.na(pw_a) & nzchar(pw_a), pw_a, pw_b)
+
+  has_finite_a <- any(is.finite(df_a$score))
+  has_finite_b <- any(is.finite(df_b$score))
+
+  score_a <- ifelse(in_a, df_a$score[idx_a], if (has_finite_a || has_finite_b) 0 else NA_real_)
+  score_b <- ifelse(in_b, df_b$score[idx_b], if (has_finite_a || has_finite_b) 0 else NA_real_)
+
+  delta_score <- score_b - score_a
+  valid_fc <- is.finite(score_a) & is.finite(score_b) &
+    (score_a + pc > 0) & (score_b + pc > 0)
+  log2_fc <- rep(NA_real_, length(all_keys))
+  log2_fc[valid_fc] <- log2((score_b[valid_fc] + pc) / (score_a[valid_fc] + pc))
+
+  presence <- ifelse(in_a & in_b, "both", ifelse(in_a, "only_a", "only_b"))
+
+  out <- data.frame(
+    sender = sender,
+    receiver = receiver,
+    ligand = ligand,
+    receptor = receptor,
+    pathway = pathway,
+    score_a = as.numeric(score_a),
+    score_b = as.numeric(score_b),
+    delta_score = as.numeric(delta_score),
+    log2_fc = as.numeric(log2_fc),
+    presence = presence,
+    stringsAsFactors = FALSE
+  )
+
+  abs_delta <- ifelse(is.finite(out$delta_score), abs(out$delta_score), -Inf)
+  ord <- order(-abs_delta, out$sender, out$receiver, out$ligand, out$receptor)
+  out <- out[ord, , drop = FALSE]
+  rownames(out) <- NULL
+
+  attr(out, "source_method") <- val_a$source_method
+  attr(out, "label_a") <- label_a
+  attr(out, "label_b") <- label_b
+  attr(out, "pseudocount") <- pc
+  attr(out, "epistemic_note") <- .DIFF_EPISTEMIC_NOTE
+  attr(out, "qc") <- list(
+    n_total = as.integer(nrow(out)),
+    n_both = as.integer(sum(out$presence == "both")),
+    n_only_a = as.integer(sum(out$presence == "only_a")),
+    n_only_b = as.integer(sum(out$presence == "only_b"))
+  )
+  class(out) <- c("ccc_condition_diff", "data.frame")
+  out
+}
+
+#' Visualisation ggplot2 des interactions CCC différentielles (W2.2 §11.8 Gem #1)
+#'
+#' Affiche les `top_n` interactions présentant la plus forte variation absolue
+#' (`abs(delta_score)`) sous forme de graphique divergent (`delta_score` en
+#' abscisse, `log2_fc` en taille/annotation, direction colorée par condition).
+#'
+#' @param diff_res `data.frame` retourné par `build_communication_condition_diff()`.
+#' @param top_n Nombre maximal d'interactions affichées (défaut `25L`).
+#' @return Objet `ggplot`.
+#' @export
+plot_communication_condition_diff <- function(diff_res, top_n = 25L) {
+  req_cols <- c(
+    "sender", "receiver", "ligand", "receptor",
+    "score_a", "score_b", "delta_score", "log2_fc"
+  )
+  if (!is.data.frame(diff_res) || !all(req_cols %in% colnames(diff_res))) {
+    .views_stop(
+      "plot_communication_condition_diff() : data.frame valide issu de build_communication_condition_diff() requis."
+    )
+  }
+  if (!is.numeric(top_n) || length(top_n) != 1L || !is.finite(top_n) || top_n < 1) {
+    .views_stop("plot_communication_condition_diff() : 'top_n' doit être un entier >= 1.")
+  }
+
+  label_a <- as.character(attr(diff_res, "label_a") %||% "Condition A")[1L]
+  label_b <- as.character(attr(diff_res, "label_b") %||% "Condition B")[1L]
+  src_method <- as.character(attr(diff_res, "source_method") %||% "communication")[1L]
+  epistemic_note <- as.character(attr(diff_res, "epistemic_note") %||% .DIFF_EPISTEMIC_NOTE)[1L]
+
+  title_str <- sprintf("CCC différentielle : %s vs %s", label_b, label_a)
+  sub_str <- sprintf(
+    "Outil : %s | %s -> %s (delta_score = %s - %s)",
+    src_method, label_a, label_b, label_b, label_a
+  )
+
+  valid_rows <- diff_res[is.finite(diff_res$delta_score), , drop = FALSE]
+  if (nrow(valid_rows) == 0L) {
+    return(.communication_empty_view_plot(
+      "Aucune interaction différentielle avec score fini disponible.",
+      title_str,
+      epistemic_note
+    ))
+  }
+
+  ord <- order(-abs(valid_rows$delta_score), valid_rows$sender, valid_rows$receiver)
+  valid_rows <- valid_rows[ord, , drop = FALSE]
+  n_keep <- min(nrow(valid_rows), max(1L, as.integer(top_n)))
+  sub <- valid_rows[seq_len(n_keep), , drop = FALSE]
+
+  sub$interaction_label <- sprintf(
+    "%s -> %s : %s - %s",
+    sub$sender, sub$receiver, sub$ligand, sub$receptor
+  )
+  if (any(duplicated(sub$interaction_label))) {
+    sub$interaction_label <- make.unique(sub$interaction_label, sep = " #")
+  }
+  sub <- sub[order(sub$delta_score), , drop = FALSE]
+  sub$interaction_label <- factor(sub$interaction_label, levels = sub$interaction_label)
+
+  dir_up <- paste0("Enrichi : ", label_b)
+  dir_down <- paste0("Enrichi : ", label_a)
+  dir_eq <- "Inchangé"
+  sub$direction <- ifelse(
+    sub$delta_score > 0, dir_up,
+    ifelse(sub$delta_score < 0, dir_down, dir_eq)
+  )
+  sub$abs_log2_fc <- ifelse(is.finite(sub$log2_fc), abs(sub$log2_fc), 0)
+
+  pal <- stats::setNames(
+    c("#B2182B", "#2166AC", "grey55"),
+    c(dir_up, dir_down, dir_eq)
+  )
+
+  ggplot2::ggplot(
+    sub,
+    ggplot2::aes(
+      x = .data$delta_score,
+      y = .data$interaction_label,
+      colour = .data$direction
+    )
+  ) +
+    ggplot2::geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+    ggplot2::geom_segment(
+      ggplot2::aes(
+        x = 0,
+        xend = .data$delta_score,
+        y = .data$interaction_label,
+        yend = .data$interaction_label
+      ),
+      linewidth = 0.7
+    ) +
+    ggplot2::geom_point(ggplot2::aes(size = .data$abs_log2_fc), alpha = 0.9) +
+    ggplot2::scale_colour_manual(values = pal, name = "Direction") +
+    ggplot2::scale_size_continuous(range = c(2.5, 6.5), name = "|log2 FC|") +
+    ggplot2::labs(
+      title = title_str,
+      subtitle = sub_str,
+      x = sprintf("delta_score (%s - %s)", label_b, label_a),
+      y = NULL,
+      caption = epistemic_note
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      panel.grid.minor = ggplot2::element_blank(),
+      plot.caption = ggplot2::element_text(size = 8.5, colour = "grey35")
     )
 }
 
