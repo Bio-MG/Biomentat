@@ -595,6 +595,17 @@ TS_DRIVE_SC_PATHWAYS_TOP_TAB <- "tab_sc"
 TS_DRIVE_SC_PATHWAYS_PANELS <- "6_pathway"
 TS_DRIVE_SC_PATHWAYS_ACCORDION_IDS <- c("sc-acc_workflow", "sc-acc_analyse")
 
+# --- SC RNA velocity (measured in modules/sc/mod_sc_velocity.R) --------------
+# W1.1 #2: bind velocity_validate and velocity_scvelo_run to the drive layer.
+# Mounted in mod_sc.R via mod_sc_velocity_ui(ns("velocity")) and
+# mod_sc_velocity_server("velocity", ...), hence the `sc-velocity-` prefix.
+TS_DRIVE_SC_VELOCITY_VALIDATE_BUTTON <- "sc-velocity-velocity_validate"
+TS_DRIVE_SC_VELOCITY_SCVELO_BUTTON   <- "sc-velocity-velocity_scvelo_run"
+TS_DRIVE_SC_VELOCITY_MODULE          <- "sc_velocity"
+TS_DRIVE_SC_VELOCITY_TOP_TAB         <- "tab_sc"
+TS_DRIVE_SC_VELOCITY_PANELS          <- "8_velocity"
+TS_DRIVE_SC_VELOCITY_ACCORDION_IDS   <- c("sc-acc_workflow", "sc-acc_dynamique")
+
 # --- Spatial QC hotspots (measured in modules/spatial/mod_spatial_qc.R) -------
 # The second Spatial action, and the second one whose parameters are resolved by a
 # RULE rather than frozen: the metric must be one of the QC columns and a remote
@@ -846,24 +857,31 @@ TS_DRIVE_ALLOWLIST <- c(
            note = paste("local Getis-Ord hotspots via run_spatial_hotspots() with",
                         "frozen .spatial_qc_drive_inputs(); the metric is resolved by",
                         "RULE (.spatial_hotspot_metric), never frozen. The DOM button",
-                        "is not exposed"))
+                        "is not exposed")),
+      list(kind = "button", module = TS_DRIVE_SC_VELOCITY_MODULE,
+           note = "validate spliced/unspliced velocity matrices via mod_sc_velocity.R (DOM button sc-velocity-velocity_validate)"),
+      list(kind = "button", module = TS_DRIVE_SC_VELOCITY_MODULE,
+           note = "run opt-in scVelo vector inference via mod_sc_velocity.R (DOM button sc-velocity-velocity_scvelo_run)")
     ),
     c(TS_DRIVE_SC_BUTTON, TS_DRIVE_SC_ANNOTATION_BUTTON,
       TS_DRIVE_SC_MARKERS_BUTTON, TS_DRIVE_BULK_SIGNATURES_BUTTON,
       TS_DRIVE_BULK_PATTERN_BUTTON, TS_DRIVE_BULK_NETWORK_BUTTON,
-      TS_DRIVE_SC_PATHWAYS_BUTTON, TS_DRIVE_SPATIAL_QC_BUTTON)
+      TS_DRIVE_SC_PATHWAYS_BUTTON, TS_DRIVE_SPATIAL_QC_BUTTON,
+      TS_DRIVE_SC_VELOCITY_VALIDATE_BUTTON, TS_DRIVE_SC_VELOCITY_SCVELO_BUTTON)
   )
 )
 
-#' The ONLY SEVENTEEN button ids ts_drive_bind_button() is allowed to instrument.
+#' The ONLY NINETEEN button ids ts_drive_bind_button() is allowed to instrument.
 #' Seven are real DOM buttons measured on a live session; the eighth through
 #' fourteenth are dispatched by a counter each module publishes (frozen declared
 #' parameters, so the DOM id is deliberately not exposed); the fifteenth — the
 #' Spatial import confirm — is a real DOM button again, for the module whose only
-#' dataset input is a folder; and the sixteenth and seventeenth (Slice 4) are the
+#' dataset input is a folder; the sixteenth and seventeenth (Slice 4) are the
 #' two WGCNA STAGE buttons — real DOM buttons once more, forming a declared
 #' prerequisite chain (stage 2 consumes stage 1's stored power), each published
-#' by its own counter and readiness guard.
+#' by its own counter and readiness guard; and the eighteenth and nineteenth
+#' (W1.1 #2) are the two SC RNA velocity buttons (`velocity_validate` and
+#' `velocity_scvelo_run`).
 TS_DRIVE_BUTTONS <- c(
   "import_bulk-btn_load",
   "bulk-filter-run_filter_norm",
@@ -880,6 +898,8 @@ TS_DRIVE_BUTTONS <- c(
   TS_DRIVE_SC_ANNOTATION_BUTTON,
   TS_DRIVE_SC_MARKERS_BUTTON,
   TS_DRIVE_SC_PATHWAYS_BUTTON,
+  TS_DRIVE_SC_VELOCITY_VALIDATE_BUTTON,
+  TS_DRIVE_SC_VELOCITY_SCVELO_BUTTON,
   TS_DRIVE_BULK_WGCNA_POWER_BUTTON,
   TS_DRIVE_BULK_WGCNA_MODULES_BUTTON
 )
@@ -965,7 +985,7 @@ TS_DRIVE_MODULES <- c("import_bulk", "import_spatial", TS_DRIVE_SC_IMPORT_MODULE
                       "spatial_pipeline", TS_DRIVE_SPATIAL_QC_MODULE,
                       TS_DRIVE_SC_MODULE,
                       TS_DRIVE_SC_ANNOTATION_MODULE, TS_DRIVE_SC_MARKERS_MODULE,
-                      TS_DRIVE_SC_PATHWAYS_MODULE,
+                      TS_DRIVE_SC_PATHWAYS_MODULE, TS_DRIVE_SC_VELOCITY_MODULE,
                       TS_DRIVE_SC_EMBEDDINGS_MODULE, TS_DRIVE_SC_TRAJECTORY_MODULE,
                       "spatial")
 
@@ -1292,18 +1312,19 @@ ts_drive_allowlist_problems <- function(allowlist = TS_DRIVE_ALLOWLIST,
     if (identical(e$module, "sc")) {
       problems <- c(problems, sprintf("%s: module 'sc' is out of scope", id))
     }
-    # The `sc-` namespace is a CLOSED set of FOUR declared actions. The
+    # The `sc-` namespace is a CLOSED set of SIX declared actions. The
     # original v1 rail was "no sc- key at all"; replacing it with named
     # exceptions keeps every later widening a visible edit rather than a
     # default. A LYING module field buys nothing: the id prefix alone is enough
     # to refuse the key.
     sc_buttons <- c(TS_DRIVE_SC_BUTTON, TS_DRIVE_SC_ANNOTATION_BUTTON,
-                    TS_DRIVE_SC_MARKERS_BUTTON, TS_DRIVE_SC_PATHWAYS_BUTTON)
+                    TS_DRIVE_SC_MARKERS_BUTTON, TS_DRIVE_SC_PATHWAYS_BUTTON,
+                    TS_DRIVE_SC_VELOCITY_VALIDATE_BUTTON,
+                    TS_DRIVE_SC_VELOCITY_SCVELO_BUTTON)
     if (grepl("^sc-", id) && !id %in% sc_buttons) {
       problems <- c(problems, sprintf(
-        "%s: only %s, %s, %s or %s is in scope, every other sc- key is out of scope",
-        id, TS_DRIVE_SC_BUTTON, TS_DRIVE_SC_ANNOTATION_BUTTON,
-        TS_DRIVE_SC_MARKERS_BUTTON, TS_DRIVE_SC_PATHWAYS_BUTTON))
+        "%s: only %s is in scope, every other sc- key is out of scope",
+        id, paste(sc_buttons, collapse = ", ")))
     }
     if (identical(id, TS_DRIVE_SC_BUTTON) &&
         !identical(e$module, TS_DRIVE_SC_MODULE)) {
@@ -1339,6 +1360,16 @@ ts_drive_allowlist_problems <- function(allowlist = TS_DRIVE_ALLOWLIST,
         !identical(e$module, TS_DRIVE_SC_PATHWAYS_MODULE)) {
       problems <- c(problems, sprintf("%s: must declare module '%s'",
                                       id, TS_DRIVE_SC_PATHWAYS_MODULE))
+    }
+    if (identical(id, TS_DRIVE_SC_VELOCITY_VALIDATE_BUTTON) &&
+        !identical(e$module, TS_DRIVE_SC_VELOCITY_MODULE)) {
+      problems <- c(problems, sprintf("%s: must declare module '%s'",
+                                      id, TS_DRIVE_SC_VELOCITY_MODULE))
+    }
+    if (identical(id, TS_DRIVE_SC_VELOCITY_SCVELO_BUTTON) &&
+        !identical(e$module, TS_DRIVE_SC_VELOCITY_MODULE)) {
+      problems <- c(problems, sprintf("%s: must declare module '%s'",
+                                      id, TS_DRIVE_SC_VELOCITY_MODULE))
     }
     if (identical(id, TS_DRIVE_SPATIAL_QC_BUTTON) &&
         !identical(e$module, TS_DRIVE_SPATIAL_QC_MODULE)) {

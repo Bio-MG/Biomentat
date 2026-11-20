@@ -890,7 +890,22 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       showNotification(.tr("Vecteurs calculés via scVelo (opt-in)."), type = "message", duration = 6)
     }
 
-    observeEvent(input$velocity_scvelo_run, {
+    drive_counter_validate <- shiny::reactiveVal(0L)
+    drive_counter_scvelo   <- shiny::reactiveVal(0L)
+    drive_trigger_validate <- shiny::reactive({
+      dc <- drive_counter_validate()
+      bc <- input$velocity_validate
+      if (identical(dc, 0L) && (is.null(bc) || identical(as.integer(bc), 0L))) return(NULL)
+      list(dc, bc)
+    })
+    drive_trigger_scvelo   <- shiny::reactive({
+      dc <- drive_counter_scvelo()
+      bc <- input$velocity_scvelo_run
+      if (identical(dc, 0L) && (is.null(bc) || identical(as.integer(bc), 0L))) return(NULL)
+      list(dc, bc)
+    })
+
+    observeEvent(drive_trigger_scvelo(), {
       canon <- velocity_state$result
       if (is.null(canon)) {
         showNotification(
@@ -1283,8 +1298,53 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       })
     }, state = drive_velocity_state)
 
+    drive_ready_validate <- function() {
+      obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+      if (is.null(obj)) {
+        return("no Seurat object loaded (global_data$sc_obj is NULL)")
+      }
+      mode <- tryCatch(shiny::isolate(input$velocity_import_mode), error = function(e) NULL) %||% "rds"
+      f <- if (identical(mode, "loom")) {
+        tryCatch(shiny::isolate(input$velocity_loom_file), error = function(e) NULL)
+      } else {
+        tryCatch(shiny::isolate(input$velocity_rds_file), error = function(e) NULL)
+      }
+      if (is.null(f)) {
+        return(sprintf("no velocity file selected for mode '%s'", mode))
+      }
+      TRUE
+    }
+    drive_ready_scvelo <- function() {
+      canon <- tryCatch(shiny::isolate(velocity_state$result), error = function(e) NULL)
+      if (is.null(canon)) {
+        return("no validated velocity result yet (run velocity_validate or import_velocity first)")
+      }
+      if (!is.null(scvelo_task) &&
+          identical(tryCatch(scvelo_task$status(), error = function(e) ""), "running")) {
+        return("scVelo inference is already running")
+      }
+      obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+      sel_red <- tryCatch(shiny::isolate(input$velocity_reduction), error = function(e) NULL) %||% "umap"
+      if (!.velocity_has_reduction(obj, sel_red)) {
+        return(sprintf("reduction '%s' is not available on the Seurat object", sel_red))
+      }
+      TRUE
+    }
+    if (exists("ts_drive_bind_button", mode = "function") &&
+        exists("ts_drive_publish_token", mode = "function") &&
+        exists("TS_DRIVE_BUTTONS")) {
+      ts_drive_bind_button("sc-velocity-velocity_validate")
+      ts_drive_bind_button("sc-velocity-velocity_scvelo_run")
+      ts_drive_publish_token(global_data, "sc-velocity-velocity_validate",
+                             drive_counter_validate, ready = drive_ready_validate,
+                             state = drive_velocity_state)
+      ts_drive_publish_token(global_data, "sc-velocity-velocity_scvelo_run",
+                             drive_counter_scvelo, ready = drive_ready_scvelo,
+                             state = drive_velocity_state)
+    }
+
     # Validation button (BUG 1-8, 10)
-    observeEvent(input$velocity_validate, {
+    observeEvent(drive_trigger_validate(), {
       req(global_data$sc_obj)
 
       # P0.4 lane 1 (2026-11-13, demande opérateur) : même traitement que

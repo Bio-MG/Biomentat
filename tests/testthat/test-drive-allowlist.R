@@ -149,6 +149,7 @@ test_that("the bound buttons are exactly the ones the spec names", {
       "spatial-pipeline-btn_run_all", "spatial-qc-btn_hotspots",
       "sc-pipeline-run_auto_pipeline", "sc-annotation-run_annot",
       "sc-markers-run_markers", "sc-pathways-run_pathway",
+      "sc-velocity-velocity_validate", "sc-velocity-velocity_scvelo_run",
       "bulk-wgcna-run_wgcna_power", "bulk-wgcna-run_wgcna_modules")
   )
   # Every button must be in the allowlist with kind = "button", otherwise
@@ -204,10 +205,12 @@ test_that("Spatial drive exposure is exactly THREE owned buttons", {
                         ts_drive_allowlist_problems(mixed, character(0)))))
 })
 
-test_that("SC drive exposure is exactly four owned action buttons", {
+test_that("SC drive exposure is exactly six owned action buttons", {
   buttons <- c("sc-pipeline-run_auto_pipeline", "sc-annotation-run_annot",
-               "sc-markers-run_markers", "sc-pathways-run_pathway")
-  modules <- c("sc_pipeline", "sc_annotation", "sc_markers", "sc_pathways")
+               "sc-markers-run_markers", "sc-pathways-run_pathway",
+               "sc-velocity-velocity_validate", "sc-velocity-velocity_scvelo_run")
+  modules <- c("sc_pipeline", "sc_annotation", "sc_markers", "sc_pathways",
+               "sc_velocity", "sc_velocity")
   expect_true(all(modules %in% TS_DRIVE_MODULES))
   expect_setequal(TS_DRIVE_BUTTONS[startsWith(TS_DRIVE_BUTTONS, "sc-")], buttons)
   for (i in seq_along(buttons)) {
