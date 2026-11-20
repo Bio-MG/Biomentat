@@ -779,6 +779,25 @@ run_markers <- function(input, global_data, shared_rv, session) {
   NULL
 }
 
+# Pure helper: reactive CSS for workflow_display_mode == "specialise".
+# Keeps grp_prep visible in #acc_workflow and only hides sibling items in
+# non-prep nested accordions so 0_autopipeline & 0_mapping stay reachable.
+.sc_wf_mode_css <- function(ns, step, info) {
+  if (is.null(info)) return(NULL)
+  css <- sprintf(
+    "#%s > .accordion-item:not([data-value='%s']):not([data-value='grp_prep']) { display: none; }",
+    ns("acc_workflow"), info$group
+  )
+  if (!identical(info$acc, "acc_prep")) {
+    css <- paste0(
+      css, "\n",
+      sprintf("#%s > .accordion-item:not([data-value='%s']) { display: none; }",
+              ns(info$acc), step)
+    )
+  }
+  css
+}
+
 # Pure helper: compact pipeline progress items derived from existing SC
 # object / shared_rv completion signals (no Shiny or Seurat dependency).
 .sc_pipeline_progress_items <- function(state_list) {
@@ -830,6 +849,8 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
         ".sc-auto-log-wrap pre, #", ns("acc_workflow"), " pre, .bslib-card:has(#", ns("main_tabs"), ") pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }\n",
         ".bslib-card:has(#", ns("main_tabs"), ") > .tab-content > .tab-pane { overflow-y: auto; overflow-x: hidden; }\n",
         ".bslib-card:has(#", ns("main_tabs"), ") > .tab-content > .tab-pane .card { min-height: min-content; }\n",
+        ".bslib-card:has(#", ns("main_tabs"), ") .card-header:has(.card-header-pills) { flex-wrap: wrap; gap: 0.4rem; }\n",
+        ".bslib-card:has(#", ns("main_tabs"), ") .card-header-pills { flex-wrap: wrap; max-width: 100%; margin-left: 0; }\n",
         ".ts-sc-step-sync-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.85rem; }\n",
         "#", ns("acc_workflow"), " .accordion-body { padding: 0.5rem 0.65rem; }\n",
         "#", ns("acc_workflow"), " .accordion-button { padding: 0.45rem 0.75rem; }\n",
@@ -1389,14 +1410,12 @@ mod_sc_server <- function(id, global_data) {
       if (identical(mode, "complet")) return(NULL)
       step <- active_sc_step_rv()
       info <- .SC_STEP_TAB_MAP[[step]]
-      if (is.null(info)) return(NULL)
+      css <- .sc_wf_mode_css(ns, step, info)
+      if (is.null(css)) return(NULL)
       # ⚠️ tags$style(HTML(...)) COMME spatial/bulk : un HTML() NU dans
       # renderUI est rendu ÉCHAPPÉ (texte) — MEASURÉ boot33g (« &gt; » dans
       # le div, aucune règle appliquée) ; le wrapper tag préserve le HTML.
-      tags$style(HTML(sprintf(
-        paste0("#%1$s > .accordion-item:not([data-value='%2$s']) { display: none; }\n",
-               "#%3$s > .accordion-item:not([data-value='%4$s']) { display: none; }"),
-        ns("acc_workflow"), info$group, ns(info$acc), step)))
+      tags$style(HTML(css))
     })
     # P1-ÉTAPE 3 (MEASURÉ boot34c) : sortie de suspension (cf. mod_spatial.R).
     outputOptions(output, "wf_mode_style", suspendWhenHidden = FALSE)
