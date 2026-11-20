@@ -195,16 +195,38 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
     # W1.3 Lot 1 : en mode 2D (distances non physiques), griser Rayon/Permutations
     observe({
       is_2d <- identical(input$spc_source %||% "reduction", "reduction")
-      if (requireNamespace("shinyjs", quietly = TRUE)) {
-        if (is_2d) {
-          shinyjs::disable("spc_radius")
-          shinyjs::disable("spc_nperm")
-        } else {
-          shinyjs::enable("spc_radius")
-          shinyjs::enable("spc_nperm")
-        }
+      if (requireNamespace("shinyjs", quietly = TRUE) &&
+          !is.null(shiny::getDefaultReactiveDomain())) {
+        tryCatch({
+          if (is_2d) {
+            shinyjs::disable("spc_radius")
+            shinyjs::disable("spc_nperm")
+          } else {
+            shinyjs::enable("spc_radius")
+            shinyjs::enable("spc_nperm")
+          }
+        }, error = function(e) NULL)
       }
     })
+
+    .spc_coord_extent_label <- function(coords, source = input$spc_source %||% "reduction",
+                                        units = NULL) {
+      if (!is.data.frame(coords) || !all(c("x", "y") %in% names(coords)) || nrow(coords) == 0L) {
+        return("")
+      }
+      xr <- range(coords$x, na.rm = TRUE)
+      yr <- range(coords$y, na.rm = TRUE)
+      if (!all(is.finite(c(xr, yr)))) return("")
+      unit_str <- if (!is.null(units) && !is.na(units) && nzchar(units)) {
+        units
+      } else if (identical(source, "spatial_object")) {
+        "unités natives"
+      } else {
+        "projection 2D (non physique)"
+      }
+      sprintf("X [%.2f, %.2f], Y [%.2f, %.2f] (%s)",
+              xr[1L], xr[2L], yr[1L], yr[2L], unit_str)
+    }
 
     output$spc_spatial_info <- renderText({
       b <- global_data$spatial_obj
@@ -212,7 +234,9 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
       if (n == 0L) {
         .tr("Aucune coordonnée disponible dans le bundle spatial courant.")
       } else {
-        sprintf(.tr("Bundle spatial courant : %d spot(s)/cellule(s) (coordonnées d'import, colonnes id/x/y)."), n)
+        base_txt <- sprintf(.tr("Bundle spatial courant : %d spot(s)/cellule(s) (coordonnées d'import, colonnes id/x/y)."), n)
+        ext <- .spc_coord_extent_label(b$coords, source = "spatial_object")
+        if (nzchar(ext)) paste(base_txt, ext, sep = " — ") else base_txt
       }
     })
 
@@ -336,8 +360,11 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
       .ctx_tab_guard()
       ctx <- spc_ctx()
       req(ctx)
-      sprintf(.tr("Statut : %s — %d cellule(s) cartographiée(s) ; %d paire(s) non cartographiée(s) (listées dans les avertissements)."),
-              ctx$status, ctx$qc$n_cells_matched, ctx$qc$n_pairs_unmapped)
+      base_txt <- sprintf(.tr("Statut : %s — %d cellule(s) cartographiée(s) ; %d paire(s) non cartographiée(s) (listées dans les avertissements)."),
+                          ctx$status, ctx$qc$n_cells_matched, ctx$qc$n_pairs_unmapped)
+      coords <- tryCatch(.coordinates(), error = function(e) NULL)
+      ext <- .spc_coord_extent_label(coords, source = ctx$coordinate_source, units = ctx$coordinate_units)
+      if (nzchar(ext)) paste(base_txt, ext, sep = " — ") else base_txt
     })
 
     .spc_drop_all_na_cols <- function(df) {
