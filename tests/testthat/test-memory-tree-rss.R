@@ -99,3 +99,44 @@ test_that("ts_estimate_rds_size_mb handles NA and invalid inputs without throwin
   expect_identical(ts_estimate_rds_size_mb(1024^2, compression_ratio = NA_real_), NA_real_)
   expect_identical(ts_estimate_rds_size_mb(1024^2, compression_ratio = Inf), NA_real_)
 })
+
+test_that("ts_estimate_rds_size_mb matches realistic saveRDS compressed size on synthetic object", {
+  set.seed(42)
+  syn <- list(
+    expr = matrix(round(rnorm(4e5), 3), nrow = 800, ncol = 500),
+    meta = data.frame(cell = paste0("c", seq_len(500)), grp = rep(letters[1:5], 100))
+  )
+  raw_bytes <- as.numeric(object.size(syn))
+  raw_mb <- raw_bytes / 1024^2
+
+  tmp_gz <- tempfile(fileext = ".rds")
+  on.exit(unlink(tmp_gz), add = TRUE)
+  saveRDS(syn, tmp_gz, compress = TRUE)
+  actual_gz_mb <- file.info(tmp_gz)[["size"]] / 1024^2
+
+  est_mb <- ts_estimate_rds_size_mb(object.size(syn))
+  expect_true(is.finite(est_mb) && est_mb > 0)
+  # Must avoid the ~5x overestimate of raw object.size()
+  expect_lt(est_mb, raw_mb * 0.30)
+  # Realistic relative proximity to actual compressed .rds size
+  expect_gt(est_mb, actual_gz_mb * 0.4)
+  expect_lt(est_mb, actual_gz_mb * 1.5)
+})
+
+test_that("ts_estimate_rds_size_mb supports optional compress mode presets", {
+  raw_bytes <- 100 * 1024^2
+  expect_equal(ts_estimate_rds_size_mb(raw_bytes, compress = TRUE), 22)
+  expect_equal(ts_estimate_rds_size_mb(raw_bytes, compress = "gzip"), 22)
+  expect_equal(ts_estimate_rds_size_mb(raw_bytes, compress = "xz"), 20)
+  expect_equal(ts_estimate_rds_size_mb(raw_bytes, compress = "bzip2"), 21)
+  expect_equal(ts_estimate_rds_size_mb(raw_bytes, compress = FALSE), 100)
+  expect_equal(ts_estimate_rds_size_mb(raw_bytes, compress = "none"), 100)
+
+  # Explicit compression_ratio takes precedence over compress preset
+  expect_equal(ts_estimate_rds_size_mb(raw_bytes, compression_ratio = 0.5, compress = "xz"), 50)
+
+  # Invalid compress values return NA_real_ without throwing
+  for (bad in list(NA, "lz4", 123, c("gzip", "xz"))) {
+    expect_identical(ts_estimate_rds_size_mb(raw_bytes, compress = bad), NA_real_)
+  }
+})

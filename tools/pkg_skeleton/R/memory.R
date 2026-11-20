@@ -141,12 +141,29 @@ ts_process_tree_rss_mb <- function(pid = Sys.getpid(), include_children = TRUE) 
 #' @param object_bytes Numeric scalar, in-memory size in bytes (e.g. from
 #'   `object.size(obj)`).
 #' @param compression_ratio Non-negative finite numeric scalar (default `0.22`).
+#'   When explicitly supplied, takes precedence over `compress`.
+#' @param compress Optional compression mode (`NULL`, `TRUE`, `FALSE`,
+#'   `"gzip"`, `"xz"`, `"bzip2"`, or `"none"`). Used when `compression_ratio`
+#'   is not explicitly supplied.
 #' @return Numeric scalar (estimated `.rds` size in MB, rounded to 2 decimals),
 #'   or `NA_real_` on `NA`/invalid input. Never throws.
-ts_estimate_rds_size_mb <- function(object_bytes, compression_ratio = 0.22) {
+ts_estimate_rds_size_mb <- function(object_bytes, compression_ratio = 0.22,
+                                    compress = NULL) {
   if (!is.numeric(object_bytes) || length(object_bytes) != 1L ||
       is.na(object_bytes) || !is.finite(object_bytes) || object_bytes < 0) {
     return(NA_real_)
+  }
+  if (!is.null(compress) && missing(compression_ratio)) {
+    ratio_map <- c(gzip = 0.22, xz = 0.20, bzip2 = 0.21, none = 1.0)
+    if (is.logical(compress) && length(compress) == 1L && !is.na(compress)) {
+      key <- if (isTRUE(compress)) "gzip" else "none"
+    } else if (is.character(compress) && length(compress) == 1L &&
+               !is.na(compress) && compress %in% names(ratio_map)) {
+      key <- compress
+    } else {
+      return(NA_real_)
+    }
+    compression_ratio <- unname(ratio_map[[key]])
   }
   if (!is.numeric(compression_ratio) || length(compression_ratio) != 1L ||
       is.na(compression_ratio) || !is.finite(compression_ratio) ||
