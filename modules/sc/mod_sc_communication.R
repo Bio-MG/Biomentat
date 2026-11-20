@@ -320,6 +320,10 @@ mod_sc_communication_output_ui <- function(id) {
         nav_panel(i18n$t("Table (filtres)"), value = "ccc_tab_table_filtres",
                   DT::dataTableOutput(ns("comm_table_filtered"), height = "auto", fill = FALSE)),
         nav_panel(i18n$t("DotPlot"), value = "ccc_tab_dotplot",
+                div(class = "m-2",
+                    numericInput(ns("comm_dotplot_top_n"),
+                                 i18n$t("Top N paires (DotPlot, 0 = toutes)"),
+                                 value = 25L, min = 0L, max = 200L, step = 5L, width = "240px")),
                 plotOutput(ns("comm_dotplot"), fill = TRUE),
                 fluidRow(
                   column(6, downloadButton(ns("dl_comm_dotplot_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
@@ -334,6 +338,10 @@ mod_sc_communication_output_ui <- function(id) {
                   column(6, downloadButton(ns("dl_comm_heatmap_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
                   column(6, downloadButton(ns("dl_comm_heatmap_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
       nav_panel(i18n$t("Réseau"), value = "ccc_tab_reseau",
+                div(class = "m-2",
+                    numericInput(ns("comm_circle_top_n"),
+                                 i18n$t("Top N arêtes (Réseau, 0 = toutes)"),
+                                 value = 25L, min = 0L, max = 200L, step = 5L, width = "240px")),
                 plotOutput(ns("comm_circle"), height = "520px"),
                 fluidRow(
                   column(6, downloadButton(ns("dl_comm_circle_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
@@ -355,7 +363,9 @@ mod_sc_communication_output_ui <- function(id) {
                 # CC-1 : dot plot des rôles (voie × groupe) — affiché quand les
                 # rôles CellChat du moteur sont présents, message i18n sinon.
                 plotOutput(ns("comm_centrality_plot"), height = "420px"),
-                DT::dataTableOutput(ns("comm_centrality"), height = "auto", fill = FALSE)),
+                DT::dataTableOutput(ns("comm_centrality"), height = "auto", fill = FALSE),
+                div(class = "mt-3",
+                    plotOutput(ns("comm_centrality_quadrant_plot"), height = "420px"))),
       # CC-2 (O34/D3) : comparaison inter-conditions des runs CellChat de
       # session (mergeCellChat + rankNet + similarité). Conditionnée à ≥ 2
       # runs complets dans le registre (message i18n propre sinon) — fiche
@@ -2013,12 +2023,17 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       .round_comm_dt(dt, df)
     })
 
+    .parse_top_n <- function(val) {
+      if (!is.null(val) && is.finite(val) && val > 0) as.integer(val) else NULL
+    }
+
     output$comm_dotplot <- renderPlot({
       req(comm_state$result)
       .check_fingerprint()
       tryCatch(
         plot_communication_dotplot(comm_state$result, comm_filtered()$table,
-                                   seurat_obj = .view_object()),
+                                   seurat_obj = .view_object(),
+                                   top_n_pairs = .parse_top_n(input$comm_dotplot_top_n)),
         error = function(e) .error_plot(e)
       )
     })
@@ -2026,17 +2041,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     output$comm_heatmap <- renderPlot({
       req(comm_state$result)
       .check_fingerprint()
-      top_n <- if (!is.null(input$comm_heatmap_top_n) &&
-                   is.finite(input$comm_heatmap_top_n) &&
-                   input$comm_heatmap_top_n > 0) {
-        as.integer(input$comm_heatmap_top_n)
-      } else {
-        NULL
-      }
       tryCatch(
         plot_communication_pathway_heatmap(comm_state$result, comm_filtered()$table,
                                            seurat_obj = .view_object(),
-                                           top_n_pathways = top_n),
+                                           top_n_pathways = .parse_top_n(input$comm_heatmap_top_n)),
         error = function(e) .error_plot(e)
       )
     })
@@ -2046,7 +2054,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       .check_fingerprint()
       tryCatch(
         plot_communication_circle(comm_state$result, comm_filtered()$table,
-                                  seurat_obj = .view_object()),
+                                  seurat_obj = .view_object(),
+                                  top_n_edges = .parse_top_n(input$comm_circle_top_n)),
         error = function(e) .error_plot(e)
       )
     })
@@ -2087,21 +2096,32 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       req(comm_state$result)
       roles <- comm_state$result$cellchat_roles
       if (!is.null(roles) && is.data.frame(roles) && nrow(roles) > 0L) {
-        top_n <- if (!is.null(input$comm_centrality_top_n) &&
-                     is.finite(input$comm_centrality_top_n) &&
-                     input$comm_centrality_top_n > 0) {
-          as.integer(input$comm_centrality_top_n)
-        } else {
-          NULL
-        }
         plot_communication_roles_dot(
           roles,
           hide_minor = isTRUE(input$comm_centrality_hide_minor),
-          top_n_pathways = top_n
+          top_n_pathways = .parse_top_n(input$comm_centrality_top_n)
         )
       } else {
         .tr("Roles CellChat indisponibles (voie import ou centralite non calculee) — vue derivee seule.")
       }
+    })
+
+    output$comm_centrality_quadrant_plot <- renderPlot({
+      req(comm_state$result)
+      roles <- comm_state$result$cellchat_roles
+      validate(need(
+        !is.null(roles) && is.data.frame(roles) && nrow(roles) > 0L,
+        .tr("Roles CellChat indisponibles (voie import ou centralite non calculee) — vue derivee seule.")
+      ))
+      if (isTRUE(input$comm_centrality_hide_minor) && "role" %in% colnames(roles)) {
+        roles <- roles[as.character(roles$role) != "minor", , drop = FALSE]
+      }
+      pw <- input$comm_f_pathways
+      pw_arg <- if (!is.null(pw) && length(pw) == 1L && nzchar(pw)) pw else NULL
+      tryCatch(
+        plot_communication_centrality_quadrant(roles, pathway = pw_arg),
+        error = function(e) .error_plot(e)
+      )
     })
 
     # ── CC-2 (O34/D3) : comparaison inter-conditions — consommateur du ──────
@@ -2560,42 +2580,48 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       filename = function() communication_export_filename(comm_state$result, "communication_dotplot", "png"),
       content = function(file) .export_figure(function() {
         plot_communication_dotplot(comm_state$result, comm_filtered()$table,
-                                   seurat_obj = .view_object())
+                                   seurat_obj = .view_object(),
+                                   top_n_pairs = .parse_top_n(input$comm_dotplot_top_n))
       }, file)
     )
     output$dl_comm_dotplot_pdf <- downloadHandler(
       filename = function() communication_export_filename(comm_state$result, "communication_dotplot", "pdf"),
       content = function(file) .export_figure(function() {
         plot_communication_dotplot(comm_state$result, comm_filtered()$table,
-                                   seurat_obj = .view_object())
+                                   seurat_obj = .view_object(),
+                                   top_n_pairs = .parse_top_n(input$comm_dotplot_top_n))
       }, file)
     )
     output$dl_comm_heatmap_png <- downloadHandler(
       filename = function() communication_export_filename(comm_state$result, "communication_pathway_heatmap", "png"),
       content = function(file) .export_figure(function() {
         plot_communication_pathway_heatmap(comm_state$result, comm_filtered()$table,
-                                           seurat_obj = .view_object())
+                                           seurat_obj = .view_object(),
+                                           top_n_pathways = .parse_top_n(input$comm_heatmap_top_n))
       }, file)
     )
     output$dl_comm_heatmap_pdf <- downloadHandler(
       filename = function() communication_export_filename(comm_state$result, "communication_pathway_heatmap", "pdf"),
       content = function(file) .export_figure(function() {
         plot_communication_pathway_heatmap(comm_state$result, comm_filtered()$table,
-                                           seurat_obj = .view_object())
+                                           seurat_obj = .view_object(),
+                                           top_n_pathways = .parse_top_n(input$comm_heatmap_top_n))
       }, file)
     )
     output$dl_comm_circle_png <- downloadHandler(
       filename = function() communication_export_filename(comm_state$result, "communication_circle_network", "png"),
       content = function(file) .export_figure(function() {
         plot_communication_circle(comm_state$result, comm_filtered()$table,
-                                  seurat_obj = .view_object())
+                                  seurat_obj = .view_object(),
+                                  top_n_edges = .parse_top_n(input$comm_circle_top_n))
       }, file)
     )
     output$dl_comm_circle_pdf <- downloadHandler(
       filename = function() communication_export_filename(comm_state$result, "communication_circle_network", "pdf"),
       content = function(file) .export_figure(function() {
         plot_communication_circle(comm_state$result, comm_filtered()$table,
-                                  seurat_obj = .view_object())
+                                  seurat_obj = .view_object(),
+                                  top_n_edges = .parse_top_n(input$comm_circle_top_n))
       }, file)
     )
 

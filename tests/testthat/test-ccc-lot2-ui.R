@@ -69,6 +69,16 @@ test_that("mod_sc_communication wires Lot 2 controls and inactive filter disable
   expect_match(src, 'comm_centrality_hide_minor', fixed = TRUE)
   expect_match(src, 'comm_centrality_top_n', fixed = TRUE)
   expect_match(src, 'comm_heatmap_top_n', fixed = TRUE)
+  expect_match(src, 'comm_dotplot_top_n', fixed = TRUE)
+  expect_match(src, 'top_n_pairs', fixed = TRUE)
+  expect_match(src, 'comm_circle_top_n', fixed = TRUE)
+  expect_match(src, 'top_n_edges', fixed = TRUE)
+  expect_match(src, 'comm_centrality_quadrant_plot', fixed = TRUE)
+  expect_match(src, 'plot_communication_centrality_quadrant', fixed = TRUE)
+  expect_lt(
+    regexpr('DT::dataTableOutput(ns("comm_centrality")', src, fixed = TRUE)[1],
+    regexpr('plotOutput(ns("comm_centrality_quadrant_plot")', src, fixed = TRUE)[1]
+  )
   expect_match(src, '.toggle_filter', fixed = TRUE)
   expect_match(src, 'shinyjs::disable', fixed = TRUE)
 })

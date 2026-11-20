@@ -14248,6 +14248,14 @@
     {
       "fr": "version source",
       "en": "source version"
+    },
+    {
+      "fr": "Top N paires (DotPlot, 0 = toutes)",
+      "en": "Top N pairs (DotPlot, 0 = all)"
+    },
+    {
+      "fr": "Top N arêtes (Réseau, 0 = toutes)",
+      "en": "Top N edges (Network, 0 = all)"
     }
   ]
 }
