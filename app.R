@@ -1700,8 +1700,18 @@ server <- function(input, output, session) {
       shared$communication_collection, shared$communication_ccc_registry,
       shared$communication_ccc_comparison, shared$communication_ctx_view,
       shared$report_viz_list, shared$provenance) else list()
-    total_mb <- sum(vapply(c(parts, extra), function(x)
-      if (is.null(x)) 0 else as.numeric(object.size(x)) / 1024^2, numeric(1)))
+    total_bytes <- sum(vapply(c(parts, extra), function(x)
+      if (is.null(x)) 0 else as.numeric(object.size(x)), numeric(1)))
+    est_mb <- if (exists("ts_estimate_rds_size_mb", mode = "function")) {
+      ts_estimate_rds_size_mb(total_bytes)
+    } else {
+      NA_real_
+    }
+    total_mb <- if (is.numeric(est_mb) && length(est_mb) == 1L && is.finite(est_mb)) {
+      est_mb
+    } else {
+      total_bytes / 1024^2
+    }
     has_results <- !is.null(shared) &&
       (!is.null(shared$velocity_result) || !is.null(shared$communication_result))
     n_runs <- length(shared$communication_ccc_registry %||% list())
