@@ -567,6 +567,22 @@ mod_import_sc_server <- function(id, global_data) {
     sample_list <- reactiveVal(list())
     # Roadmap 3.4 : annulation coopérative des boucles d'import (A et B).
     import_cancel <- reactiveVal(FALSE)
+    .sc_log_merge_gene_report <- function(objs, merged_obj, log_per_sample = FALSE) {
+      if (length(objs) <= 1L) return(invisible(NULL))
+      if (isTRUE(log_per_sample)) {
+        per_feat <- vapply(objs, function(o) as.integer(nrow(o)), integer(1))
+        add_log(paste("  🧬", .tr("Gènes par échantillon :"),
+                      paste(paste0(names(per_feat), "=", per_feat), collapse = ", ")))
+      }
+      add_log(paste("  🧬", .tr("Union au merge :"), nrow(merged_obj), .tr("gènes"),
+                    "—", .tr("gènes absents = zéro-remplis (aucune suppression)")))
+      n_common <- length(Reduce(intersect, lapply(objs, rownames)))
+      add_log(sprintf("  🧬 %s", sprintf(
+        .tr("Intersection : %d gènes communs à TOUS les échantillons — %d gènes zéro-remplis dans au moins un échantillon."),
+        n_common, nrow(merged_obj) - n_common)))
+      invisible(list(union = as.integer(nrow(merged_obj)), common = as.integer(n_common)))
+    }
+
     observeEvent(input$btn_cancel_import_a, import_cancel(TRUE))
     observeEvent(input$btn_cancel_import_b, import_cancel(TRUE))
     volumes     <- c(Home = fs::path_home(), getVolumes()())
@@ -686,21 +702,7 @@ mod_import_sc_server <- function(id, global_data) {
         # échantillon, puis on joint les couches v5 (sinon l'assay reste
         # éclaté en counts.<sample> et certaines analyses aval dégradent).
         if (length(obj_list) > 1) {
-          # fix 2026-11-03 (bug #4) : nrow(<Seurat v5>) renvoie un DOUBLE
-          # (méthode dim C++) — vapply(..., integer(1)) refusait le type et
-          # tuait l'import APRÈS une fusion réussie (29k cellules perdues).
-          per_feat <- vapply(obj_list, function(o) as.integer(nrow(o)), integer(1))
-          add_log(paste("  🧬", .tr("Gènes par échantillon :"),
-                        paste(paste0(names(per_feat), "=", per_feat), collapse = ", ")))
-          add_log(paste("  🧬", .tr("Union au merge :"), nrow(merged), .tr("gènes"),
-                        "—", .tr("gènes absents = zéro-remplis (aucune suppression)")))
-          # Roadmap SC FUNCTION_TEST M1.1 : les 6 runs divergent de 5-15 % en
-          # gènes — le delta union/intersection doit être CHIFFRÉ, pas
-          # invisible (pertes silencieuses = résultats faux sans le dire).
-          n_common <- length(Reduce(intersect, lapply(obj_list, rownames)))
-          add_log(sprintf("  🧬 %s", sprintf(
-            .tr("Intersection : %d gènes communs à TOUS les échantillons — %d gènes zéro-remplis dans au moins un échantillon."),
-            n_common, nrow(merged) - n_common)))
+          .sc_log_merge_gene_report(obj_list, merged, log_per_sample = TRUE)
           merged <- tryCatch({
             a <- SeuratObject::JoinLayers(merged[["RNA"]])
             merged[["RNA"]] <- a
@@ -870,13 +872,7 @@ mod_import_sc_server <- function(id, global_data) {
         merged <- if (length(obj_list)==1) obj_list[[1]] else
           merge(obj_list[[1]], y=obj_list[-1], add.cell.ids=names(obj_list), project="MultiFile")
         if (length(obj_list) > 1) {
-          add_log(paste("  🧬", .tr("Union au merge :"), nrow(merged), .tr("gènes"),
-                        "—", .tr("gènes absents = zéro-remplis (aucune suppression)")))
-          # M1.1 : delta union/intersection chiffré (cf. Option A).
-          n_common <- length(Reduce(intersect, lapply(obj_list, rownames)))
-          add_log(sprintf("  🧬 %s", sprintf(
-            .tr("Intersection : %d gènes communs à TOUS les échantillons — %d gènes zéro-remplis dans au moins un échantillon."),
-            n_common, nrow(merged) - n_common)))
+          .sc_log_merge_gene_report(obj_list, merged)
           merged <- tryCatch({
             a <- SeuratObject::JoinLayers(merged[["RNA"]])
             merged[["RNA"]] <- a
@@ -959,6 +955,8 @@ mod_import_sc_server <- function(id, global_data) {
           })
           if (length(objs) == 1L) objs[[1L]] else {
             m <- merge(objs[[1L]], y = objs[-1L], add.cell.ids = basename(sdirs), project = id)
+            names(objs) <- basename(sdirs)
+            .sc_log_merge_gene_report(objs, m, log_per_sample = TRUE)
             tryCatch({ m[["RNA"]] <- SeuratObject::JoinLayers(m[["RNA"]]); m }, error = function(e) m)
           }
         } else {
