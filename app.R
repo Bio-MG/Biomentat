@@ -287,6 +287,7 @@ source("tools/pkg_skeleton/R/report_bundle.R")
 
 # ── Bloc 09 : modules/import (Shiny : UI + reactive glue) ────────────────────
 source("modules/import/mod_rdata_picker.R")  # composant mutualise .rda/.RData
+source("modules/import/mod_dataset_dirs_options.R")  # dossiers datasets enregistres (Bulk/SC/Spatial)
 source("modules/import/mod_import_sc.R")
 source("modules/import/mod_import_bulk.R")
 source("modules/import/mod_import_spatial.R")

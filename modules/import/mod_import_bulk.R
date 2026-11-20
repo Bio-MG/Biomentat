@@ -444,6 +444,7 @@ mod_import_bulk_ui <- function(id) {
                              class = "btn-outline-primary btn-sm"),
                 uiOutput(ns("datasets_dir_txt"))
             ),
+            if (exists("dataset_dirs_options_ui", mode = "function")) dataset_dirs_options_ui(ns, i18n),
             uiOutput(ns("datasets_table_ui")),
             # N5 dataset-doctor (2026-11-03) : rapport de santé unifié —
             # bloc additif warn-only (AC2.4 : jamais bloquant), alimenté par
@@ -1140,8 +1141,16 @@ mod_import_bulk_server <- function(id, global_data) {
       invisible(res)
     }
 
+    if (exists("dataset_dirs_options_server", mode = "function")) {
+      dataset_dirs_options_server(input, output, session, modality = "bulk")
+    }
+
     observeEvent(input$btn_scan_datasets, {
-      bulk_dir <- ts_datasets_dir(modality = "bulk")
+      bulk_dir <- if (exists("ts_datasets_dirs", mode = "function")) {
+        ts_datasets_dirs(modality = "bulk")
+      } else {
+        ts_datasets_dir(modality = "bulk")
+      }
       res <- tryCatch(ts_dataset_dir_scan(datasets_dir = bulk_dir), error = function(e) e)
       if (inherits(res, "condition")) {
         showNotification(sprintf(.tr("Erreur scan du répertoire : %s"),
@@ -1149,7 +1158,7 @@ mod_import_bulk_server <- function(id, global_data) {
                          type = "error", duration = 10)
         return()
       }
-      ds_dir_rv(bulk_dir)
+      ds_dir_rv(paste(bulk_dir, collapse = " ; "))
       ds_scan_rv(res)
       # Observateurs « Charger » par dataset (motif lapply + observeEvent
       # dynamique, mod_sc_communication.R:756-760) : les ids ne sont connus

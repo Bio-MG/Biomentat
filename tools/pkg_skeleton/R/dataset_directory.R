@@ -98,6 +98,143 @@ ts_datasets_dir <- function(dir = NULL, modality = c("sc", "bulk", "spatial")) {
                 winslash = "/", mustWork = FALSE)
 }
 
+# ── Dossiers personnalisés enregistrés (options persistantes par modalité) ──
+
+#' Resolve the JSON config path storing user-saved dataset discovery folders.
+#'
+#' @param config_path Optional explicit config file path.
+#' @return Character scalar path (not created on read).
+ts_dataset_dirs_config_path <- function(config_path = NULL) {
+  explicit <- .sc_scalar_text(config_path)
+  if (!is.null(explicit) && nzchar(trimws(explicit))) {
+    return(normalizePath(trimws(explicit), winslash = "/", mustWork = FALSE))
+  }
+  env_cfg <- trimws(Sys.getenv("BIOMENTAT_DATASET_DIRS_CONFIG", ""))
+  if (nzchar(env_cfg)) {
+    return(normalizePath(env_cfg, winslash = "/", mustWork = FALSE))
+  }
+  normalizePath(
+    file.path(tools::R_user_dir("biomentat", "config"), "dataset_dirs.json"),
+    winslash = "/", mustWork = FALSE
+  )
+}
+
+.ts_read_dataset_dirs_cfg <- function(config_path = NULL) {
+  p <- ts_dataset_dirs_config_path(config_path)
+  if (!file.exists(p)) return(list())
+  raw <- tryCatch(jsonlite::fromJSON(p, simplifyVector = TRUE), error = function(e) list())
+  if (!is.list(raw)) list() else raw
+}
+
+.ts_write_dataset_dirs_cfg <- function(cfg, config_path = NULL) {
+  p <- ts_dataset_dirs_config_path(config_path)
+  dir.create(dirname(p), recursive = TRUE, showWarnings = FALSE)
+  jsonlite::write_json(cfg, p, auto_unbox = TRUE, pretty = TRUE)
+  invisible(p)
+}
+
+#' List user-saved dataset discovery folders for a modality.
+#'
+#' @param modality Target modality (`"sc"`, `"bulk"`, `"spatial"`).
+#' @param config_path Optional explicit config file path.
+#' @return Character vector of normalized folder paths.
+ts_saved_dataset_dirs <- function(modality = c("sc", "bulk", "spatial"),
+                                  config_path = NULL) {
+  modality <- match.arg(modality)
+  cfg <- .ts_read_dataset_dirs_cfg(config_path)
+  vals <- cfg[[modality]]
+  if (is.null(vals) || length(vals) == 0L) return(character(0))
+  vals <- trimws(as.character(unlist(vals, use.names = FALSE)))
+  vals <- vals[nzchar(vals)]
+  if (length(vals) == 0L) return(character(0))
+  unique(normalizePath(vals, winslash = "/", mustWork = FALSE))
+}
+
+#' Save a dataset discovery folder into persistent options for a modality.
+#'
+#' @param path Folder path to save.
+#' @param modality Target modality (`"sc"`, `"bulk"`, `"spatial"`).
+#' @param config_path Optional explicit config file path.
+#' @return Updated character vector of saved folder paths for `modality`.
+ts_save_dataset_dir <- function(path,
+                                modality = c("sc", "bulk", "spatial"),
+                                config_path = NULL) {
+  modality <- match.arg(modality)
+  p <- .sc_scalar_text(path)
+  if (is.null(p) || !nzchar(trimws(p))) {
+    stop(errorCondition("ts_save_dataset_dir() : chemin de dossier requis.",
+                        class = "dataset_dir_error"))
+  }
+  p_norm <- normalizePath(trimws(p), winslash = "/", mustWork = FALSE)
+  cfg <- .ts_read_dataset_dirs_cfg(config_path)
+  cur <- ts_saved_dataset_dirs(modality = modality, config_path = config_path)
+  cfg[[modality]] <- as.list(unique(c(cur, p_norm)))
+  .ts_write_dataset_dirs_cfg(cfg, config_path = config_path)
+  ts_saved_dataset_dirs(modality = modality, config_path = config_path)
+}
+
+#' Remove a saved dataset discovery folder for a modality.
+#'
+#' @param path Folder path to remove.
+#' @param modality Target modality (`"sc"`, `"bulk"`, `"spatial"`).
+#' @param config_path Optional explicit config file path.
+#' @return Updated character vector of saved folder paths for `modality`.
+ts_remove_dataset_dir <- function(path,
+                                  modality = c("sc", "bulk", "spatial"),
+                                  config_path = NULL) {
+  modality <- match.arg(modality)
+  p <- .sc_scalar_text(path)
+  if (is.null(p) || !nzchar(trimws(p))) {
+    return(ts_saved_dataset_dirs(modality = modality, config_path = config_path))
+  }
+  p_norm <- normalizePath(trimws(p), winslash = "/", mustWork = FALSE)
+  cfg <- .ts_read_dataset_dirs_cfg(config_path)
+  cur <- ts_saved_dataset_dirs(modality = modality, config_path = config_path)
+  kept <- cur[cur != p_norm]
+  cfg[[modality]] <- as.list(kept)
+  .ts_write_dataset_dirs_cfg(cfg, config_path = config_path)
+  kept
+}
+
+#' Resolve all dataset discovery roots (default + saved folders) for a modality.
+#'
+#' @param dir Optional explicit root(s) overriding default + saved.
+#' @param modality Target modality (`"sc"`, `"bulk"`, `"spatial"`).
+#' @param config_path Optional explicit config file path.
+#' @return Character vector of normalized root paths.
+ts_datasets_dirs <- function(dir = NULL,
+                             modality = c("sc", "bulk", "spatial"),
+                             config_path = NULL) {
+  modality <- match.arg(modality)
+  if (!is.null(dir) && length(dir) > 0L) {
+    vals <- trimws(as.character(dir))
+    vals <- vals[!is.na(vals) & nzchar(vals)]
+    if (length(vals) > 0L) {
+      return(unique(normalizePath(vals, winslash = "/", mustWork = FALSE)))
+    }
+  }
+  unique(c(
+    ts_datasets_dir(modality = modality),
+    ts_saved_dataset_dirs(modality = modality, config_path = config_path)
+  ))
+}
+
+.ts_scan_multi_roots <- function(roots, scan_one_fn) {
+  if (is.null(roots) || length(roots) == 0L) return(list())
+  roots <- unique(trimws(as.character(roots)))
+  roots <- roots[!is.na(roots) & nzchar(roots)]
+  out <- list()
+  for (r in roots) {
+    part <- scan_one_fn(r)
+    if (length(part) == 0L) next
+    for (nm in names(part)) {
+      key <- if (nm %in% names(out)) sprintf("%s [%s]", nm, basename(r)) else nm
+      out[[key]] <- part[[nm]]
+    }
+  }
+  out
+}
+
 # ── Scanner passif (fiche §3.2 — UNE profondeur, délégation v1) ──────────────
 
 #' Frozen status vocabulary of the scan table (AC1).
@@ -253,26 +390,25 @@ ts_dataset_dir_scan_states <- function() {
 #' @param validate Delegate each subdirectory to the v1 engine (default TRUE).
 #' @return Named list of per-dataset entries (see details); empty list for an
 #'   empty or missing root.
-ts_dataset_dir_scan <- function(datasets_dir = ts_datasets_dir(), validate = TRUE) {
-  # racine absente / non répertoire : table vide, jamais d'erreur (AC2, §5)
-  root <- .sc_scalar_text(datasets_dir)
-  if (is.null(root) || !dir.exists(root)) {
-    return(list())
-  }
-  # ordre canonique indépendant de la locale (motif tools/sources_manifest.R :
-  # LC_COLLATE="C" autour du list.*, l'ordre épinglé est documental)
-  old_coll <- Sys.setlocale("LC_COLLATE", "C")
-  on.exit(Sys.setlocale("LC_COLLATE", old_coll), add = TRUE)
-  subdirs <- sort(list.dirs(root, full.names = TRUE, recursive = FALSE))
+ts_dataset_dir_scan <- function(datasets_dir = ts_datasets_dirs(), validate = TRUE) {
+  .ts_scan_multi_roots(datasets_dir, function(one_root) {
+    root <- .sc_scalar_text(one_root)
+    if (is.null(root) || !dir.exists(root)) {
+      return(list())
+    }
+    old_coll <- Sys.setlocale("LC_COLLATE", "C")
+    on.exit(Sys.setlocale("LC_COLLATE", old_coll), add = TRUE)
+    subdirs <- sort(list.dirs(root, full.names = TRUE, recursive = FALSE))
 
-  out <- list()
-  for (d in subdirs) {
-    entry <- .ts_datasets_scan_one(d, validate = validate)
-    key <- .sc_scalar_text(entry$manifest$dataset_id)
-    if (is.null(key)) key <- basename(d)   # repli : basename du sous-répertoire
-    out[[key]] <- entry
-  }
-  out
+    out <- list()
+    for (d in subdirs) {
+      entry <- .ts_datasets_scan_one(d, validate = validate)
+      key <- .sc_scalar_text(entry$manifest$dataset_id)
+      if (is.null(key)) key <- basename(d)
+      out[[key]] <- entry
+    }
+    out
+  })
 }
 
 # ── Scanner passif Single-Cell (10X / .rds / .h5 / .h5ad / .loom) ───────────
@@ -414,39 +550,41 @@ ts_dataset_dir_scan <- function(datasets_dir = ts_datasets_dir(), validate = TRU
 #'
 #' @param datasets_dir Root to scan (default: `ts_datasets_dir(modality = "sc")`).
 #' @return Named list of discovered SC dataset entries.
-ts_sc_dataset_dir_scan <- function(datasets_dir = ts_datasets_dir(modality = "sc")) {
-  root <- .sc_scalar_text(datasets_dir)
-  if (is.null(root) || !dir.exists(root)) {
-    return(list())
-  }
-  old_coll <- Sys.setlocale("LC_COLLATE", "C")
-  on.exit(Sys.setlocale("LC_COLLATE", old_coll), add = TRUE)
+ts_sc_dataset_dir_scan <- function(datasets_dir = ts_datasets_dirs(modality = "sc")) {
+  .ts_scan_multi_roots(datasets_dir, function(one_root) {
+    root <- .sc_scalar_text(one_root)
+    if (is.null(root) || !dir.exists(root)) {
+      return(list())
+    }
+    old_coll <- Sys.setlocale("LC_COLLATE", "C")
+    on.exit(Sys.setlocale("LC_COLLATE", old_coll), add = TRUE)
 
-  subdirs <- sort(list.dirs(root, full.names = TRUE, recursive = FALSE))
-  top_files <- sort(list.files(root, full.names = TRUE, recursive = FALSE))
-  top_files <- top_files[!dir.exists(top_files) &
-                           grepl("\\.(rds|h5|h5ad|loom)$", basename(top_files),
-                                 ignore.case = TRUE)]
+    subdirs <- sort(list.dirs(root, full.names = TRUE, recursive = FALSE))
+    top_files <- sort(list.files(root, full.names = TRUE, recursive = FALSE))
+    top_files <- top_files[!dir.exists(top_files) &
+                             grepl("\\.(rds|h5|h5ad|loom)$", basename(top_files),
+                                   ignore.case = TRUE)]
 
-  out <- list()
-  for (d in subdirs) {
-    out[[basename(d)]] <- .ts_sc_scan_one_dir(d)
-  }
-  for (f in top_files) {
-    f_norm <- .ts_datasets_path(f)
-    sz <- file.size(f)
-    ext <- tolower(tools::file_ext(f))
-    ok <- !is.na(sz) && sz > 0
-    out[[basename(f)]] <- list(
-      status = if (ok) "valid" else "invalid",
-      raison = if (ok) NA_character_ else "empty_file",
-      format = ext,
-      n_samples = if (ok) 1L else 0L,
-      paths = list(dir = NA_character_, file = f_norm, sample_dirs = character(0)),
-      mtime = file.mtime(f_norm)
-    )
-  }
-  out
+    out <- list()
+    for (d in subdirs) {
+      out[[basename(d)]] <- .ts_sc_scan_one_dir(d)
+    }
+    for (f in top_files) {
+      f_norm <- .ts_datasets_path(f)
+      sz <- file.size(f)
+      ext <- tolower(tools::file_ext(f))
+      ok <- !is.na(sz) && sz > 0
+      out[[basename(f)]] <- list(
+        status = if (ok) "valid" else "invalid",
+        raison = if (ok) NA_character_ else "empty_file",
+        format = ext,
+        n_samples = if (ok) 1L else 0L,
+        paths = list(dir = NA_character_, file = f_norm, sample_dirs = character(0)),
+        mtime = file.mtime(f_norm)
+      )
+    }
+    out
+  })
 }
 
 # ── Scanner Spatial (data_spatial/datasets) ───────────────────────────────────
@@ -493,35 +631,37 @@ ts_sc_dataset_dir_scan <- function(datasets_dir = ts_datasets_dir(modality = "sc
 #'
 #' @param datasets_dir Root to scan (default: `ts_datasets_dir(modality = "spatial")`).
 #' @return Named list of discovered Spatial dataset entries.
-ts_spatial_dataset_dir_scan <- function(datasets_dir = ts_datasets_dir(modality = "spatial")) {
-  root <- .sc_scalar_text(datasets_dir)
-  if (is.null(root) || !dir.exists(root)) {
-    return(list())
-  }
-  old_coll <- Sys.setlocale("LC_COLLATE", "C")
-  on.exit(Sys.setlocale("LC_COLLATE", old_coll), add = TRUE)
+ts_spatial_dataset_dir_scan <- function(datasets_dir = ts_datasets_dirs(modality = "spatial")) {
+  .ts_scan_multi_roots(datasets_dir, function(one_root) {
+    root <- .sc_scalar_text(one_root)
+    if (is.null(root) || !dir.exists(root)) {
+      return(list())
+    }
+    old_coll <- Sys.setlocale("LC_COLLATE", "C")
+    on.exit(Sys.setlocale("LC_COLLATE", old_coll), add = TRUE)
 
-  subdirs <- sort(list.dirs(root, full.names = TRUE, recursive = FALSE))
-  top_files <- sort(list.files(root, full.names = TRUE, recursive = FALSE))
-  top_files <- top_files[!dir.exists(top_files) &
-                           grepl("\\.(rds|h5ad|h5)$", basename(top_files), ignore.case = TRUE)]
+    subdirs <- sort(list.dirs(root, full.names = TRUE, recursive = FALSE))
+    top_files <- sort(list.files(root, full.names = TRUE, recursive = FALSE))
+    top_files <- top_files[!dir.exists(top_files) &
+                             grepl("\\.(rds|h5ad|h5)$", basename(top_files), ignore.case = TRUE)]
 
-  out <- list()
-  for (d in subdirs) {
-    out[[basename(d)]] <- .ts_spatial_scan_one_dir(d)
-  }
-  for (f in top_files) {
-    f_norm <- .ts_datasets_path(f)
-    sz <- file.size(f)
-    ext <- tolower(tools::file_ext(f))
-    ok <- !is.na(sz) && sz > 0
-    out[[basename(f)]] <- list(
-      status = if (ok) "valid" else "invalid",
-      raison = if (ok) NA_character_ else "empty_file",
-      format = ext,
-      paths = list(dir = NA_character_, file = f_norm),
-      mtime = file.mtime(f_norm)
-    )
-  }
-  out
+    out <- list()
+    for (d in subdirs) {
+      out[[basename(d)]] <- .ts_spatial_scan_one_dir(d)
+    }
+    for (f in top_files) {
+      f_norm <- .ts_datasets_path(f)
+      sz <- file.size(f)
+      ext <- tolower(tools::file_ext(f))
+      ok <- !is.na(sz) && sz > 0
+      out[[basename(f)]] <- list(
+        status = if (ok) "valid" else "invalid",
+        raison = if (ok) NA_character_ else "empty_file",
+        format = ext,
+        paths = list(dir = NA_character_, file = f_norm),
+        mtime = file.mtime(f_norm)
+      )
+    }
+    out
+  })
 }

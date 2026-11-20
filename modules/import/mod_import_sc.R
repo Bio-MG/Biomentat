@@ -367,6 +367,7 @@ mod_import_sc_ui <- function(id) {
                 actionButton(ns("btn_scan_datasets"), i18n$t("Scanner le répertoire"),
                              class = "btn-outline-secondary btn-sm"),
                 uiOutput(ns("datasets_dir_txt"))),
+            if (exists("dataset_dirs_options_ui", mode = "function")) dataset_dirs_options_ui(ns, i18n),
             uiOutput(ns("datasets_table_ui"))
           )
         )
@@ -986,20 +987,31 @@ mod_import_sc_server <- function(id, global_data) {
       })
     }
 
+    if (exists("dataset_dirs_options_server", mode = "function")) {
+      dataset_dirs_options_server(input, output, session, modality = "sc")
+    }
+
     observeEvent(input$btn_scan_datasets, {
-      sc_dir <- tryCatch(ts_datasets_dir(modality = "sc"), error = function(e) e)
-      if (inherits(sc_dir, "condition")) {
-        err_msg <- .sc_utf8(sprintf(.tr("Erreur scan du répertoire : %s"), .sc_utf8(conditionMessage(sc_dir))))
+      sc_dirs <- tryCatch(
+        if (exists("ts_datasets_dirs", mode = "function")) {
+          ts_datasets_dirs(modality = "sc")
+        } else {
+          ts_datasets_dir(modality = "sc")
+        },
+        error = function(e) e
+      )
+      if (inherits(sc_dirs, "condition")) {
+        err_msg <- .sc_utf8(sprintf(.tr("Erreur scan du répertoire : %s"), .sc_utf8(conditionMessage(sc_dirs))))
         add_log(err_msg); .notify_sc(err_msg, type = "error", duration = 10)
         return()
       }
-      res <- tryCatch(ts_sc_dataset_dir_scan(datasets_dir = sc_dir), error = function(e) e)
+      res <- tryCatch(ts_sc_dataset_dir_scan(datasets_dir = sc_dirs), error = function(e) e)
       if (inherits(res, "condition")) {
         err_msg <- .sc_utf8(sprintf(.tr("Erreur scan du répertoire : %s"), .sc_utf8(conditionMessage(res))))
         add_log(err_msg); .notify_sc(err_msg, type = "error", duration = 10)
         return()
       }
-      ds_dir_rv(sc_dir)
+      ds_dir_rv(paste(sc_dirs, collapse = " ; "))
       ds_scan_rv(res)
       ids <- names(res) %||% character(0)
       btn_ids <- if (length(ids)) paste0("btn_load_ds_", seq_along(ids)) else character(0)

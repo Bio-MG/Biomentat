@@ -290,6 +290,7 @@ mod_import_spatial_ui <- function(id) {
             actionButton(ns("btn_scan_datasets"), i18n$t("Scanner le répertoire"),
                          class = "btn-outline-secondary btn-sm"),
             uiOutput(ns("datasets_dir_txt"))),
+        if (exists("dataset_dirs_options_ui", mode = "function")) dataset_dirs_options_ui(ns, i18n),
         uiOutput(ns("datasets_table_ui"))
       ),
 
@@ -1079,18 +1080,29 @@ mod_import_spatial_server <- function(id, global_data) {
     ds_btn_map_rv <- reactiveVal(list())
     ds_seen_btns <- reactiveVal(character(0))
 
+    if (exists("dataset_dirs_options_server", mode = "function")) {
+      dataset_dirs_options_server(input, output, session, modality = "spatial")
+    }
+
     observeEvent(input$btn_scan_datasets, {
-      sp_dir <- tryCatch(ts_datasets_dir(modality = "spatial"), error = function(e) e)
-      if (inherits(sp_dir, "condition")) {
-        showNotification(conditionMessage(sp_dir), type = "error", duration = 8)
+      sp_dirs <- tryCatch(
+        if (exists("ts_datasets_dirs", mode = "function")) {
+          ts_datasets_dirs(modality = "spatial")
+        } else {
+          ts_datasets_dir(modality = "spatial")
+        },
+        error = function(e) e
+      )
+      if (inherits(sp_dirs, "condition")) {
+        showNotification(conditionMessage(sp_dirs), type = "error", duration = 8)
         return()
       }
-      res <- tryCatch(ts_spatial_dataset_dir_scan(datasets_dir = sp_dir), error = function(e) e)
+      res <- tryCatch(ts_spatial_dataset_dir_scan(datasets_dir = sp_dirs), error = function(e) e)
       if (inherits(res, "condition")) {
         showNotification(conditionMessage(res), type = "error", duration = 8)
         return()
       }
-      ds_dir_rv(sp_dir)
+      ds_dir_rv(paste(sp_dirs, collapse = " ; "))
       ds_scan_rv(res)
       ids <- names(res) %||% character(0)
       btn_ids <- if (length(ids)) paste0("btn_load_sp_ds_", seq_along(ids)) else character(0)

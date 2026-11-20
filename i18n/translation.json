@@ -14060,6 +14060,30 @@
     {
       "fr": " → Omics générique (%s): %d/%d entités conservées",
       "en": " → Generic omics (%s): %d/%d features kept"
+    },
+    {
+      "fr": "Chemin d'un dossier de datasets...",
+      "en": "Dataset folder path..."
+    },
+    {
+      "fr": "Enregistrer ce dossier",
+      "en": "Save this folder"
+    },
+    {
+      "fr": "Veuillez saisir un chemin de dossier.",
+      "en": "Please enter a folder path."
+    },
+    {
+      "fr": "Dossier enregistré dans les options.",
+      "en": "Folder saved to options."
+    },
+    {
+      "fr": "Dossier retiré des options.",
+      "en": "Folder removed from options."
+    },
+    {
+      "fr": "Aucun dossier personnalisé enregistré.",
+      "en": "No custom folders saved."
     }
   ]
 }
