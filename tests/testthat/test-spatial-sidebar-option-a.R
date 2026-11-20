@@ -47,8 +47,15 @@ source_project_file("modules/spatial/mod_spatial_qc.R")
 
 if (!exists(".tr", envir = globalenv()))
   assign(".tr", function(key) key, envir = globalenv())
-if (!exists(".t_fmt", envir = globalenv()))
-  assign(".t_fmt", function(template, ...) template, envir = globalenv())
+if (!exists(".t_fmt", envir = globalenv())) {
+  assign(".t_fmt", function(template, ...) {
+    vals <- list(...)
+    for (nm in names(vals)) {
+      template <- gsub(paste0("{", nm, "}"), format(vals[[nm]]), template, fixed = TRUE)
+    }
+    template
+  }, envir = globalenv())
+}
 if (!exists(".tr_plain", envir = globalenv()))
   assign(".tr_plain", function(key) key, envir = globalenv())
 
