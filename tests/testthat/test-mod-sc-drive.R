@@ -117,9 +117,11 @@ test_that("the drive input set is frozen, closed, and carries no modal-only key"
     # M4 (2026-10-26) : QC doublets & ambiant — opt-in (le drive n'ajoute
     # aucun calcul non éprouvé : sc_ap_doublets reste FALSE).
     "sc_ap_doublets", "sc_ap_run_ambient",
-    "sc_ap_doublet_score_cutoff", "sc_ap_max_contamination"
+    "sc_ap_doublet_score_cutoff", "sc_ap_max_contamination",
+    # W1.1 #11 (2026-11-20, a293adc) : rareté des populations — opt-in OFF au drive.
+    "sc_ap_population_rarity", "sc_ap_rarity_rule", "sc_ap_rarity_threshold"
   ))
-  expect_length(inputs, 30L)
+  expect_length(inputs, 33L)
   # Declared values. `sketch_preset = "max"` means FULL dataset: the drive never
   # depends on a hidden sub-sampling decision, and `bpcells = FALSE` keeps the
   # action free of any disk write.
@@ -143,6 +145,7 @@ test_that("the drive input set is frozen, closed, and carries no modal-only key"
   expect_identical(inputs$sc_ap_run_ambient, FALSE)
   expect_equal(inputs$sc_ap_doublet_score_cutoff, TS_SC_QC_DOUBLET_SCORE_CUTOFF)
   expect_equal(inputs$sc_ap_max_contamination, TS_SC_QC_MAX_CONTAMINATION)
+  expect_identical(inputs$sc_ap_population_rarity, FALSE)
   # QW-2 (2026-09-30) : les défauts drive lisent la source unique config/ —
   # les anciens 10/50 (plus permissifs que l'UI) créaient un fork de
   # reproductibilité. Le pin suit désormais la constante, pas un littéral.

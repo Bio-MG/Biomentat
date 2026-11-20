@@ -2111,8 +2111,9 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       tryCatch(.build_alluvial_plot(), error = function(e) .error_plot(e))
     })
 
-    observeEvent(comm_filtered(), {
-      tbl <- comm_filtered()$table
+    observe({
+      res <- tryCatch(comm_filtered(), error = function(e) NULL)
+      tbl <- if (is.list(res)) res$table else NULL
       if (is.null(tbl) || !is.data.frame(tbl) || nrow(tbl) == 0L) {
         updateSelectInput(session, "comm_lr_verify_pair",
                           choices = character(0), selected = character(0))
@@ -2136,7 +2137,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                               as.character(tbl$receptor)))
       pairs <- pairs[!is.na(pairs) & nzchar(trimws(pairs))]
       if (length(pairs) > 200L) pairs <- utils::head(pairs, 200L)
-      cur <- input$comm_lr_verify_pair
+      cur <- isolate(input$comm_lr_verify_pair)
       sel <- if (!is.null(cur) && cur %in% pairs) cur else if (length(pairs) > 0L) pairs[1L] else character(0)
       updateSelectInput(session, "comm_lr_verify_pair", choices = pairs, selected = sel)
     })

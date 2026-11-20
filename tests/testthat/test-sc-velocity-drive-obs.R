@@ -6,9 +6,11 @@
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("tools/pkg_skeleton/R/defaults.R")
+source_project_file("tools/pkg_skeleton/R/state.R")
 source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
 source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 source_project_file("tools/pkg_skeleton/R/sc_velocity.R")
+source_project_file("modules/sc/mod_sc_velocity.R")
 
 test_that(".velocity_drive_probe_fields returns bounded has_vectors & optin_status", {
   p_null <- .velocity_drive_probe_fields(NULL)

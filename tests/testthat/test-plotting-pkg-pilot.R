@@ -256,8 +256,10 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           # re-basage 90 -> 96 (6 fichiers ajoutes depuis PK-1).
                           "biomentat_archive.R", "demo_loader.R",
                           "sc_spatial_regulon.R", "spatial_banksy.R",
-                          "spatial_milo.R", "spatial_roi_de.R")),
-                   info = "le perimetre du paquet doit etre exactement 96 fichiers R/ (90 + biomentat_archive, demo_loader, sc_spatial_regulon, spatial_banksy, spatial_milo, spatial_roi_de)")
+                          "spatial_milo.R", "spatial_roi_de.R",
+                          # W2.2 §4.3 (2026-11-20, 78f8a41) : directionnalite velocity T_ij.
+                          "sc_communication_velocity_directional.R")),
+                   info = "le perimetre du paquet doit etre exactement 97 fichiers R/ (96 + sc_communication_velocity_directional)")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────
