@@ -1274,3 +1274,99 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
       })
 }
 
+#' Résumé de la perte de gènes lors d'un merge multi-échantillons (W2.4 §1.6)
+#'
+#' Fonction pure comparant les listes de gènes d'entrée par jeu/échantillon à
+#' l'ensemble retenu après fusion (`merged_genes`, par défaut l'intersection
+#' stricte de tous les échantillons).
+#'
+#' @param gene_lists Liste non vide (idéalement nommée) de vecteurs caractères
+#'   contenant les gènes de chaque jeu/échantillon d'entrée.
+#' @param merged_genes Vecteur caractère optionnel des gènes retenus après
+#'   merge. Si `NULL` (défaut), utilise `Reduce(intersect, gene_lists)`.
+#' @return Liste nommée :
+#'   - `per_sample` : `data.frame` (`sample`, `n_input`, `n_retained`, `n_lost`, `pct_lost`)
+#'   - `union_genes` : vecteur caractère de l'union des gènes d'entrée
+#'   - `common_genes` : vecteur caractère des gènes communs à tous les échantillons
+#'   - `merged_genes` : vecteur caractère des gènes retenus utilisés pour la comparaison
+#'   - `total_union` : entier, taille de `union_genes`
+#'   - `total_retained` : entier, nombre de gènes de l'union présents dans `merged_genes`
+#'   - `total_lost_vs_union` : entier, nombre de gènes de `union_genes` absents de `merged_genes`
+#'   - `sample_lost_genes` : liste nommée des gènes perdus par échantillon
+#' @raises Erreur classée `sc_pipeline_error` si `gene_lists` est vide ou invalide,
+#'   ou si `merged_genes` n'est pas un vecteur atomique.
+summarize_merge_gene_loss <- function(gene_lists, merged_genes = NULL) {
+  if (!is.list(gene_lists) || length(gene_lists) == 0L) {
+    stop(errorCondition(
+      .sc_tr("gene_lists doit être une liste non vide de vecteurs de gènes."),
+      class = "sc_pipeline_error"
+    ))
+  }
+  if (!is.null(merged_genes) && (!is.atomic(merged_genes) || is.list(merged_genes))) {
+    stop(errorCondition(
+      .sc_tr("merged_genes doit être NULL ou un vecteur atomique de gènes."),
+      class = "sc_pipeline_error"
+    ))
+  }
+
+  .clean_genes <- function(x) {
+    if (is.null(x) || length(x) == 0L) return(character(0))
+    vals <- as.character(x)
+    unique(vals[!is.na(vals) & nzchar(vals)])
+  }
+
+  nms <- names(gene_lists)
+  if (is.null(nms)) nms <- rep("", length(gene_lists))
+  bad_nm <- is.na(nms) | !nzchar(nms)
+  if (any(bad_nm)) {
+    nms[bad_nm] <- paste0("sample_", which(bad_nm))
+  }
+
+  clean_lists <- stats::setNames(lapply(gene_lists, .clean_genes), nms)
+  union_genes <- unique(unlist(clean_lists, use.names = FALSE))
+  common_genes <- Reduce(intersect, clean_lists)
+  target_genes <- if (is.null(merged_genes)) common_genes else .clean_genes(merged_genes)
+
+  n_samples <- length(clean_lists)
+  n_input <- integer(n_samples)
+  n_retained <- integer(n_samples)
+  n_lost <- integer(n_samples)
+  pct_lost <- numeric(n_samples)
+  sample_lost_genes <- stats::setNames(vector("list", n_samples), nms)
+
+  for (i in seq_len(n_samples)) {
+    g <- clean_lists[[i]]
+    lost <- setdiff(g, target_genes)
+    n_in <- length(g)
+    n_lo <- length(lost)
+    n_input[i] <- n_in
+    n_lost[i] <- n_lo
+    n_retained[i] <- n_in - n_lo
+    pct_lost[i] <- if (n_in > 0L) 100 * n_lo / n_in else 0
+    sample_lost_genes[[i]] <- lost
+  }
+
+  total_union <- length(union_genes)
+  total_retained <- length(intersect(union_genes, target_genes))
+  total_lost_vs_union <- total_union - total_retained
+
+  list(
+    per_sample = data.frame(
+      sample     = nms,
+      n_input    = n_input,
+      n_retained = n_retained,
+      n_lost     = n_lost,
+      pct_lost   = pct_lost,
+      stringsAsFactors = FALSE
+    ),
+    union_genes         = union_genes,
+    common_genes        = common_genes,
+    merged_genes        = target_genes,
+    total_union         = total_union,
+    total_retained      = total_retained,
+    total_lost_vs_union = total_lost_vs_union,
+    sample_lost_genes   = sample_lost_genes
+  )
+}
+
+
