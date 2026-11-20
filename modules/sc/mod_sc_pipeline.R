@@ -41,6 +41,45 @@
   dm@eigenvectors[, seq_len(n_out), drop = FALSE]
 }
 
+.sc_pipeline_replicate_aberrations <- function(obj = NULL) {
+  empty <- list(aberrations_text = NULL, flagged_replicates = character(0))
+  if (is.null(obj) || !exists("detect_replicate_aberrations", mode = "function")) {
+    return(empty)
+  }
+  meta_df <- if (isS4(obj) && methods::.hasSlot(obj, "meta.data")) {
+    tryCatch(obj@meta.data, error = function(e) NULL)
+  } else if (is.list(obj) && !is.data.frame(obj) && is.data.frame(obj$meta.data)) {
+    obj$meta.data
+  } else {
+    NULL
+  }
+  if (!is.data.frame(meta_df) || !"orig.ident" %in% colnames(meta_df)) {
+    return(empty)
+  }
+  sample_vals <- as.character(meta_df[["orig.ident"]])
+  n_reps <- length(unique(sample_vals[!is.na(sample_vals) & nzchar(sample_vals)]))
+  if (n_reps < 2L) {
+    return(empty)
+  }
+  ab_res <- tryCatch(
+    detect_replicate_aberrations(meta_df, sample_col = "orig.ident"),
+    error = function(e) NULL
+  )
+  if (is.null(ab_res) || !isTRUE(ab_res$has_aberrations) ||
+      length(ab_res$flagged_replicates) == 0L) {
+    return(empty)
+  }
+  flagged_rows <- ab_res$summary_df[ab_res$summary_df$flagged, , drop = FALSE]
+  details <- paste0(flagged_rows$replicate, " (", flagged_rows$reasons, ")", collapse = "; ")
+  list(
+    aberrations_text = sprintf(
+      "Replicate QC warning (%d/%d): %s",
+      nrow(flagged_rows), nrow(ab_res$summary_df), details
+    ),
+    flagged_replicates = as.character(ab_res$flagged_replicates)
+  )
+}
+
 # Résumé QC honnête pour le pipeline manuel (testable hors Shiny).
 # Ne fabrique aucun chiffre : lit exclusivement qc_snapshot, obj et les
 # paramètres réellement soumis au run.
@@ -51,7 +90,8 @@
     status = "none", n_before = NA_integer_, n_retained = NA_integer_,
     n_removed = NA_integer_, n_features = NA_integer_, n_doublets = 0L,
     pct_retained = NA_real_, counts_text = NULL, thresholds_text = NULL,
-    doublets_text = NULL, text = NULL
+    doublets_text = NULL, aberrations_text = NULL,
+    flagged_replicates = character(0), text = NULL
   )
   if (!is.data.frame(qc_snapshot) || nrow(qc_snapshot) == 0L ||
       !all(c("Cellules_avant", "Cellules_apres") %in% names(qc_snapshot))) {
@@ -107,7 +147,11 @@
     NULL
   }
 
-  all_lines <- Filter(Negate(is.null), list(counts_text, thresholds_text, doublets_text))
+  ab_info <- .sc_pipeline_replicate_aberrations(obj)
+  all_lines <- Filter(
+    Negate(is.null),
+    list(counts_text, thresholds_text, doublets_text, ab_info$aberrations_text)
+  )
   list(
     status = "applied",
     n_before = as.integer(n_before),
@@ -119,6 +163,8 @@
     counts_text = counts_text,
     thresholds_text = thresholds_text,
     doublets_text = doublets_text,
+    aberrations_text = ab_info$aberrations_text,
+    flagged_replicates = ab_info$flagged_replicates,
     text = paste(all_lines, collapse = "\n")
   )
 }
@@ -444,6 +490,9 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         },
         if (!is.null(info$doublets_text)) {
           shiny::div(class = "text-muted mt-1", info$doublets_text)
+        },
+        if (!is.null(info$aberrations_text)) {
+          shiny::div(class = "text-warning fw-semibold mt-1", info$aberrations_text)
         }
       )
     })
@@ -522,9 +571,13 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         showNotification(n$msg, type = n$type, duration = if (identical(n$type, "warning")) 8 else 6)
       }
       if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("pipeline_step_complete")
-      qc_summary_rv(.sc_pipeline_qc_summary(res$qc_snapshot,
+      qc_summary <- .sc_pipeline_qc_summary(res$qc_snapshot,
                                             params = shiny::isolate(last_params_rv()),
-                                            obj = res$obj, tr = .tr))
+                                            obj = res$obj, tr = .tr)
+      qc_summary_rv(qc_summary)
+      if (!is.null(qc_summary$aberrations_text)) {
+        showNotification(qc_summary$aberrations_text, type = "warning", duration = 8)
+      }
       .tl_end(ok = TRUE)
       showNotification(.tr("✓ Pipeline terminé"), type = "message")
     }
