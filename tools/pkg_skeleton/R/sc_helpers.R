@@ -1916,6 +1916,137 @@ sc_fast_find_all_markers <- function(object,
   df
 }
 
+#' Detect multi-replicate QC aberrations across samples.
+#'
+#' Pure helper summarizing per-replicate cell counts and median QC metrics,
+#' flagging replicates with abnormally low cell counts (`< 50` or
+#' `< 0.25 * median(n_cells)`) or extreme metric medians
+#' (`|val - median| > mad_k * mad` when `mad > 0` and at least 3 replicates
+#' have finite medians).
+#'
+#' @param meta_df Cell-level metadata `data.frame` (e.g. `seurat_obj@meta.data`).
+#' @param sample_col Name of the replicate/sample column in `meta_df`.
+#' @param metrics Character vector of numeric QC metric columns to inspect.
+#' @param mad_k Positive numeric MAD multiplier for outlier detection.
+#' @return A list with `summary_df` (`data.frame` with `replicate`, `n_cells`,
+#'   `<metric>_median`, `flagged`, `reasons`), `flagged_replicates` (character),
+#'   and `has_aberrations` (logical scalar).
+#' @export
+detect_replicate_aberrations <- function(meta_df,
+                                         sample_col = "orig.ident",
+                                         metrics = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
+                                         mad_k = 3) {
+  err_cls <- "sc_replicate_aberration_error"
+  if (!is.data.frame(meta_df)) {
+    stop(errorCondition("meta_df must be a data.frame.", class = err_cls))
+  }
+  if (!is.character(sample_col) || length(sample_col) != 1L ||
+      is.na(sample_col) || !nzchar(sample_col)) {
+    stop(errorCondition("sample_col must be a non-empty character scalar.", class = err_cls))
+  }
+  if (!sample_col %in% colnames(meta_df)) {
+    stop(errorCondition(
+      sprintf("sample_col '%s' not found in meta_df.", sample_col),
+      class = err_cls
+    ))
+  }
+  if (!is.numeric(mad_k) || length(mad_k) != 1L ||
+      !is.finite(mad_k) || mad_k <= 0) {
+    stop(errorCondition("mad_k must be a positive finite numeric scalar.", class = err_cls))
+  }
+
+  available_metrics <- intersect(as.character(metrics), colnames(meta_df))
+  available_metrics <- available_metrics[vapply(
+    available_metrics,
+    function(m) is.numeric(meta_df[[m]]),
+    logical(1L)
+  )]
+
+  sample_vals <- as.character(meta_df[[sample_col]])
+  valid_idx <- !is.na(sample_vals) & nzchar(sample_vals)
+  replicates <- sort(unique(sample_vals[valid_idx]))
+
+  if (length(replicates) == 0L) {
+    empty_df <- data.frame(
+      replicate = character(0),
+      n_cells = integer(0),
+      stringsAsFactors = FALSE
+    )
+    for (m in available_metrics) {
+      empty_df[[paste0(m, "_median")]] <- numeric(0)
+    }
+    empty_df$flagged <- logical(0)
+    empty_df$reasons <- character(0)
+    return(list(
+      summary_df = empty_df,
+      flagged_replicates = character(0),
+      has_aberrations = FALSE
+    ))
+  }
+
+  idx_by_rep <- split(which(valid_idx), sample_vals[valid_idx])[replicates]
+  n_cells <- vapply(idx_by_rep, length, integer(1L))
+
+  summary_df <- data.frame(
+    replicate = replicates,
+    n_cells = as.integer(n_cells),
+    stringsAsFactors = FALSE,
+    row.names = NULL
+  )
+  for (m in available_metrics) {
+    col_vals <- meta_df[[m]]
+    meds <- vapply(idx_by_rep, function(ii) {
+      v <- col_vals[ii]
+      v <- v[is.finite(v)]
+      if (length(v) == 0L) NA_real_ else stats::median(v)
+    }, numeric(1L))
+    summary_df[[paste0(m, "_median")]] <- as.numeric(meds)
+  }
+
+  reasons_list <- vector("list", length(replicates))
+  med_cells <- stats::median(summary_df$n_cells)
+  for (i in seq_along(replicates)) {
+    r <- character(0)
+    nc <- summary_df$n_cells[i]
+    if (nc < 50L) {
+      r <- c(r, sprintf("low_cell_count (n=%d < 50)", nc))
+    }
+    if (nc < 0.25 * med_cells) {
+      r <- c(r, sprintf("low_cell_count_relative (n=%d < %.1f)", nc, 0.25 * med_cells))
+    }
+    reasons_list[[i]] <- r
+  }
+
+  if (length(replicates) >= 3L) {
+    for (m in available_metrics) {
+      vals <- summary_df[[paste0(m, "_median")]]
+      fin <- is.finite(vals)
+      if (sum(fin) < 3L) next
+      med_v <- stats::median(vals[fin])
+      mad_v <- stats::mad(vals[fin], center = med_v, constant = 1.4826)
+      if (!is.finite(mad_v) || mad_v <= 0) next
+      outliers <- which(fin & abs(vals - med_v) > mad_k * mad_v)
+      for (i in outliers) {
+        reasons_list[[i]] <- c(
+          reasons_list[[i]],
+          sprintf("extreme_%s (%.2f vs median %.2f, MAD %.2f)", m, vals[i], med_v, mad_v)
+        )
+      }
+    }
+  }
+
+  summary_df$flagged <- vapply(reasons_list, function(x) length(x) > 0L, logical(1L))
+  summary_df$reasons <- vapply(reasons_list, function(x) paste(x, collapse = "; "), character(1L))
+  flagged_reps <- summary_df$replicate[summary_df$flagged]
+
+  list(
+    summary_df = summary_df,
+    flagged_replicates = flagged_reps,
+    has_aberrations = length(flagged_reps) > 0L
+  )
+}
+
+
 
 
 
