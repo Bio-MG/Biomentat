@@ -68,6 +68,37 @@ communication_spatial_contract_fields <- function() {
   ))
 }
 
+# Détection explicite des auto-boucles (sender == receiver ou distance nulle)
+# pour étiqueter honnêtement "0 (autocrine / self)" sans altérer les valeurs
+# numériques figées par le contrat.
+.spc_is_autocrine <- function(sender_node, receiver_node, centroid_distance = NULL) {
+  same_node <- !is.na(sender_node) & !is.na(receiver_node) &
+    as.character(sender_node) == as.character(receiver_node)
+  if (is.null(centroid_distance)) {
+    return(same_node)
+  }
+  zero_dist <- !is.na(centroid_distance) & is.finite(centroid_distance) &
+    centroid_distance == 0
+  same_node | zero_dist
+}
+
+.spc_distance_label <- function(distance, sender_node = NULL, receiver_node = NULL,
+                                digits = 3L) {
+  n <- length(distance)
+  if (n == 0L) return(character(0))
+  is_auto <- if (!is.null(sender_node) && !is.null(receiver_node)) {
+    .spc_is_autocrine(sender_node, receiver_node, centroid_distance = distance)
+  } else {
+    !is.na(distance) & is.finite(distance) & distance == 0
+  }
+  out <- rep(NA_character_, n)
+  valid <- !is.na(distance) & is.finite(distance)
+  fmt <- paste0("%.", as.integer(digits), "g")
+  out[valid] <- sprintf(fmt, distance[valid])
+  out[is_auto] <- "0 (autocrine / self)"
+  out
+}
+
 # Coalescence noeud = identité harmonisée sinon label brut (implémentation
 # volontairement vectorisée différemment de .communication_node_keys du
 # fichier de vues, dont les helpers internes sont réservés à ce fichier).
@@ -470,27 +501,33 @@ plot_communication_spatial_edges <- function(context, sender_node, receiver_node
     x = c(cs[[1L]], cr[[1L]]), y = c(cs[[2L]], cr[[2L]]),
     pop = c("Sender", "Receiver")
   )
-  ggplot2::ggplot() +
+  is_auto <- isTRUE(.spc_is_autocrine(sender_node, receiver_node, sel$centroid_distance))
+  cent_lbl <- .spc_distance_label(sel$centroid_distance, sender_node, receiver_node)
+  nn_lbl <- .spc_distance_label(sel$median_recv_to_sender_nn, sender_node, receiver_node)
+  p <- ggplot2::ggplot() +
     ggplot2::geom_point(data = df_all, ggplot2::aes(x, y),
                         colour = "grey85", size = 0.4, alpha = 0.5) +
     ggplot2::geom_point(data = df_pair, ggplot2::aes(x, y, colour = pop),
                         size = 0.8, alpha = 0.65) +
-    ggplot2::geom_point(data = df_cent, ggplot2::aes(x, y, colour = pop), size = 4) +
-    ggplot2::geom_segment(
+    ggplot2::geom_point(data = df_cent, ggplot2::aes(x, y, colour = pop), size = 4)
+  if (!is_auto) {
+    p <- p + ggplot2::geom_segment(
       data = data.frame(x = cs[[1L]], y = cs[[2L]]),
       ggplot2::aes(x = x, y = y, xend = cr[[1L]], yend = cr[[2L]]),
       arrow = grid::arrow(length = grid::unit(10, "pt"), type = "closed"),
       linewidth = 1, colour = "#2166AC"
-    ) +
+    )
+  }
+  p +
     ggplot2::scale_colour_manual(values = c(Sender = "#2166AC", Receiver = "#D6604D"), name = NULL) +
     ggplot2::coord_fixed() +
     ggplot2::theme_classic() +
     ggplot2::labs(
       title = sprintf("Contexte spatial : %s -> %s", sender_node, receiver_node),
       subtitle = sprintf(
-        paste0("%s — centroïdes : %.3g ; NN médian receiver→sender : %.3g ; ",
+        paste0("%s — centroïdes : %s ; NN médian receiver→sender : %s ; ",
                "%d cellules sender / %d receiver."),
-        caption, sel$centroid_distance, sel$median_recv_to_sender_nn,
+        caption, cent_lbl, nn_lbl,
         sel$n_sender_cells, sel$n_receiver_cells
       )
     )
@@ -517,6 +554,8 @@ plot_communication_spatial_distance_summary <- function(context) {
     ))
   }
   pt$pair_label <- paste(pt$sender_node, pt$receiver_node, sep = " -> ")
+  is_auto <- .spc_is_autocrine(pt$sender_node, pt$receiver_node, pt$centroid_distance)
+  pt$pair_label[is_auto] <- paste0(pt$pair_label[is_auto], " (autocrine / self)")
   lim <- range(c(pt$median_recv_to_sender_nn, pt$median_send_to_recv_nn), na.rm = TRUE)
   span <- diff(lim)
   if (!is.finite(span) || span <= 0) span <- 1
@@ -547,9 +586,22 @@ build_communication_spatial_export <- function(context) {
   if (!is.list(context) || !identical(context$type %||% NULL, "ccc_spatial_context")) {
     .spc_stop("build_communication_spatial_export() : contexte spatial requis.")
   }
-  n <- nrow(context$pair_table %||% data.frame())
+  pt <- context$pair_table %||% data.frame()
+  n <- nrow(pt)
+  is_auto <- if (n > 0L) {
+    .spc_is_autocrine(pt$sender_node, pt$receiver_node, pt$centroid_distance)
+  } else {
+    logical(0)
+  }
+  dist_lbl <- if (n > 0L) {
+    .spc_distance_label(pt$centroid_distance, pt$sender_node, pt$receiver_node)
+  } else {
+    character(0)
+  }
   data.frame(
-    context$pair_table,
+    pt,
+    is_autocrine = is_auto,
+    distance_label = dist_lbl,
     analysis_id = rep(context$analysis_id, n),
     parent_analysis_id = rep(context$parent_analysis_id, n),
     timestamp_utc = rep(context$timestamp_utc, n),
