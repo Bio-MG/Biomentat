@@ -509,8 +509,8 @@ test_that("T6 pins : app.R source le module (manifeste) et le DÉSACTIVE (décis
   # commit 998a98c) — l'ancien pin « 164L » (ère SPMV-1/M4) était périmé et
   # ratait déjà avant la reprise de ce jalon.
   # RE-BASAGE 171 -> 175 (2026-11-20, W2.3/P2.4 : mod_dataset_dirs_options + spatial_roi_de/banksy/milo)
-  expect_true(grepl("175L", asr_src, fixed = TRUE),
-              info = "test-app-sourcing.R doit porter le compte 175L (re-basage W2.3 mesuré)")
+  expect_true(grepl("176L", asr_src, fixed = TRUE),
+              info = "test-app-sourcing.R doit porter le compte 176L (re-basage W2.3 mesuré)")
   expect_true(grepl("162 -> 163", asr_src, fixed = TRUE),
               info = "le re-basage 162 -> 163 doit être documenté dans test-app-sourcing.R (motif M2)")
   expect_true(grepl("2026-11", asr_src),

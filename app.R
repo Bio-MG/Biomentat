@@ -201,6 +201,7 @@ source("tools/pkg_skeleton/R/sc_communication_views.R")  # Stage 12 (4D-2) : vue
 source("tools/pkg_skeleton/R/sc_communication_spatial.R")  # V1.x-A (CCC avancée Phase 1) : contexte spatial, APRES sc_communication_views.R
 source("tools/pkg_skeleton/R/sc_communication_trajectory.R")  # V1.x-B (CCC avancée Phase 3) : contexte trajectoire/pseudo-temps, APRES sc_communication_spatial.R
 source("tools/pkg_skeleton/R/sc_communication_velocity.R")  # V1.x-C (CCC avancée Phase 2) : contexte vélocité, APRES sc_communication_trajectory.R
+source("tools/pkg_skeleton/R/sc_communication_velocity_directional.R")  # CCC velocity directional (apres sc_communication_velocity.R)
 source("tools/pkg_skeleton/R/sc_communication_perturbation.R")  # V1.x-D (CCC avancée Phase 4) : perturbation IN SILICO du réseau importé, APRES sc_communication_velocity.R
 source("tools/pkg_skeleton/R/sc_communication_engine.R")  # Moteur CellChat natif (Path B) : APRES sc_communication_input.R (consomme build_cellchat_input). CellChat est une dependance PARESSeUSE : l'app demarre sans.
 source("tools/pkg_skeleton/R/sc_abundance_design.R")  # Stage 13 (4E-0) : validation du design DA (reutilise check_design_confounding)

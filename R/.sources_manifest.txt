@@ -40,6 +40,7 @@ tools/pkg_skeleton/R/sc_communication_views.R
 tools/pkg_skeleton/R/sc_communication_spatial.R
 tools/pkg_skeleton/R/sc_communication_trajectory.R
 tools/pkg_skeleton/R/sc_communication_velocity.R
+tools/pkg_skeleton/R/sc_communication_velocity_directional.R
 tools/pkg_skeleton/R/sc_communication_perturbation.R
 tools/pkg_skeleton/R/sc_communication_engine.R
 tools/pkg_skeleton/R/sc_abundance_design.R
