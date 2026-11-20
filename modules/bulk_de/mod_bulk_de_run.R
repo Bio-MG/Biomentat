@@ -463,7 +463,10 @@
     # DESeq(). Catch it here with an actionable message instead.
     covariates_in_use <- input$covariates %||% character(0)
     confounded <- Filter(
-      function(cov) check_design_confounding(meta, input$condition_col, cov),
+      function(cov) {
+        if (cov %in% colnames(meta) && is.numeric(meta[[cov]])) return(FALSE)
+        check_design_confounding(meta, input$condition_col, cov)
+      },
       covariates_in_use
     )
     if (length(confounded) > 0) {
@@ -474,6 +477,28 @@
       )
       job_state$reason <- "a covariate fully mirrors the condition; drop it from the design"
       return()
+    }
+
+    # WARNING (non-blocking): numeric covariate strongly correlated with
+    # condition_col (|cor| > 0.90) via check_design_cancor(). Design remains
+    # full-rank, so warn without blocking execution.
+    if (exists("check_design_cancor", mode = "function") && length(covariates_in_use) > 0) {
+      cancor_hits <- character(0)
+      for (cov in covariates_in_use) {
+        if (cov %in% colnames(meta) && is.numeric(meta[[cov]])) {
+          cc <- check_design_cancor(meta, input$condition_col, cov)
+          if (isTRUE(cc$confounded)) {
+            cancor_hits <- c(cancor_hits, sprintf("%s (|cor|=%.2f)", cov, cc$correlation))
+          }
+        }
+      }
+      if (length(cancor_hits) > 0) {
+        showNotification(
+          .t_fmt(.tr("\u274c Covariable(s) confondue(s) avec '{col}' : {covs}. Retirez-la(les) du design ou revoyez votre plan d'exp\u00e9rience."),
+                 col = input$condition_col, covs = paste(cancor_hits, collapse = ", ")),
+          type = "warning", duration = 10
+        )
+      }
     }
 
     # HARD BLOCK: a single-level covariate contributes nothing to the
