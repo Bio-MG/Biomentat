@@ -233,7 +233,13 @@ mod_import_sc_ui <- function(id) {
             i18n$t("Identifiants non-symboles (Ensembl, Entrez, sondes Affymetrix) ? Le mapping d'IDs est disponible à l'étape 0 de l'analyse.")),
         actionButton(ns("goto_mapping"), i18n$t("Aller au mapping des IDs"),
                      class = "btn-outline-secondary btn-sm w-100 mb-2", icon = icon("arrow-right")),
+        # Fix W1.2 #3b : id namespacé + multiple explicite — sans id, aucun
+        # accordion_panel_open/close n'est possible et le panneau
+        # « Datasets découverts » ne pouvait être piloté (ni rouvert après scan).
         accordion(
+          id = ns("acc_sources"),
+          multiple = TRUE,
+          open = "opt_a",
           accordion_panel(
             i18n$t("Option A: Dossiers Multiples (10X)"),
             value = "opt_a",
@@ -1010,6 +1016,8 @@ mod_import_sc_server <- function(id, global_data) {
         return()
       }
       ds_dir_rv(paste(sc_dirs, collapse = " ; "))
+      # Fix W1.2 #3b : garder le panneau ouvert (résultat du scan visible).
+      try(accordion_panel_open("acc_sources", "panel_datasets", session = session), silent = TRUE)
       ds_scan_rv(res)
       ids <- names(res) %||% character(0)
       btn_ids <- if (length(ids)) paste0("btn_load_ds_", seq_along(ids)) else character(0)
