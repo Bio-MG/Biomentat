@@ -30,6 +30,7 @@ mod_sc_communication_velocity_ui <- function(id) {
     actionButton(ns("vel_compute"), i18n$t("Calculer le contexte vélocité"),
                  class = "btn-primary w-100", icon = icon("tachometer-alt")),
     div(class = "small text-muted mt-1", textOutput(ns("vel_status"))),
+    div(class = "small text-muted", textOutput(ns("vel_dir_summary"))),
     hr(),
     # P0.4 harmonisation (2026-11-14, demande opérateur) : plot AU-DESSUS de la
     # table + k1 complétion — hauteur fixe < contenu paginé = débord du wrapper
@@ -278,6 +279,23 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
       }
     })
 
+    # W2.2 §4.3 : synthèse directionnelle concise (descriptive, sans causalité,
+    # aucune clé i18n : texte numérique/codes de statut uniquement). NULL => "".
+    output$vel_dir_summary <- renderText({
+      d <- vel_directionality()
+      if (is.null(d) || !is.list(d)) return("")
+      pt <- d$pair_table
+      n_map <- if (is.data.frame(pt)) nrow(pt) else 0L
+      if (n_map == 0L) return("")
+      if (identical(d$transition_status, "valid")) {
+        n_al <- sum(pt$transition_aligned %in% TRUE)
+        tij <- sprintf("T_ij: %d/%d aligned", n_al, n_map)
+      } else {
+        tij <- sprintf("T_ij: n/a (%s)", d$transition_status %||% "NA")
+      }
+      n_cv <- sum(pt$cor_status == "valid", na.rm = TRUE)
+      sprintf("%s ; rho: %d/%d valid (%s)", tij, n_cv, n_map, d$cor_status %||% "NA")
+    })
     output$vel_table <- DT::renderDataTable({
       .ctx_tab_guard()
       ctx <- vel_ctx()
