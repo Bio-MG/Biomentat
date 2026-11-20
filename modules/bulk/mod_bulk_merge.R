@@ -257,7 +257,7 @@ mod_bulk_merge_server <- function(id, global_data) {
       if (is.null(res)) {
         return(.tr("En attente — sélectionnez >= 2 datasets puis lancez la fusion."))
       }
-      sprintf("%s — %d gènes communs × %d échantillons [%s]",
+      sprintf(.tr("%s — %d gènes communs × %d échantillons [%s]"),
               paste(res$labels, collapse = " + "), res$n_common_genes,
               res$n_samples,
               if (isTRUE(res$combat_applied)) "ComBat-seq" else .tr("sans correction"))

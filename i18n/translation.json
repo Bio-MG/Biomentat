@@ -14104,6 +14104,150 @@
     {
       "fr": "Top N voies (Heatmap, 0 = toutes)",
       "en": "Top N pathways (Heatmap, 0 = all)"
+    },
+    {
+      "fr": "L'activation remplace le jeu actif : filtrage, contrastes et voies du jeu précédent sont purgés.",
+      "en": "Activation replaces the active dataset: filtering, contrasts and pathways from the previous dataset are purged."
+    },
+    {
+      "fr": "Tous significatifs",
+      "en": "All significant"
+    },
+    {
+      "fr": "Up seulement",
+      "en": "Up only"
+    },
+    {
+      "fr": "Down seulement",
+      "en": "Down only"
+    },
+    {
+      "fr": "%s gènes × %s échantillons",
+      "en": "%s genes × %s samples"
+    },
+    {
+      "fr": "Méthode : {m} — {n} gènes analysés",
+      "en": "Method: {m} — {n} genes analyzed"
+    },
+    {
+      "fr": "%s — %d gènes communs × %d échantillons [%s]",
+      "en": "%s — %d common genes × %d samples [%s]"
+    },
+    {
+      "fr": "⚠️ Aucun power n'atteint R2 = 0.80 — le meilleur compromis est retenu (voir sous-titre du graphique).",
+      "en": "⚠️ No power reaches R2 = 0.80 — the best trade-off is selected (see plot subtitle)."
+    },
+    {
+      "fr": "BCV = %.2f (dispersion = %.4f) — %d échantillon(s) / %d coefficient(s).",
+      "en": "BCV = %.2f (dispersion = %.4f) — %d sample(s) / %d coefficient(s)."
+    },
+    {
+      "fr": "(ou conteneur trop petit — agrandissez la fenêtre/onglet)",
+      "en": "(or container too small — enlarge the window/tab)"
+    },
+    {
+      "fr": "le calcul DE a échoué dans le pool",
+      "en": "DE computation failed in the worker pool"
+    },
+    {
+      "fr": "Up-régulé",
+      "en": "Up-regulated"
+    },
+    {
+      "fr": "Down-régulé",
+      "en": "Down-regulated"
+    },
+    {
+      "fr": "Non-significatif",
+      "en": "Non-significant"
+    },
+    {
+      "fr": "%d Up · %d Down · %d testés%s",
+      "en": "%d Up · %d Down · %d tested%s"
+    },
+    {
+      "fr": "Paramètre",
+      "en": "Parameter"
+    },
+    {
+      "fr": "algorithme",
+      "en": "algorithm"
+    },
+    {
+      "fr": "seuil de prime",
+      "en": "prize threshold"
+    },
+    {
+      "fr": "primes en entrée",
+      "en": "input prizes"
+    },
+    {
+      "fr": "primes non positives",
+      "en": "non-positive prizes"
+    },
+    {
+      "fr": "sous le seuil",
+      "en": "below threshold"
+    },
+    {
+      "fr": "hors réseau",
+      "en": "outside network"
+    },
+    {
+      "fr": "terminaux",
+      "en": "terminals"
+    },
+    {
+      "fr": "relais",
+      "en": "relays"
+    },
+    {
+      "fr": "nœuds",
+      "en": "nodes"
+    },
+    {
+      "fr": "arêtes",
+      "en": "edges"
+    },
+    {
+      "fr": "composantes",
+      "en": "components"
+    },
+    {
+      "fr": "prime totale",
+      "en": "total prize"
+    },
+    {
+      "fr": "score",
+      "en": "score"
+    },
+    {
+      "fr": "liaison max (arêtes)",
+      "en": "max join hops (edges)"
+    },
+    {
+      "fr": "nœuds du réseau",
+      "en": "network nodes"
+    },
+    {
+      "fr": "arêtes du réseau",
+      "en": "network edges"
+    },
+    {
+      "fr": "taux de correspondance",
+      "en": "mapping rate"
+    },
+    {
+      "fr": "espèce",
+      "en": "species"
+    },
+    {
+      "fr": "source",
+      "en": "source"
+    },
+    {
+      "fr": "version source",
+      "en": "source version"
     }
   ]
 }

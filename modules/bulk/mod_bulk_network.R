@@ -417,16 +417,17 @@ mod_bulk_network_server <- function(id, global_data, shared_rv) {
     })
 
     output$network_qc <- renderDT({
+      global_data$language
       req(shared_rv$network_result)
       r <- shared_rv$network_result
       qc <- r$qc
       tab <- data.frame(
-        param = c("algorithme", "seuil de prime", "primes en entrée",
-                  "primes non positives", "sous le seuil", "hors réseau",
-                  "terminaux", "relais", "nœuds", "arêtes", "composantes",
-                  "prime totale", "score", "liaison max (arêtes)",
-                  "nœuds du réseau", "arêtes du réseau",
-                  "taux de correspondance", "espèce", "source", "version source"),
+        param = c(.tr("algorithme"), .tr("seuil de prime"), .tr("primes en entrée"),
+                  .tr("primes non positives"), .tr("sous le seuil"), .tr("hors réseau"),
+                  .tr("terminaux"), .tr("relais"), .tr("nœuds"), .tr("arêtes"), .tr("composantes"),
+                  .tr("prime totale"), .tr("score"), .tr("liaison max (arêtes)"),
+                  .tr("nœuds du réseau"), .tr("arêtes du réseau"),
+                  .tr("taux de correspondance"), .tr("espèce"), .tr("source"), .tr("version source")),
         valeur = c(qc$algorithm, format(qc$threshold), qc$n_prizes_input,
                    qc$n_prizes_non_positive, qc$n_prizes_below_threshold,
                    qc$n_prizes_outside_network, qc$n_terminals, qc$n_relay,

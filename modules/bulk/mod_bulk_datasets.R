@@ -95,8 +95,8 @@ mod_bulk_datasets_server <- function(id, global_data, shared_rv) {
       }
       global_data$bulk_datasets <- new_ds
       showNotification(
-        sprintf(.tr(if (had) "✓ État enregistré (mis à jour) sous « %s »."
-                    else "✓ État enregistré sous « %s »."), lbl),
+        sprintf(if (had) .tr("✓ État enregistré (mis à jour) sous « %s ».")
+                else .tr("✓ État enregistré sous « %s »."), lbl),
         type = "message", duration = 6)
     })
 
@@ -146,8 +146,7 @@ mod_bulk_datasets_server <- function(id, global_data, shared_rv) {
                     choices = ds_names, selected = ds_names[1L], width = "100%"),
         actionButton(ns("ds_activate"), .tr("✅ Activer ce dataset"),
                      icon = icon("circle-play"), class = "btn-outline-success w-100 mb-1"),
-        helpText(style = "font-size:0.76em;", .tr(
-          "L'activation remplace le jeu actif : filtrage, contrastes et voies du jeu précédent sont purgés."))
+        helpText(style = "font-size:0.76em;", .tr("L'activation remplace le jeu actif : filtrage, contrastes et voies du jeu précédent sont purgés."))
       )
     })
 
@@ -162,7 +161,7 @@ mod_bulk_datasets_server <- function(id, global_data, shared_rv) {
         return()
       }
       dims <- tryCatch(
-        sprintf("%s gènes × %s échantillons",
+        sprintf(.tr("%s gènes × %s échantillons"),
                 format(nrow(entry$obj$counts), big.mark = " "),
                 format(ncol(entry$obj$counts), big.mark = " ")),
         error = function(e) "?")

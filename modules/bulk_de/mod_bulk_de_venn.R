@@ -96,7 +96,8 @@
       # this fallback itself can no longer fail the way it used to (was
       # the actual source of the duplicate "figure margins too large").
       grid::grid.newpage()
-      grid::grid.text(paste0("Erreur : ", conditionMessage(e), "\n(ou conteneur trop petit — agrandissez la fenêtre/onglet)"),
+      grid::grid.text(paste0(.tr("Erreur:"), " ", conditionMessage(e), "\n",
+                             .tr("(ou conteneur trop petit — agrandissez la fenêtre/onglet)")),
                       gp = grid::gpar(col = "firebrick", fontsize = 11))
     })
   })

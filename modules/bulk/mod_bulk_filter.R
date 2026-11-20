@@ -649,8 +649,8 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       if (is.null(vp)) {
         .tr("Cliquez sur D\u00e9composition de variance pour lancer le calcul.")
       } else {
-        paste0("M\u00e9thode : ", vp$method, " — ",
-               vp$n_genes_used, " g\u00e8nes analys\u00e9s")
+        .t_fmt(.tr("M\u00e9thode : {m} — {n} g\u00e8nes analys\u00e9s"),
+               m = vp$method, n = vp$n_genes_used)
       }
     })
     output$plot_varpart <- renderPlot({

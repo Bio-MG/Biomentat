@@ -71,9 +71,14 @@ mod_bulk_dose_response_server <- function(id, global_data, shared_rv) {
                            c(.tr("Surexprimés (up)"), .tr("Sous-exprimés (down)"), .tr("Tous les significatifs"))),
         selected = isolate(input$dose_source) %||% "up")
       updateNumericInput(session, "dose_top_n", label = .tr("Top N gènes (par p.adjust)"))
-      updateSelectInput(session, "dose_model", label = .tr("Modèle"))
+      updateSelectInput(session, "dose_model", label = .tr("Modèle"),
+        choices = setNames(bulk_dose_models(),
+                           c(.tr("Log-logistique (Hill, LL.4)"), .tr("Weibull type 1 (W1.4)"),
+                             .tr("Weibull type 2 (W2.4)"), .tr("Log-logistique biface (BC.4)"))),
+        selected = isolate(input$dose_model) %||% bulk_dose_models()[1L])
       updateActionButton(session, "run_dose", label = .tr("Lancer les ajustements"))
-      updateSelectizeInput(session, "dose_gene", label = .tr("Gène (tapez pour rechercher)"))
+      updateSelectizeInput(session, "dose_gene", label = .tr("Gène (tapez pour rechercher)"),
+                           options = list(placeholder = .tr("Gène (tapez pour rechercher)")))
     }, ignoreInit = TRUE)
 
     # Colonnes de dose/temps candidates : numériques/logiques, ou character

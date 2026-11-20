@@ -279,8 +279,7 @@ mod_bulk_wgcna_output_ui <- function(id) {
         bo <- bulk_ensure_provenance(bo)
         global_data$bulk_obj <- bo
         if (!isTRUE(pw$chosen$target_reached)) {
-          showNotification(.tr(paste0("\u26a0\ufe0f Aucun power n'atteint R2 = 0.80 — le meilleur ",
-                                       "compromis est retenu (voir sous-titre du graphique).")),
+          showNotification(.tr("\u26a0\ufe0f Aucun power n'atteint R2 = 0.80 — le meilleur compromis est retenu (voir sous-titre du graphique)."),
                            type = "warning", duration = 8)
         }
         showNotification(.t_fmt(.tr("\u2713 Power retenu : {p} (R2 = {r})."),
@@ -435,7 +434,7 @@ mod_bulk_wgcna_output_ui <- function(id) {
       global_data$language
       md <- shared_rv$wgcna_modules; req(md)
       sizes <- as.data.frame(md$module_sizes)
-      colnames(sizes) <- c("Module", "Gènes")
+      colnames(sizes) <- c("Module", .tr("Gènes"))
       sizes <- sizes[order(sizes$Module), ]
       ts_datatable(sizes, page_length = 15L,
                    filename_base = "wgcna_module_sizes", filter = "none")

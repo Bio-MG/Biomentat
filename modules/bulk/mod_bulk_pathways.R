@@ -453,12 +453,18 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       updateRadioButtons(session, "enrich_mode", label = .tr("M\u00e9thode d'enrichissement"),
         choices = stats::setNames(c("ora","gsea","dir","compare"),
           c(.tr("ORA \u2014 sur g\u00e8nes significatifs (classique)"), .tr("GSEA \u2014 sur tous les g\u00e8nes class\u00e9s (sans seuil)"),
-            .tr("Directionnelle \u2014 goana/kegga (table DE compl\u00e8te, Up/Down par voie)"))))
+            .tr("Directionnelle \u2014 goana/kegga (table DE compl\u00e8te, Up/Down par voie)"),
+            .tr("Comparative — compareCluster (inter-contrastes)"))))
       updateSelectInput(session, "pathway_source", label = .tr("Source de g\u00e8nes"),
         choices = stats::setNames(c("up","down","all_sig","manual"),
           c(.tr("G\u00e8nes Up (significatifs)"), .tr("G\u00e8nes Down (significatifs)"),
             .tr("Tous g\u00e8nes significatifs"), .tr("S\u00e9lection manuelle"))))
       updateSelectizeInput(session, "pathway_genes", label = .tr("G\u00e8nes"))
+      updateNumericInput(session, "dir_fdr", label = .tr("Seuil FDR (s\u00e9lection DE directionnelle)"))
+      updateSelectInput(session, "comp_source", label = .tr("Gènes par contraste"),
+        choices = stats::setNames(c("all","up","down"),
+          c(.tr("Tous significatifs"), .tr("Up seulement"), .tr("Down seulement"))))
+      updateNumericInput(session, "comp_fdr", label = .tr("Seuil FDR (sélection DE comparative)"))
       updateSelectInput(session, "pathway_db",  label = .tr("Base de donn\u00e9es"))
       updateSelectInput(session, "pathway_org", label = .tr("Organisme"),
         choices = stats::setNames(c("human","mouse"), c(.tr("Humain"), .tr("Souris"))))

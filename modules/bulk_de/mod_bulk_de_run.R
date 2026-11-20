@@ -637,7 +637,7 @@
       removeNotification("de_drive_progress")
       err <- tryCatch(de_drive_task$result(), error = function(e) e)
       msg <- if (inherits(err, "error")) conditionMessage(err)
-             else "le calcul DE a \u00e9chou\u00e9 dans le pool"
+             else .tr("le calcul DE a \u00e9chou\u00e9 dans le pool")
       cell$finish("error", .de_drive_fail(cell$ctx, msg))
     }
   })

@@ -144,6 +144,10 @@
     updateNumericInput(session, "lfc_thresh",   label = .trl("Seuil |Log2FC|"))
     updateNumericInput(session, "padj_thresh",  label = .trl("Seuil p-adj"))
     updateSelectInput(session, "padj_method",   label = .trl("M\u00e9thode de correction (p-adj)"))
+    updateSelectInput(session, "plot_theme",    label = .trl("Th\u00e8me"),
+      choices = stats::setNames(TS_THEME_CHOICES,
+        c(.trl("Minimal"), .trl("Classique"), .trl("BW"), .trl("Vide"))))
+    updateSliderInput(session, "base_size",     label = .trl("Taille de police (base)"))
     updateTextInput(session, "contrast_name",    label = .trl("Nom du contraste (auto si vide)"))
     updateTextInput(session, "adhoc_contrast_name", label = .trl("Nom du contraste"))
     updateCheckboxGroupInput(session, "adhoc_group_a", label = .trl("Groupe A"))
@@ -157,7 +161,8 @@
           .trl("Up-r\u00e9gul\u00e9s"), .trl("Down-r\u00e9gul\u00e9s"), .trl("Non-significatifs"))))
     updateSelectInput(session, "heatmap_export_fmt", label = .trl("Format export"))
     # venn tab
-    updateSelectizeInput(session, "venn_contrasts", label = .trl("Contrastes \u00e0 comparer"))
+    updateSelectizeInput(session, "venn_contrasts", label = .trl("Contrastes \u00e0 comparer"),
+      options = list(maxItems = 6, placeholder = .trl("2 \u00e0 6 contrastes")))
     updateRadioButtons(session, "venn_type", label = .trl("Type de diagramme"),
       choices = stats::setNames(c("upset","venn"),
         c(.trl("UpSet (recommand\u00e9)"), .trl("Venn (2-4 contrastes)"))))
@@ -308,6 +313,7 @@
   output$no_rep_active_banner <- renderUI({
     # .trl() est redéfini localement (même motif que les autres renderUI du
     # fichier) : il n'existe pas dans la portée englobante.
+    global_data$language
     .trl <- function(key) { tr <- global_data$i18n; if (is.null(tr)) return(key)
                             tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key) }
     bp <- shared_rv$de_bypass
@@ -315,7 +321,7 @@
     div(class = "alert alert-danger", style = "font-size:0.76em;padding:6px 10px;",
         tags$strong(.trl("Mode exploratoire sans r\u00e9plicat")),
         tags$div(.trl("R\u00e9sultats obtenus avec une dispersion impos\u00e9e (edgeR, BCV d\u00e9clar\u00e9) : les p-values ne sont PAS inf\u00e9rentielles.")),
-        tags$div(sprintf("BCV = %.2f (dispersion = %.4f) \u2014 %d \u00e9chantillon(s) / %d coefficient(s).",
+        tags$div(sprintf(.trl("BCV = %.2f (dispersion = %.4f) \u2014 %d \u00e9chantillon(s) / %d coefficient(s)."),
                          bp$bcv %||% sqrt(bp$dispersion), bp$dispersion, bp$n, bp$p)))
   })
 

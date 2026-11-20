@@ -186,7 +186,8 @@
       if (input$mm_venn_type == "venn") plot_venn_contrasts(sets, palette = shared_rv$bulk_palette %||% "default") else plot_upset_contrasts(sets)
     }, error = function(e) {
       grid::grid.newpage()
-      grid::grid.text(paste0("Erreur : ", conditionMessage(e), "\n(ou conteneur trop petit — agrandissez la fenêtre/onglet)"),
+      grid::grid.text(paste0(.tr("Erreur:"), " ", conditionMessage(e), "\n",
+                             .tr("(ou conteneur trop petit — agrandissez la fenêtre/onglet)")),
                       gp = grid::gpar(col = "firebrick", fontsize = 11))
     })
   })

@@ -160,7 +160,7 @@
       h6(.tr("Couleurs manuelles \u2014 Up / Down / Non-significatif"),
          style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
       manual_color_picker_ui(ns, c("role_color_up", "role_color_down", "role_color_ns"),
-                             c("Up-régulé", "Down-régulé", "Non-significatif"),
+                             c(.tr("Up-r\u00e9gul\u00e9"), .tr("Down-r\u00e9gul\u00e9"), .tr("Non-significatif")),
                              c("#E74C3C", "#2980B9", "#BDC3C7"))
     )
   })
@@ -429,7 +429,7 @@
     eng <- .engine_label()
     tail <- if (nzchar(eng)) sprintf(" — %s (padj<%.2g, |log2FC|>%.2g)", eng, pv, lfc)
             else sprintf(" (padj<%.2g, |log2FC|>%.2g)", pv, lfc)
-    sprintf("%d Up · %d Down · %d testés%s", n_up, n_down, sum(ok), tail)
+    sprintf(.tr("%d Up · %d Down · %d testés%s"), n_up, n_down, sum(ok), tail)
   }
 
   .heatmap_obj <- function() {
