@@ -335,14 +335,25 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
         }
 
         p$set(0.6, .tr("FindAllMarkers..."))
-        markers <- FindAllMarkers(
-          obj_use,
-          test.use      = input$marker_test,
-          min.pct       = input$marker_min_pct,
-          logfc.threshold = input$marker_logfc,
-          only.pos      = TRUE,
-          verbose       = FALSE
-        )
+        markers <- if (exists("sc_fast_find_all_markers", mode = "function")) {
+          sc_fast_find_all_markers(
+            obj_use,
+            test.use      = input$marker_test,
+            min.pct       = input$marker_min_pct,
+            logfc.threshold = input$marker_logfc,
+            only.pos      = TRUE,
+            verbose       = FALSE
+          )
+        } else {
+          FindAllMarkers(
+            obj_use,
+            test.use      = input$marker_test,
+            min.pct       = input$marker_min_pct,
+            logfc.threshold = input$marker_logfc,
+            only.pos      = TRUE,
+            verbose       = FALSE
+          )
+        }
 
         if (nrow(markers) == 0) {
           marker_log_rv(.tr("Aucun marqueur trouve"))

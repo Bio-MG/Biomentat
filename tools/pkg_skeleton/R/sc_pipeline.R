@@ -561,8 +561,13 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
     sub_res <- subsample_seurat_for_analysis(obj, max_per_group = cap_m, group_col = "seurat_clusters")
     markers <- tryCatch({
       Seurat::Idents(sub_res$object) <- sub_res$object$seurat_clusters
-      Seurat::FindAllMarkers(sub_res$object, only.pos = TRUE, min.pct = 0.1,
-                             logfc.threshold = 0.25, verbose = FALSE)
+      if (exists("sc_fast_find_all_markers", mode = "function")) {
+        sc_fast_find_all_markers(sub_res$object, only.pos = TRUE, min.pct = 0.1,
+                                 logfc.threshold = 0.25, verbose = FALSE)
+      } else {
+        Seurat::FindAllMarkers(sub_res$object, only.pos = TRUE, min.pct = 0.1,
+                               logfc.threshold = 0.25, verbose = FALSE)
+      }
     }, error = function(e) { log_fn(paste("Markers:", e$message)); NULL })
 
     if (!is.null(markers) && nrow(markers) > 0) {

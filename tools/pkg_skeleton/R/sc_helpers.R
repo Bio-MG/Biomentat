@@ -1828,6 +1828,87 @@ plot_sc_reduction_3d <- function(seurat_obj, reduction = "umap",
 
 # Internal: readLines with transparent gzip support (barcodes/features files).
 
+#' Fast cluster marker discovery via presto::wilcoxauc with Seurat fallback.
+#'
+#' @param object Seurat object with active Idents set.
+#' @param test.use Marker test (`"wilcox"` uses presto when available).
+#' @param min.pct Minimum fraction of expressing cells in either group.
+#' @param logfc.threshold Minimum log2 fold-change threshold.
+#' @param only.pos Keep only positive markers (`avg_log2FC >= logfc.threshold`).
+#' @param verbose Passed to `Seurat::FindAllMarkers` on fallback.
+#' @param use_presto Set `FALSE` to force `Seurat::FindAllMarkers`.
+#' @return Data frame in Seurat `FindAllMarkers` schema with `attr(., "engine")`.
+#' @export
+sc_fast_find_all_markers <- function(object,
+                                     test.use = "wilcox",
+                                     min.pct = 0.1,
+                                     logfc.threshold = 0.25,
+                                     only.pos = TRUE,
+                                     verbose = FALSE,
+                                     use_presto = TRUE) {
+  if (!inherits(object, "Seurat")) {
+    fam <- get("FindAllMarkers", envir = parent.frame(), inherits = TRUE)
+    return(fam(
+      object,
+      test.use = test.use,
+      min.pct = min.pct,
+      logfc.threshold = logfc.threshold,
+      only.pos = only.pos,
+      verbose = verbose
+    ))
+  }
+  if (identical(test.use, "wilcox") && isTRUE(use_presto) &&
+      requireNamespace("presto", quietly = TRUE)) {
+    presto_res <- tryCatch({
+      X <- SeuratObject::LayerData(object, layer = "data")
+      if (is.null(X) || nrow(X) == 0L || ncol(X) == 0L || inherits(X, "IterableMatrix")) {
+        NULL
+      } else {
+        y <- as.character(SeuratObject::Idents(object))
+        if (length(unique(y[!is.na(y)])) < 2L) {
+          NULL
+        } else {
+          raw <- presto::wilcoxauc(X, y)
+          df <- data.frame(
+            p_val = as.numeric(raw$pval),
+            avg_log2FC = as.numeric(raw$logFC) / log(2),
+            pct.1 = as.numeric(raw$pct_in) / 100,
+            pct.2 = as.numeric(raw$pct_out) / 100,
+            p_val_adj = as.numeric(raw$padj),
+            cluster = factor(raw$group),
+            gene = as.character(raw$feature),
+            stringsAsFactors = FALSE
+          )
+          keep <- pmax(df$pct.1, df$pct.2) >= min.pct
+          if (isTRUE(only.pos)) {
+            keep <- keep & (df$avg_log2FC >= logfc.threshold)
+          } else {
+            keep <- keep & (abs(df$avg_log2FC) >= logfc.threshold)
+          }
+          df <- df[keep, , drop = FALSE]
+          rownames(df) <- NULL
+          attr(df, "engine") <- "presto"
+          df
+        }
+      }
+    }, error = function(e) NULL)
+    if (!is.null(presto_res)) {
+      return(presto_res)
+    }
+  }
+
+  df <- Seurat::FindAllMarkers(
+    object,
+    test.use = test.use,
+    min.pct = min.pct,
+    logfc.threshold = logfc.threshold,
+    only.pos = only.pos,
+    verbose = verbose
+  )
+  attr(df, "engine") <- "seurat"
+  df
+}
+
 
 
 

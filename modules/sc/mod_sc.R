@@ -442,14 +442,25 @@ run_markers <- function(input, global_data, shared_rv, session) {
       session$onSessionEnded(function() unlink(bpc$dir, recursive = TRUE))
     }
     p$set(0.6, "FindAllMarkers...")
-    markers <- FindAllMarkers(
-      obj_use,
-      test.use = input$marker_test,
-      min.pct = input$marker_min_pct,
-      logfc.threshold = input$marker_logfc,
-      only.pos = input$only_pos,
-      verbose = input$verbose
-    )
+    markers <- if (exists("sc_fast_find_all_markers", mode = "function")) {
+      sc_fast_find_all_markers(
+        obj_use,
+        test.use = input$marker_test,
+        min.pct = input$marker_min_pct,
+        logfc.threshold = input$marker_logfc,
+        only.pos = input$only_pos,
+        verbose = input$verbose
+      )
+    } else {
+      FindAllMarkers(
+        obj_use,
+        test.use = input$marker_test,
+        min.pct = input$marker_min_pct,
+        logfc.threshold = input$marker_logfc,
+        only.pos = input$only_pos,
+        verbose = input$verbose
+      )
+    }
     if (is.null(markers) || nrow(markers) == 0L) {
       shared_rv$markers_data <- NULL
       return(list(ok = TRUE, n_results = 0L))
