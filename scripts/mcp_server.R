@@ -609,56 +609,106 @@ ts_drive_boot(.project_root)
 #
 # ZERO writes: no state.json, no arm.json, nothing — measured by T7-3.
 
-.ts_tool_datasets <- function() {
-  root <- tryCatch(ts_datasets_dir(), error = function(e) NULL)
+.ts_tool_datasets_one <- function(mod_key = NULL) {
+  root <- tryCatch(
+    if (is.null(mod_key)) ts_datasets_dir() else ts_datasets_dir(modality = mod_key),
+    error = function(e) NULL
+  )
   if (is.null(root)) {
-    return(.ts_tool_err(
+    return(list(ok = FALSE, err = .ts_tool_err(
       "SCAN_FAILED",
       "The datasets root could not be resolved.",
-      "Check TRANSCRIPTO_DATASETS_DIR / TRANSCRIPTO_DRIVE_DATA_DIR."))
+      "Check TRANSCRIPTO_DATASETS_DIR / TRANSCRIPTO_DRIVE_DATA_DIR.")))
   }
-  # S11 confinement of the RESOLVED root (path-level: no existence demand —
-  # a not-yet-created default root is a normal empty listing, never an error).
   conf <- tryCatch(
     .ts_drive_resolve_import_path(root, ts_drive_import_roots()),
-    error = function(e) list(ok = FALSE, path = NULL,
-                             reason = conditionMessage(e)))
+    error = function(e) list(ok = FALSE, path = NULL, reason = conditionMessage(e)))
   if (!isTRUE(conf$ok)) {
-    return(.ts_tool_err(
+    return(list(ok = FALSE, err = .ts_tool_err(
       "OUTSIDE_ALLOWLIST",
       sprintf("the datasets root '%s' is outside the allowlisted roots: %s",
               .ts_clean(root), .ts_clean(conf$reason %|NA|% "unknown")),
       paste0("Set TRANSCRIPTO_DATASETS_DIR inside the project root, tempdir(), ",
              "or a TRANSCRIPTO_DRIVE_DATA_DIR entry. The allowlist is never ",
-             "widened by a tool.")))
+             "widened by a tool."))))
   }
-  scan <- tryCatch(
-    ts_dataset_dir_scan(datasets_dir = root, validate = FALSE),
-    error = function(e) NULL)
+  scan <- tryCatch({
+    if (identical(mod_key, "sc") && exists("ts_sc_dataset_dir_scan", mode = "function")) {
+      ts_sc_dataset_dir_scan(datasets_dir = root)
+    } else if (identical(mod_key, "spatial") && exists("ts_spatial_dataset_dir_scan", mode = "function")) {
+      ts_spatial_dataset_dir_scan(datasets_dir = root)
+    } else {
+      ts_dataset_dir_scan(datasets_dir = root, validate = FALSE)
+    }
+  }, error = function(e) NULL)
   if (is.null(scan)) {
-    return(.ts_tool_err(
+    return(list(ok = FALSE, err = .ts_tool_err(
       "SCAN_FAILED",
       sprintf("the datasets root '%s' could not be listed.", .ts_clean(root)),
-      "Check the directory's readability."))
+      "Check the directory's readability.")))
   }
   entries <- lapply(names(scan), function(id) {
     en <- scan[[id]]
     list(dataset_id = id,
+         modality = mod_key %||% "default",
+         format = en$format %||% NULL,
          species = en$manifest$species %|NA|% NULL,
          matrix_type = en$manifest$matrix_type %|NA|% NULL,
          dir = en$paths$dir %|NA|% NULL,
+         file = en$paths$file %|NA|% NULL,
          mtime = if (is.null(en$mtime) || is.na(en$mtime)) NULL
                  else format(en$mtime, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"))
   })
+  list(ok = TRUE, root = root, entries = entries)
+}
+
+.ts_tool_datasets <- function(modality = NULL) {
+  mod <- .as_chr(modality)
+  if (is.na(mod) || !nzchar(trimws(mod))) {
+    one <- .ts_tool_datasets_one(NULL)
+    if (!isTRUE(one$ok)) return(one$err)
+    by_mod <- list()
+    for (m in c("bulk", "sc", "spatial")) {
+      sub_res <- .ts_tool_datasets_one(m)
+      if (isTRUE(sub_res$ok)) {
+        by_mod[[m]] <- list(datasets_dir = sub_res$root, count = length(sub_res$entries), datasets = sub_res$entries)
+      }
+    }
+    payload <- list(
+      datasets_dir = one$root,
+      count = length(one$entries),
+      validate = FALSE,
+      read_only = TRUE,
+      datasets = one$entries,
+      by_modality = by_mod)
+    return(.ts_tool_ok(payload, sprintf(
+      "datasets: %d found in %s (light listing, validate=FALSE — no v1 verdicts)",
+      length(one$entries), .ts_clean(one$root))))
+  }
+  mod <- tolower(trimws(mod))
+  if (!mod %in% c("bulk", "sc", "spatial", "all")) {
+    return(.ts_tool_err("INVALID_MODALITY", sprintf("Unknown modality '%s'.", .ts_clean(mod)),
+                        "Use 'bulk', 'sc', 'spatial', or 'all'."))
+  }
+  mods <- if (identical(mod, "all")) c("bulk", "sc", "spatial") else mod
+  all_entries <- list()
+  roots <- list()
+  for (m in mods) {
+    one <- .ts_tool_datasets_one(m)
+    if (isTRUE(one$ok)) {
+      roots[[m]] <- one$root
+      all_entries <- c(all_entries, one$entries)
+    }
+  }
   payload <- list(
-    datasets_dir = root,
-    count = length(entries),
+    modality = mod,
+    datasets_dirs = roots,
+    count = length(all_entries),
     validate = FALSE,
     read_only = TRUE,
-    datasets = entries)
+    datasets = all_entries)
   .ts_tool_ok(payload, sprintf(
-    "datasets: %d found in %s (light listing, validate=FALSE — no v1 verdicts)",
-    length(entries), .ts_clean(root)))
+    "datasets (%s): %d found across %d root(s)", mod, length(all_entries), length(roots)))
 }
 
 # --- 7b. M2 — the ONE controlled arm/disarm tool ----------------------------
@@ -3875,7 +3925,10 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
     if (is.na(nm)) return(.ts_error(id, -32602, "Invalid params: 'name' must be one string."))
     if (identical(nm, "transcripto_drive_status")) return(.ts_result(id, .ts_tool_status()))
     if (identical(nm, "transcripto_drive_state")) return(.ts_result(id, .ts_tool_state()))
-    if (identical(nm, "transcripto_drive_datasets")) return(.ts_result(id, .ts_tool_datasets()))
+    if (identical(nm, "transcripto_drive_datasets")) {
+      args <- if (is.list(params$arguments)) params$arguments else list()
+      return(.ts_result(id, .ts_tool_datasets(modality = args$modality)))
+    }
     if (identical(nm, "transcripto_drive_import")) {
       args <- if (is.list(params$arguments)) params$arguments else list()
       # PROTOCOL-level shape checks stay here; domain refusals live in the tool.

@@ -283,6 +283,16 @@ mod_import_spatial_ui <- function(id) {
                       verbatimTextOutput(ns("console_log"), placeholder = TRUE)))
       ),
 
+      card(
+        card_header(i18n$t("Datasets découverts")),
+        helpText(i18n$t("Déposez des dossiers Visium ou des fichiers spatiaux (.rds, .h5ad, .h5) dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.")),
+        div(class = "d-flex align-items-center gap-2 mb-2",
+            actionButton(ns("btn_scan_datasets"), i18n$t("Scanner le répertoire"),
+                         class = "btn-outline-secondary btn-sm"),
+            uiOutput(ns("datasets_dir_txt"))),
+        uiOutput(ns("datasets_table_ui"))
+      ),
+
       # v7 (backlog court-terme #1 — voir handoff_spatial_bio-mg.md) :
       # reference scRNA-seq PARTAGEE, preparee une fois ici et reutilisable
       # directement par RCTD ET Label Transfer (onglet Spatial > "3.
@@ -1061,6 +1071,93 @@ mod_import_spatial_server <- function(id, global_data) {
     observeEvent(input$btn_clear_shared_ref, {
       global_data$spatial_reference <- NULL
       showNotification(.tr("Reference partagee retiree."), type = "message", duration = 4)
+    })
+
+    # ── Datasets découverts (Spatial, data_spatial/datasets) ──────────────────
+    ds_dir_rv <- reactiveVal(NULL)
+    ds_scan_rv <- reactiveVal(NULL)
+    ds_btn_map_rv <- reactiveVal(list())
+    ds_seen_btns <- reactiveVal(character(0))
+
+    observeEvent(input$btn_scan_datasets, {
+      sp_dir <- tryCatch(ts_datasets_dir(modality = "spatial"), error = function(e) e)
+      if (inherits(sp_dir, "condition")) {
+        showNotification(conditionMessage(sp_dir), type = "error", duration = 8)
+        return()
+      }
+      res <- tryCatch(ts_spatial_dataset_dir_scan(datasets_dir = sp_dir), error = function(e) e)
+      if (inherits(res, "condition")) {
+        showNotification(conditionMessage(res), type = "error", duration = 8)
+        return()
+      }
+      ds_dir_rv(sp_dir)
+      ds_scan_rv(res)
+      ids <- names(res) %||% character(0)
+      btn_ids <- if (length(ids)) paste0("btn_load_sp_ds_", seq_along(ids)) else character(0)
+      ds_btn_map_rv(if (length(ids)) stats::setNames(as.list(ids), btn_ids) else list())
+      new_btns <- setdiff(btn_ids, shiny::isolate(ds_seen_btns()))
+      lapply(new_btns, function(bid) {
+        local({
+          b <- bid
+          observeEvent(input[[b]], {
+            mp <- shiny::isolate(ds_btn_map_rv())
+            ds_id <- mp[[b]]
+            sc_map <- shiny::isolate(ds_scan_rv())
+            entry <- if (!is.null(ds_id) && !is.null(sc_map)) sc_map[[ds_id]] else NULL
+            if (!is.null(entry) && identical(entry$status, "valid")) {
+              target_path <- entry$paths$dir %||% entry$paths$file
+              if (!is.na(target_path) && nzchar(target_path)) {
+                add_log(paste0(.tr("Chargement dataset spatial : "), ds_id))
+                dir_path(target_path)
+                updateTextInput(session, "sample_name", value = ds_id)
+                updateRadioButtons(session, "technology", selected = "visium")
+                if (requireNamespace("shinyjs", quietly = TRUE)) {
+                  shinyjs::click("btn_import")
+                }
+              }
+            }
+          }, ignoreInit = TRUE)
+        })
+      })
+      ds_seen_btns(c(shiny::isolate(ds_seen_btns()), new_btns))
+    })
+
+    output$datasets_dir_txt <- renderUI({
+      d <- ds_dir_rv()
+      if (is.null(d)) return(NULL)
+      tags$code(class = "small text-muted", d)
+    })
+
+    output$datasets_table_ui <- renderUI({
+      global_data$language
+      sc_res <- ds_scan_rv()
+      if (is.null(sc_res)) return(NULL)
+      if (!length(sc_res)) {
+        return(div(class = "small text-muted", .tr("Aucun dataset spatial détecté dans ce répertoire.")))
+      }
+      ns <- session$ns
+      mp <- shiny::isolate(ds_btn_map_rv())
+      rows <- lapply(seq_along(sc_res), function(i) {
+        nm <- names(sc_res)[i]
+        en <- sc_res[[i]]
+        bid <- names(mp)[match(nm, unlist(mp))]
+        tags$tr(
+          tags$td(tags$strong(nm)),
+          tags$td(en$format %||% "unknown"),
+          tags$td(tags$span(class = if (identical(en$status, "valid")) "badge bg-success" else "badge bg-secondary",
+                            en$status)),
+          tags$td(if (identical(en$status, "valid") && !is.na(bid)) {
+            actionButton(ns(bid), .tr("Charger"), class = "btn-outline-primary btn-sm")
+          } else {
+            tags$span(class = "small text-muted", en$raison %||% "-")
+          })
+        )
+      })
+      tags$table(
+        class = "table table-sm table-hover mb-0",
+        tags$thead(tags$tr(tags$th("Dataset"), tags$th(.tr("Format")), tags$th(.tr("Statut")), tags$th(""))),
+        tags$tbody(rows)
+      )
     })
   })
 }

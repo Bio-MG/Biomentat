@@ -448,3 +448,80 @@ ts_sc_dataset_dir_scan <- function(datasets_dir = ts_datasets_dir(modality = "sc
   }
   out
 }
+
+# ── Scanner Spatial (data_spatial/datasets) ───────────────────────────────────
+
+.ts_spatial_scan_one_dir <- function(d) {
+  d_norm <- .ts_datasets_path(d)
+  mt <- file.mtime(d_norm)
+  has_visium <- dir.exists(file.path(d, "spatial")) ||
+    dir.exists(file.path(d, "outs", "spatial")) ||
+    length(list.files(d, pattern = "^(filtered|raw)_feature_bc_matrix", full.names = FALSE)) > 0L
+  if (has_visium) {
+    return(list(
+      status = "valid",
+      raison = NA_character_,
+      format = "visium",
+      paths = list(dir = d_norm, file = NA_character_),
+      mtime = mt
+    ))
+  }
+  files <- sort(list.files(d, pattern = "\\.(rds|h5ad|h5)$", ignore.case = TRUE, full.names = TRUE))
+  files <- files[!dir.exists(files)]
+  if (length(files) > 0L) {
+    f1 <- .ts_datasets_path(files[1L])
+    sz <- file.size(f1)
+    ok <- !is.na(sz) && sz > 0
+    return(list(
+      status = if (ok) "valid" else "invalid",
+      raison = if (ok) NA_character_ else "empty_file",
+      format = tolower(tools::file_ext(f1)),
+      paths = list(dir = d_norm, file = f1),
+      mtime = mt
+    ))
+  }
+  list(
+    status = "invalid",
+    raison = "no_spatial_files",
+    format = "unknown",
+    paths = list(dir = d_norm, file = NA_character_),
+    mtime = mt
+  )
+}
+
+#' Scan a Spatial datasets directory (1 depth, read-only).
+#'
+#' @param datasets_dir Root to scan (default: `ts_datasets_dir(modality = "spatial")`).
+#' @return Named list of discovered Spatial dataset entries.
+ts_spatial_dataset_dir_scan <- function(datasets_dir = ts_datasets_dir(modality = "spatial")) {
+  root <- .sc_scalar_text(datasets_dir)
+  if (is.null(root) || !dir.exists(root)) {
+    return(list())
+  }
+  old_coll <- Sys.setlocale("LC_COLLATE", "C")
+  on.exit(Sys.setlocale("LC_COLLATE", old_coll), add = TRUE)
+
+  subdirs <- sort(list.dirs(root, full.names = TRUE, recursive = FALSE))
+  top_files <- sort(list.files(root, full.names = TRUE, recursive = FALSE))
+  top_files <- top_files[!dir.exists(top_files) &
+                           grepl("\\.(rds|h5ad|h5)$", basename(top_files), ignore.case = TRUE)]
+
+  out <- list()
+  for (d in subdirs) {
+    out[[basename(d)]] <- .ts_spatial_scan_one_dir(d)
+  }
+  for (f in top_files) {
+    f_norm <- .ts_datasets_path(f)
+    sz <- file.size(f)
+    ext <- tolower(tools::file_ext(f))
+    ok <- !is.na(sz) && sz > 0
+    out[[basename(f)]] <- list(
+      status = if (ok) "valid" else "invalid",
+      raison = if (ok) NA_character_ else "empty_file",
+      format = ext,
+      paths = list(dir = NA_character_, file = f_norm),
+      mtime = file.mtime(f_norm)
+    )
+  }
+  out
+}

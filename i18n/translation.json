@@ -14020,6 +14020,18 @@
     {
       "fr": "Assemblage de l'explorateur Lite...",
       "en": "Building Lite Explorer..."
+    },
+    {
+      "fr": "Déposez des dossiers Visium ou des fichiers spatiaux (.rds, .h5ad, .h5) dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.",
+      "en": "Drop Visium folders or spatial files (.rds, .h5ad, .h5) into the directory, then scan: nothing is read at startup and nothing is loaded without your click."
+    },
+    {
+      "fr": "Aucun dataset spatial détecté dans ce répertoire.",
+      "en": "No spatial dataset detected in this directory."
+    },
+    {
+      "fr": "Chargement dataset spatial : ",
+      "en": "Loading spatial dataset: "
     }
   ]
 }
