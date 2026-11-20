@@ -779,6 +779,62 @@ run_markers <- function(input, global_data, shared_rv, session) {
   NULL
 }
 
+# Pure helper: compute which sidebar step, accordions, and DA sub-tabs need
+# resynchronization when main_tabs changes (including nav_menu dropdown clicks).
+.sc_tab_sync_plan <- function(tab, current_step, open_workflow = NULL,
+                              open_acc_panel = NULL, da_tab = NULL,
+                              da_method_tab = NULL) {
+  if (is.null(tab) || length(tab) != 1L || is.na(tab) || !nzchar(tab)) return(NULL)
+  info <- .sc_tab_to_step_info(tab)
+  if (is.null(info)) return(NULL)
+
+  last_panel <- function(x) {
+    if (is.null(x) || !length(x)) return(NULL)
+    val <- as.character(utils::tail(x, 1L))
+    if (length(val) != 1L || is.na(val) || !nzchar(val)) NULL else val
+  }
+
+  need_step <- !identical(info$panel, current_step)
+  need_workflow <- !identical(last_panel(open_workflow), info$group)
+  need_acc <- !identical(last_panel(open_acc_panel), info$panel)
+
+  target_da_tab <- NULL
+  target_da_method_tab <- NULL
+  need_da_tab <- FALSE
+  need_da_method_tab <- FALSE
+  if (identical(info$panel, "8_da_merged")) {
+    if (identical(tab, "tab_da_cross")) {
+      target_da_tab <- "da_cross"
+    } else if (tab %in% c("tab_da_milo", "tab_da_sccoda")) {
+      target_da_tab <- "da_methods"
+      target_da_method_tab <- if (identical(tab, "tab_da_sccoda")) "da_sccoda" else "da_milo"
+      need_da_method_tab <- !identical(da_method_tab, target_da_method_tab)
+    } else {
+      target_da_tab <- "da_design"
+    }
+    need_da_tab <- !identical(da_tab, target_da_tab)
+  }
+
+  list(
+    info = info,
+    need_step = need_step,
+    need_workflow = need_workflow,
+    need_acc = need_acc,
+    need_da_tab = need_da_tab,
+    target_da_tab = target_da_tab,
+    need_da_method_tab = need_da_method_tab,
+    target_da_method_tab = target_da_method_tab,
+    need_guard = isTRUE(need_step || need_acc || need_da_tab || need_da_method_tab)
+  )
+}
+
+# Pure helper: H1 anti-ping-pong echo check (0.6s window).
+.sc_sync_is_echo <- function(step, guard_step, guard_ts, now_ts, window_s = 0.6) {
+  !is.null(guard_step) &&
+    identical(step, guard_step) &&
+    (now_ts - (guard_ts %||% 0)) < window_s
+}
+
 # Pure helper: reactive CSS for workflow_display_mode == "specialise".
 # Keeps grp_prep visible in #acc_workflow and only hides sibling items in
 # non-prep nested accordions so 0_autopipeline & 0_mapping stay reachable.
@@ -1364,12 +1420,10 @@ mod_sc_server <- function(id, global_data) {
       # sidebar↔résultat). Même défense que l'observer spatial (tail).
       s <- as.character(utils::tail(step_val, 1))
       now_s <- proc.time()[["elapsed"]]
-      is_echo <- identical(s, .sc_sync_guard$from_tab_step) &&
-        (now_s - (.sc_sync_guard$from_tab_ts %||% 0)) < 0.6
-      if (is_echo) {
-        .sc_sync_guard$from_tab_step <- NULL
+      if (.sc_sync_is_echo(s, .sc_sync_guard$from_tab_step, .sc_sync_guard$from_tab_ts, now_s)) {
         return(invisible(NULL))
       }
+      .sc_sync_guard$from_tab_step <- NULL
       if (!identical(s, isolate(active_sc_step_rv()))) {
         active_sc_step_rv(s)
       }
@@ -1432,12 +1486,33 @@ mod_sc_server <- function(id, global_data) {
       if (is.null(tab) || length(tab) != 1L || is.na(tab) || !nzchar(tab)) return(invisible(NULL))
       info <- .sc_tab_to_step_info(tab)
       if (is.null(info)) return(invisible(NULL))
-      if (!identical(info$panel, isolate(active_sc_step_rv()))) {
+      plan <- .sc_tab_sync_plan(
+        tab = tab,
+        current_step = isolate(active_sc_step_rv()),
+        open_workflow = isolate(input$acc_workflow),
+        open_acc_panel = isolate(input[[info$acc]]),
+        da_tab = isolate(input$da_tabs),
+        da_method_tab = isolate(input$da_methods_tabs)
+      )
+      if (is.null(plan)) return(invisible(NULL))
+      if (isTRUE(plan$need_guard)) {
         .sc_sync_guard$from_tab_step <- info$panel
         .sc_sync_guard$from_tab_ts <- proc.time()[["elapsed"]]
+      }
+      if (!identical(info$panel, isolate(active_sc_step_rv()))) {
         active_sc_step_rv(info$panel)
+      }
+      if (isTRUE(plan$need_workflow)) {
         try(bslib::accordion_panel_open(id = "acc_workflow", values = info$group, session = session), silent = TRUE)
+      }
+      if (isTRUE(plan$need_acc)) {
         try(bslib::accordion_panel_open(id = info$acc, values = info$panel, session = session), silent = TRUE)
+      }
+      if (isTRUE(plan$need_da_tab)) {
+        try(nav_select(id = "da_tabs", selected = plan$target_da_tab, session = session), silent = TRUE)
+      }
+      if (isTRUE(plan$need_da_method_tab)) {
+        try(nav_select(id = "da_methods_tabs", selected = plan$target_da_method_tab, session = session), silent = TRUE)
       }
       invisible(NULL)
     }, ignoreInit = TRUE)
@@ -1465,22 +1540,26 @@ mod_sc_server <- function(id, global_data) {
 
     observeEvent(input$sc_sync_open_step, {
       cur_tab <- isolate(input$main_tabs) %||% isolate(state_get(shared_rv, "active_tab")) %||% "tab_qc"
-      info <- .sc_tab_to_step_info(cur_tab)
-      if (is.null(info)) return()
+      plan <- .sc_tab_sync_plan(
+        tab = cur_tab,
+        current_step = isolate(active_sc_step_rv()),
+        open_workflow = isolate(input$acc_workflow),
+        open_acc_panel = NULL,
+        da_tab = isolate(input$da_tabs),
+        da_method_tab = isolate(input$da_methods_tabs)
+      )
+      if (is.null(plan)) return()
+      info <- plan$info
+      .sc_sync_guard$from_tab_step <- info$panel
+      .sc_sync_guard$from_tab_ts <- proc.time()[["elapsed"]]
       active_sc_step_rv(info$panel)
       try(bslib::accordion_panel_open(id = "acc_workflow", values = info$group, session = session), silent = TRUE)
       try(bslib::accordion_panel_open(id = info$acc, values = info$panel, session = session), silent = TRUE)
-      if (identical(info$panel, "8_da_merged")) {
-        if (identical(cur_tab, "tab_da_cross")) {
-          try(nav_select(id = "da_tabs", selected = "da_cross", session = session), silent = TRUE)
-        } else if (cur_tab %in% c("tab_da_milo", "tab_da_sccoda")) {
-          try(nav_select(id = "da_tabs", selected = "da_methods", session = session), silent = TRUE)
-          try(nav_select(id = "da_methods_tabs",
-                         selected = if (identical(cur_tab, "tab_da_sccoda")) "da_sccoda" else "da_milo",
-                         session = session), silent = TRUE)
-        } else {
-          try(nav_select(id = "da_tabs", selected = "da_design", session = session), silent = TRUE)
-        }
+      if (!is.null(plan$target_da_tab)) {
+        try(nav_select(id = "da_tabs", selected = plan$target_da_tab, session = session), silent = TRUE)
+      }
+      if (!is.null(plan$target_da_method_tab)) {
+        try(nav_select(id = "da_methods_tabs", selected = plan$target_da_method_tab, session = session), silent = TRUE)
       }
     }, ignoreInit = TRUE)
 
