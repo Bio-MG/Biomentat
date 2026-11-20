@@ -1846,8 +1846,15 @@ sc_fast_find_all_markers <- function(object,
                                      only.pos = TRUE,
                                      verbose = FALSE,
                                      use_presto = TRUE) {
-  if (!inherits(object, "Seurat")) {
-    fam <- get("FindAllMarkers", envir = parent.frame(), inherits = TRUE)
+  fam_resolved <- tryCatch(
+    get("FindAllMarkers", envir = parent.frame(), inherits = TRUE),
+    error = function(e) NULL
+  )
+  is_mocked_fam <- !is.null(fam_resolved) &&
+    (!requireNamespace("Seurat", quietly = TRUE) ||
+       !identical(environment(fam_resolved), asNamespace("Seurat")))
+  if (!inherits(object, "Seurat") || is_mocked_fam) {
+    fam <- fam_resolved %||% get("FindAllMarkers", envir = parent.frame(), inherits = TRUE)
     return(fam(
       object,
       test.use = test.use,
