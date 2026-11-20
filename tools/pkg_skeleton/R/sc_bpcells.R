@@ -216,3 +216,106 @@ optimize_bpcells_for_markers <- function(obj, dir = NULL) {
   result
 }
 
+#' Detect and normalize legacy AnnData `.h5ad` sparse layout & orientation.
+#'
+#' Modern AnnData (>= 0.8) records `encoding-type` (`"csr_matrix"`,
+#' `"csc_matrix"`, or `"array"`) on `/X` and layers, whereas legacy `.h5ad`
+#' files often omit `encoding-type` and store sparse `(indptr, indices, data)`
+#' groups in CSR (or CSC) orientation with `(n_obs, n_vars)` shape. R/Seurat
+#' and BPCells expect `(n_vars, n_obs)` (genes x cells) orientation.
+#'
+#' @param encoding_type Character scalar from HDF5 `encoding-type` attribute,
+#'   or `NULL`/`NA`/`""` when absent (legacy `.h5ad`).
+#' @param dims Optional numeric/integer vector of length 2 (`c(nrow, ncol)`).
+#' @param n_obs Optional non-negative integer count of observations (cells).
+#' @param n_vars Optional non-negative integer count of variables (genes).
+#' @return A list with elements `layout` (`"csr"`, `"csc"`, or `"dense"`),
+#'   `needs_transpose` (logical), `legacy_fallback` (logical), and `note`
+#'   (character scalar).
+sc_normalize_h5ad_sparse_layout <- function(encoding_type = NULL,
+                                            dims = NULL,
+                                            n_obs = NULL,
+                                            n_vars = NULL) {
+  .stop_layout <- function(msg) {
+    stop(errorCondition(msg, class = "sc_bpcells_error"))
+  }
+
+  .validate_count <- function(val, label) {
+    if (is.null(val)) return(NULL)
+    if (!is.numeric(val) || length(val) != 1L || is.na(val) || !is.finite(val) || val < 0) {
+      .stop_layout(sprintf("sc_normalize_h5ad_sparse_layout() : '%s' invalide.", label))
+    }
+    as.integer(val)
+  }
+
+  missing_enc <- is.null(encoding_type) ||
+    length(encoding_type) == 0L ||
+    (length(encoding_type) == 1L && (is.na(encoding_type) || !nzchar(trimws(as.character(encoding_type)))))
+
+  if (missing_enc) {
+    legacy_fallback <- TRUE
+    layout <- "csr"
+  } else {
+    if (!is.character(encoding_type) || length(encoding_type) != 1L) {
+      .stop_layout("sc_normalize_h5ad_sparse_layout() : 'encoding_type' doit être une chaîne scalaire ou NULL.")
+    }
+    legacy_fallback <- FALSE
+    enc_norm <- tolower(trimws(encoding_type))
+    layout <- switch(
+      enc_norm,
+      csr_matrix = "csr",
+      csr = "csr",
+      csc_matrix = "csc",
+      csc = "csc",
+      array = "dense",
+      dense = "dense",
+      .stop_layout(sprintf("sc_normalize_h5ad_sparse_layout() : encoding_type non supporté : '%s'.", encoding_type))
+    )
+  }
+
+  if (!is.null(dims)) {
+    if (!is.numeric(dims) || length(dims) != 2L || anyNA(dims) || any(!is.finite(dims)) || any(dims < 0)) {
+      .stop_layout("sc_normalize_h5ad_sparse_layout() : 'dims' doit être un vecteur numérique de longueur 2 (>= 0).")
+    }
+    dims <- as.integer(dims)
+  }
+  n_obs <- .validate_count(n_obs, "n_obs")
+  n_vars <- .validate_count(n_vars, "n_vars")
+
+  needs_transpose <- TRUE
+  orientation_note <- "default AnnData (obs x var) orientation assumed; transpose to (genes x cells)"
+
+  if (!is.null(dims) && !is.null(n_obs) && !is.null(n_vars)) {
+    if (n_obs != n_vars && identical(dims, c(n_vars, n_obs))) {
+      needs_transpose <- FALSE
+      orientation_note <- "already in (genes x cells) orientation; no transpose needed"
+    } else if (identical(dims, c(n_obs, n_vars))) {
+      needs_transpose <- TRUE
+      orientation_note <- if (n_obs == n_vars) {
+        "square matrix (n_obs == n_vars); assuming AnnData (obs x var) orientation"
+      } else {
+        "AnnData (obs x var) orientation detected; transpose to (genes x cells)"
+      }
+    } else {
+      .stop_layout(sprintf(
+        "sc_normalize_h5ad_sparse_layout() : dims (%d, %d) incompatible avec n_obs=%d, n_vars=%d.",
+        dims[1L], dims[2L], n_obs, n_vars
+      ))
+    }
+  }
+
+  prefix <- if (legacy_fallback) {
+    sprintf("legacy .h5ad fallback (missing encoding-type -> '%s')", layout)
+  } else {
+    sprintf("layout '%s'", layout)
+  }
+
+  list(
+    layout = layout,
+    needs_transpose = needs_transpose,
+    legacy_fallback = legacy_fallback,
+    note = paste0(prefix, ": ", orientation_note, ".")
+  )
+}
+
+
