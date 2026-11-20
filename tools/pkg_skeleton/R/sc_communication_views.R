@@ -48,6 +48,7 @@ communication_views_public_api <- function() {
     "plot_communication_circle",
     "build_communication_centrality",
     "plot_communication_roles_dot",
+    "plot_communication_centrality_quadrant",
     "build_communication_filter_provenance",
     "build_communication_filtered_export",
     # 5e pilule exploratoire « Synthèse multi-modale » (d183d11) — registre
@@ -112,6 +113,24 @@ communication_views_public_api <- function() {
     }
     out
   }))
+}
+
+#' Garde-fou top-N generique sur un data.frame agrege (affichage uniquement)
+.communication_top_n_rows <- function(df, n, primary, secondary = NULL) {
+  if (is.null(n) || !is.numeric(n) || length(n) != 1L ||
+      !is.finite(n) || n <= 0) {
+    return(df)
+  }
+  n_keep <- as.integer(n)
+  if (n_keep <= 0L || nrow(df) <= n_keep) {
+    return(df)
+  }
+  ord <- if (is.null(secondary)) {
+    order(primary, decreasing = TRUE, na.last = TRUE)
+  } else {
+    order(primary, secondary, decreasing = TRUE, na.last = TRUE)
+  }
+  df[ord[seq_len(n_keep)], , drop = FALSE]
 }
 
 #' Message explicite au lieu d'un graphique vide (aucun graphe trompeur)
@@ -299,10 +318,12 @@ communication_apply_filters <- function(communication_result,
 #' @param filtered_table Table filtree (communication_apply_filters()$table)
 #'   ou NULL pour utiliser la table complete du resultat.
 #' @param seurat_obj Objet Seurat courant optionnel (peremption).
+#' @param top_n_pairs Entier positif optionnel : limite aux N paires
+#'   sender-receiver principales (NULL = toutes).
 #' @return ggplot.
 #' @export
 plot_communication_dotplot <- function(communication_result, filtered_table = NULL,
-                                       seurat_obj = NULL) {
+                                       seurat_obj = NULL, top_n_pairs = NULL) {
   r <- assert_communication_result(
     communication_result, seurat_obj = seurat_obj,
     context = "DotPlot sender-receiver"
@@ -323,6 +344,14 @@ plot_communication_dotplot <- function(communication_result, filtered_table = NU
   has_rank <- "mean_rank" %in% colnames(agg) &&
     any(is.finite(agg$mean_rank))
   has_score <- any(!is.na(agg$mean_score))
+  pair_weight <- if (has_rank) {
+    agg$n_interactions
+  } else if (has_score) {
+    ifelse(is.na(agg$sum_score), agg$n_interactions, agg$sum_score)
+  } else {
+    agg$n_interactions
+  }
+  agg <- .communication_top_n_rows(agg, top_n_pairs, pair_weight, agg$n_interactions)
 
   p <- ggplot2::ggplot(
     agg,
@@ -457,10 +486,12 @@ plot_communication_pathway_heatmap <- function(communication_result,
 #' @param communication_result Resultat canonique.
 #' @param filtered_table Table filtree ou NULL (table complete).
 #' @param seurat_obj Objet Seurat courant optionnel (peremption).
+#' @param top_n_edges Entier positif optionnel : limite aux N aretes les plus
+#'   ponderees (NULL = toutes).
 #' @return ggplot.
 #' @export
 plot_communication_circle <- function(communication_result, filtered_table = NULL,
-                                      seurat_obj = NULL) {
+                                      seurat_obj = NULL, top_n_edges = NULL) {
   r <- assert_communication_result(
     communication_result, seurat_obj = seurat_obj,
     context = "reseau circulaire"
@@ -489,6 +520,7 @@ plot_communication_circle <- function(communication_result, filtered_table = NUL
     any(is.finite(agg$mean_rank))
   has_score <- any(!is.na(agg$sum_score))
   agg$weight <- if (has_rank) agg$n_interactions else if (has_score) agg$sum_score else agg$n_interactions
+  agg <- .communication_top_n_rows(agg, top_n_edges, agg$weight, agg$n_interactions)
 
   nodes <- sort(unique(c(agg$sender_node, agg$receiver_node)))
   n_nodes <- length(nodes)
@@ -782,6 +814,97 @@ plot_communication_roles_dot <- function(roles_table,
     ggplot2::theme(legend.position = "right",
                    panel.grid.minor = ggplot2::element_blank(),
                    axis.text.x = ggplot2::element_text(angle = 35, hjust = 1))
+}
+
+#' Quadrant de centralite sender/receiver (CellChat, ggplot pur)
+#'
+#' Trace `outdeg` (x) contre `indeg` (y) par groupe cellulaire (agrege sur
+#' toutes les voies si `pathway = NULL`, ou pour une voie donnee), avec lignes
+#' de reference medianes et etiquettes de groupe/role. VUE DESCRIPTIVE.
+#'
+#' @param roles_table data.frame portant au moins (pathway, group, outdeg,
+#'   indeg, role) — colonnes du contrat CC-1.
+#' @param pathway Nom de voie optionnel (NULL = agregation sur toutes voies).
+#' @return objet ggplot.
+#' @export
+plot_communication_centrality_quadrant <- function(roles_table,
+                                                   pathway = NULL) {
+  if (!is.data.frame(roles_table) ||
+      !all(c("pathway", "group", "outdeg", "indeg", "role") %in%
+           colnames(roles_table))) {
+    .views_stop(paste0(
+      "plot_communication_centrality_quadrant() : table roles CC-1 requise ",
+      "(pathway, group, outdeg, indeg, role)."
+    ))
+  }
+  df <- roles_table
+  pw_label <- NULL
+  if (!is.null(pathway) && length(pathway) > 0L &&
+      nzchar(as.character(pathway[1L]))) {
+    pw_label <- as.character(pathway[1L])
+    df <- df[as.character(df$pathway) == pw_label, , drop = FALSE]
+  }
+  if (nrow(df) == 0L) {
+    return(.communication_empty_view_plot(
+      if (is.null(pw_label)) "Aucun role actif a afficher."
+      else sprintf("Aucun role actif pour la voie '%s'.", pw_label),
+      "Quadrant de centralite sender/receiver (CellChat)",
+      if (is.null(pw_label)) "" else paste0("Voie : ", pw_label)
+    ))
+  }
+
+  agg <- do.call(rbind, lapply(
+    split(df, as.character(df$group)),
+    function(sub) {
+      deg_max <- pmax(sub$outdeg, sub$indeg, na.rm = TRUE)
+      idx <- if (any(is.finite(deg_max))) which.max(deg_max) else 1L
+      data.frame(
+        group = as.character(sub$group[1L]),
+        outdeg = sum(sub$outdeg, na.rm = TRUE),
+        indeg = sum(sub$indeg, na.rm = TRUE),
+        role = as.character(sub$role[idx]),
+        stringsAsFactors = FALSE
+      )
+    }
+  ))
+  rownames(agg) <- NULL
+  agg$role <- factor(agg$role,
+                     levels = c("sender", "receiver", "mediator", "minor"))
+
+  med_out <- stats::median(agg$outdeg, na.rm = TRUE)
+  med_in <- stats::median(agg$indeg, na.rm = TRUE)
+  sub_txt <- if (is.null(pw_label)) {
+    "Agregation sur toutes les voies — lignes pointillees : medianes outdeg / indeg."
+  } else {
+    sprintf("Voie : %s — lignes pointillees : medianes outdeg / indeg.", pw_label)
+  }
+
+  ggplot2::ggplot(agg, ggplot2::aes(x = .data$outdeg, y = .data$indeg)) +
+    ggplot2::geom_vline(xintercept = med_out, linetype = "dashed",
+                        colour = "grey50") +
+    ggplot2::geom_hline(yintercept = med_in, linetype = "dashed",
+                        colour = "grey50") +
+    ggplot2::geom_point(ggplot2::aes(size = pmax(.data$outdeg, .data$indeg),
+                                     color = .data$role),
+                        alpha = 0.9) +
+    ggplot2::geom_text(ggplot2::aes(label = .data$group),
+                       vjust = -0.7, size = 3.2, check_overlap = TRUE) +
+    ggplot2::scale_color_manual(values = c(sender = "#2166AC",
+                                           receiver = "#B2182B",
+                                           mediator = "#4D4D4D",
+                                           minor = "#BDBDBD"),
+                                drop = FALSE) +
+    ggplot2::labs(
+      x = "Degre sortant pondere (outdeg)",
+      y = "Degre entrant pondere (indeg)",
+      size = "degre max",
+      color = "role",
+      title = "Quadrant de centralite sender/receiver (CellChat)",
+      subtitle = sub_txt
+    ) +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(legend.position = "right",
+                   panel.grid.minor = ggplot2::element_blank())
 }
 
 #' Synthèse multi-modale des contextes CCC (filtrage exploratoire)
