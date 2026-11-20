@@ -192,6 +192,19 @@ mod_bulk_pathways_output_ui <- function(id) {
   )
 }
 
+# W2.3 #3c — réserve méthodologique PK-3 (SOTA_OMICS_BENCHMARK §6.11) : note
+# statique (aucune clé i18n) affichée au-dessus de la vue Convergence.
+.bulk_pk3_reserve_note <- function() {
+  shiny::div(
+    class = "pk3-reserve-note small text-muted mb-2",
+    shiny::tags$strong("Réserve méthodologique : "),
+    paste0("la FDR BH de cet onglet est calculée de façon globale sur l'union ",
+           "des gènes post-cutoff (après filtrage par seuil), toutes ",
+           "librairies confondues ; elle dépend donc du seuil de sélection ",
+           "et n'est pas comparable à la p.adjust par run de l'onglet Table.")
+  )
+}
+
 mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -1129,7 +1142,8 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       global_data$language                     # i18n trigger (comme pathway_table)
       packs_converge_result(shared_rv$pathway_results, .tr)
     })
-    output$convergence_ui <- renderUI(packs_convergence_content(ns, convergence_data, .tr))
+    output$convergence_ui <- renderUI(tagList(.bulk_pk3_reserve_note(),
+                                           packs_convergence_content(ns, convergence_data, .tr)))
     output$convergence_table <- renderDT(packs_convergence_dt(convergence_data, .tr_fn(global_data)))
 
     # ── PB (GEMS D5) — résultats ORA directionnelle (goana/kegga) ────────────
