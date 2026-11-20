@@ -79,6 +79,118 @@
 .MAX_TRAJECTORY_CELLS <- if (exists("TS_MAX_TRAJECTORY_CELLS")) TS_MAX_TRAJECTORY_CELLS else 100000L   # mirrors the guard in global.R
 
 
+# ── Pure helpers: metadata hydration for auto-pipeline / restored trajectories ─
+# Item #12 (VELOCITY_IMPROVEMENTS_PROPOSAL_2026-11-17.md): when the SC
+# auto-pipeline (or a session restore) writes `pseudotime` + `traj_*`
+# provenance into `obj@meta.data`, `mod_sc_trajectory_server`'s local
+# `traj_result` reactiveVal was still NULL, leaving "Plot Trajectoire" blank.
+# These pure helpers reconstruct a read-only trajectory result from
+# `obj@meta.data` without ever re-inferring pseudotime or fabricating edges.
+.traj_result_from_meta <- function(obj) {
+  if (is.null(obj) || !inherits(obj, "Seurat")) return(NULL)
+  meta <- obj@meta.data
+  if (is.null(meta) || !"pseudotime" %in% colnames(meta)) return(NULL)
+  pt <- as.numeric(meta$pseudotime)
+  if (!length(pt) || all(is.na(pt))) return(NULL)
+
+  n_cells <- as.integer(ncol(obj))
+  first_chr <- function(col, default = NA_character_) {
+    if (!col %in% colnames(meta)) return(default)
+    val <- as.character(meta[[col]][1])
+    if (length(val) != 1L || is.na(val) || !nzchar(val)) default else val
+  }
+
+  method_type <- first_chr("traj_method", "exploratory_knn")
+  comp_red <- first_chr("traj_computation_reduction", NA_character_)
+  if (!is.na(comp_red)) {
+    comp_red <- tolower(comp_red)
+  } else {
+    reds <- names(obj@reductions)
+    comp_red <- if ("umap" %in% reds) "umap" else if ("pca" %in% reds) "pca" else NULL
+  }
+  root_method <- first_chr("traj_root_method", NA_character_)
+  root_cluster <- first_chr("traj_root_cluster", NA_character_)
+  if (is.na(root_cluster)) root_cluster <- NULL
+
+  root_cell <- NULL
+  if ("traj_root_cell" %in% colnames(meta)) {
+    rc <- suppressWarnings(as.integer(meta$traj_root_cell[1]))
+    if (length(rc) == 1L && !is.na(rc) && rc >= 1L && rc <= n_cells) {
+      root_cell <- rc
+    }
+  }
+
+  in_comp <- if ("traj_in_component" %in% colnames(meta)) {
+    as.logical(meta$traj_in_component)
+  } else if ("traj_in_root_component" %in% colnames(meta)) {
+    as.logical(meta$traj_in_root_component)
+  } else {
+    is.finite(pt)
+  }
+
+  comp_size <- if ("traj_root_component_size" %in% colnames(meta)) {
+    cs <- suppressWarnings(as.integer(meta$traj_root_component_size[1]))
+    if (length(cs) == 1L && !is.na(cs)) cs else sum(is.finite(pt))
+  } else {
+    sum(is.finite(pt))
+  }
+
+  list(
+    pseudotime            = pt,
+    graph                 = NULL,
+    root_cell             = root_cell,
+    root_method           = root_method,
+    root_cluster          = root_cluster,
+    in_root_component     = in_comp,
+    root_component_size   = comp_size,
+    n_cells               = n_cells,
+    computation_reduction = comp_red,
+    method_type           = method_type,
+    source                = "metadata"
+  )
+}
+
+.resolve_traj_result <- function(obj, current_res = NULL) {
+  if (is.null(obj) || !inherits(obj, "Seurat")) return(NULL)
+  meta <- obj@meta.data
+  if (is.null(meta) || !"pseudotime" %in% colnames(meta)) return(NULL)
+
+  if (!is.null(current_res) && is.list(current_res) && !is.null(current_res$pseudotime)) {
+    meta_method <- if ("traj_method" %in% colnames(meta)) {
+      val <- as.character(meta$traj_method[1])
+      if (length(val) == 1L && !is.na(val) && nzchar(val)) val else "exploratory_knn"
+    } else {
+      "exploratory_knn"
+    }
+    cur_method <- current_res$method_type %||% "exploratory_knn"
+    cur_n <- as.integer(current_res$n_cells %||% length(current_res$pseudotime))
+    if (identical(cur_n, as.integer(ncol(obj))) &&
+        identical(cur_method, meta_method) &&
+        identical(as.numeric(current_res$pseudotime), as.numeric(meta$pseudotime))) {
+      return(current_res)
+    }
+  }
+  .traj_result_from_meta(obj)
+}
+
+.resolve_traj_display_reduction <- function(obj, input_red = NULL, result = NULL, shared_red = NULL) {
+  if (is.null(obj) || !inherits(obj, "Seurat")) return(NULL)
+  reds <- names(obj@reductions)
+  if (!length(reds)) return(NULL)
+
+  candidates <- c(input_red,
+                  if (is.list(result)) result$computation_reduction else NULL,
+                  shared_red, "umap", "pca")
+  for (cand in candidates) {
+    if (is.character(cand) && length(cand) == 1L && !is.na(cand) && nzchar(cand)) {
+      lc <- tolower(cand)
+      if (lc %in% reds) return(lc)
+    }
+  }
+  reds[1]
+}
+
+
 # ── UI: sidebar controls ──────────────────────────────────────────────────────
 
 mod_sc_trajectory_ui <- function(id) {
@@ -343,6 +455,29 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       var_genes <- VariableFeatures(obj)
       all_genes <- c(var_genes, setdiff(rownames(obj), var_genes))
       updateSelectizeInput(session, "traj_genes", choices = all_genes, server = TRUE)
+
+      # Item #12: hydrate traj_result from auto-pipeline / restored metadata
+      # (or clear stale result when the new object has no pseudotime).
+      cur_res  <- isolate(traj_result())
+      hydrated <- .resolve_traj_result(obj, cur_res)
+      if (!identical(hydrated, cur_res)) {
+        traj_result(hydrated)
+        if (!is.null(hydrated) && identical(hydrated$source, "metadata")) {
+          if (is.null(isolate(shared_rv$traj_reduction)) && !is.null(hydrated$computation_reduction)) {
+            state_set(shared_rv, "traj_reduction", hydrated$computation_reduction)
+          }
+          if (is.null(isolate(shared_rv$traj_method)) && !is.null(hydrated$method_type)) {
+            state_set(shared_rv, "traj_method", hydrated$method_type)
+          }
+          pct <- if (hydrated$n_cells > 0L) round(100 * hydrated$root_component_size / hydrated$n_cells, 1) else 0
+          traj_status_rv(sprintf(
+            "OK Pseudotemps charge (%s, espace %s). %d/%d cellules (%.1f%%).",
+            hydrated$method_type %||% "exploratory_knn",
+            hydrated$computation_reduction %||% "?",
+            hydrated$root_component_size, hydrated$n_cells, pct
+          ))
+        }
+      }
     })
 
     # ── 0bis. Method help + Slingshot controls (Slingshot integration) ─────
@@ -644,18 +779,23 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
     # ── 2. Main trajectory plot ────────────────────────────────────────────
     output$trajectory_plot <- renderPlot({
       input$plot_trajectory_btn
-      req(global_data$sc_obj, traj_result())
+      req(global_data$sc_obj)
       obj    <- global_data$sc_obj
-      result <- traj_result()
-      colorby <- input$traj_color
+      result <- .resolve_traj_result(obj, traj_result())
+      colorby <- input$traj_color %||% "pseudotime"
 
-      if (colorby == "pseudotime" && !"pseudotime" %in% colnames(obj@meta.data)) {
+      if (identical(colorby, "pseudotime") && !"pseudotime" %in% colnames(obj@meta.data)) {
         return(ggplot() + annotate("text", x = 0.5, y = 0.5,
                                    label = .tr("Pseudotemps non calculé."), size = 6, hjust = 0.5) +
                  theme_void())
       }
+      req(result)
 
-      display_embedding <- Seurat::Embeddings(obj, reduction = input$traj_reduction)
+      disp_red <- .resolve_traj_display_reduction(
+        obj, input$traj_reduction, result, state_get(shared_rv, "traj_reduction")
+      )
+      req(!is.null(disp_red))
+      display_embedding <- Seurat::Embeddings(obj, reduction = disp_red)
 
       # NOTE: deliberately separate rendering paths.
       #  - exploratory "pseudotime" -> plot_trajectory(): continuous viridis
@@ -688,7 +828,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
             )
           }
         } else {
-          Seurat::DimPlot(obj, reduction = input$traj_reduction,
+          Seurat::DimPlot(obj, reduction = disp_red,
                           group.by = colorby, pt.size = 0.7) +
             ggplot2::theme_classic()
         }
@@ -844,14 +984,19 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
     output$dl_trajectory_png <- downloadHandler(
       filename = function() paste0("trajectory_plot_", Sys.Date(), ".", input$traj_export_fmt %||% "png"),
       content = function(file) {
-        req(global_data$sc_obj, traj_result())
+        req(global_data$sc_obj)
         obj    <- global_data$sc_obj
-        result <- traj_result()
+        result <- .resolve_traj_result(obj, traj_result())
+        req(result)
+        disp_red <- .resolve_traj_display_reduction(
+          obj, input$traj_reduction, result, state_get(shared_rv, "traj_reduction")
+        )
+        req(!is.null(disp_red))
         p <- tryCatch({
           if (identical(input$traj_color %||% "pseudotime", "pseudotime")) {
             if (identical(result$method_type %||% "exploratory_knn", "slingshot")) {
               plot_slingshot_trajectory(
-                embeddings = Seurat::Embeddings(obj, reduction = input$traj_reduction),
+                embeddings = Seurat::Embeddings(obj, reduction = disp_red),
                 pseudotime = obj@meta.data$pseudotime,
                 curves     = NULL,
                 palette         = state_get(shared_rv, "sc_palette") %||% "default",
@@ -859,7 +1004,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
               )
             } else {
               plot_trajectory(
-                embeddings = Seurat::Embeddings(obj, reduction = input$traj_reduction),
+                embeddings = Seurat::Embeddings(obj, reduction = disp_red),
                 pseudotime = obj@meta.data$pseudotime,
                 graph      = result$graph,
                 root_cell  = result$root_cell,
@@ -869,7 +1014,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
               )
             }
           } else {
-            Seurat::DimPlot(obj, reduction = input$traj_reduction,
+            Seurat::DimPlot(obj, reduction = disp_red,
                             group.by = input$traj_color, pt.size = 0.7) +
               ggplot2::theme_classic()
           }

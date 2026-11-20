@@ -112,6 +112,19 @@ mod_sc_velocity_ui <- function(id) {
     actionButton(ns("velocity_scvelo_run"), i18n$t("Calculer les vecteurs (scVelo — opt-in)"),
                  class = "btn-warning w-100", icon = icon("paper-plane")),
     uiOutput(ns("velocity_scvelo_banner")),
+    # Journal leger (2026-11-17, item #10) : place dans la sidebar sous le
+    # bouton opt-in (preference operateur) au lieu de la carte de resultats.
+    # Borne cote serveur (50 lignes) + hauteur max scrollable pour preserver
+    # l'ergonomie de la sidebar.
+    div(
+      class = "mt-2",
+      tags$strong(class = "small", i18n$t("Console de Log")),
+      div(
+        class = "small",
+        style = "max-height:140px;overflow-y:auto;",
+        verbatimTextOutput(ns("velocity_log"), placeholder = TRUE)
+      )
+    ),
     hr(),
     selectInput(ns("velocity_gene"), i18n$t("Gene pour phase portrait"), choices = character(0)),
     selectInput(ns("velocity_reduction"), i18n$t("Reduction pour vecteurs"), choices = c("umap", "pca")),
@@ -183,14 +196,6 @@ mod_sc_velocity_output_ui <- function(id) {
                 plotOutput(ns("velocity_coverage_plot"), height = "450px")),
       nav_panel(i18n$t("QC alignement"), value = "velocity_tab_qc",
                 plotOutput(ns("velocity_qc_plot"), height = "450px"))
-    ),
-    # Journal leger (2026-11-17) : occupe la zone vide sous les vues velocity.
-    # Borne cote serveur (50 lignes) — aucune donnee biologique, que des
-    # transitions de statut horodatees (validation / opt-in).
-    div(
-      class = "px-3 pb-3",
-      tags$strong(i18n$t("Console de Log")),
-      verbatimTextOutput(ns("velocity_log"), placeholder = TRUE)
     ),
     # Tiroir offcanvas (DEUXIÈME enfant de la carte — motif comm_drawer /
     # milo_drawer / sccoda_drawer / cross_drawer) :

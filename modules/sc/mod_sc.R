@@ -2124,9 +2124,19 @@ mod_sc_server <- function(id, global_data) {
             if (!is.null(res$obj)) {
               global_data$sc_obj <- res$obj
               if ("pseudotime" %in% colnames(res$obj@meta.data)) {
-                traj_red_use <- if ("umap" %in% names(res$obj@reductions)) "umap" else "pca"
+                meta_red <- if ("traj_computation_reduction" %in% colnames(res$obj@meta.data)) {
+                  as.character(res$obj@meta.data$traj_computation_reduction[1])
+                } else NA_character_
+                traj_red_use <- if (!is.na(meta_red) && nzchar(meta_red) &&
+                                    tolower(meta_red) %in% names(res$obj@reductions)) {
+                  tolower(meta_red)
+                } else if ("umap" %in% names(res$obj@reductions)) "umap" else "pca"
+                meta_method <- if ("traj_method" %in% colnames(res$obj@meta.data)) {
+                  as.character(res$obj@meta.data$traj_method[1])
+                } else NA_character_
+                traj_method_use <- if (!is.na(meta_method) && nzchar(meta_method)) meta_method else "exploratory_knn"
                 state_set(shared_rv, "traj_reduction", traj_red_use)
-                state_set(shared_rv, "traj_method", "exploratory_knn")
+                state_set(shared_rv, "traj_method", traj_method_use)
               }
             }
             markers_res <- res$markers_data %||% res$markers
