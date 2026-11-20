@@ -82,3 +82,76 @@ ts_ram_budget_check <- function(object_bytes, factor = 3,
   }
   out
 }
+
+# ── Arbre de processus RSS (jalon W1.4) & estimateur .rds (W1.2) ───────────
+
+#' Resident memory (RSS) of a process and its child tree, in MB
+#'
+#' Sums `ps::ps_memory_info()[["rss"]]` for `pid` and optionally all recursive
+#' children via `ps::ps_children(h, recursive = TRUE)`. Each child query is
+#' guarded by `tryCatch()` so short-lived workers exiting mid-poll never fail.
+#'
+#' @param pid Numeric/integer scalar PID (default `Sys.getpid()`).
+#' @param include_children Logical scalar; if `TRUE`, include recursive children.
+#' @return Named list `total_mb`, `self_mb`, `children_mb`, `n_children`.
+#'   Returns `NA_real_` (`NA_integer_` for `n_children`) when `ps` is
+#'   unavailable or the root handle cannot be inspected. Never throws.
+ts_process_tree_rss_mb <- function(pid = Sys.getpid(), include_children = TRUE) {
+  fallback <- list(total_mb = NA_real_, self_mb = NA_real_,
+                   children_mb = NA_real_, n_children = NA_integer_)
+  if (!requireNamespace("ps", quietly = TRUE)) return(fallback)
+  if (!is.numeric(pid) || length(pid) != 1L || is.na(pid) ||
+      !is.finite(pid) || pid <= 0) {
+    return(fallback)
+  }
+  h <- tryCatch(ps::ps_handle(as.integer(pid)), error = function(e) NULL)
+  if (is.null(h)) return(fallback)
+  self_rss <- tryCatch(ps::ps_memory_info(h)[["rss"]], error = function(e) NA_real_)
+  if (!is.numeric(self_rss) || length(self_rss) != 1L || !is.finite(self_rss)) {
+    return(fallback)
+  }
+  self_bytes <- as.numeric(self_rss)
+  children_bytes <- 0
+  n_children <- 0L
+  if (isTRUE(include_children)) {
+    children <- tryCatch(ps::ps_children(h, recursive = TRUE),
+                         error = function(e) list())
+    for (ch in children) {
+      ch_rss <- tryCatch(ps::ps_memory_info(ch)[["rss"]],
+                         error = function(e) NA_real_)
+      if (is.numeric(ch_rss) && length(ch_rss) == 1L && is.finite(ch_rss)) {
+        children_bytes <- children_bytes + as.numeric(ch_rss)
+        n_children <- n_children + 1L
+      }
+    }
+  }
+  list(
+    total_mb = round((self_bytes + children_bytes) / 1024^2),
+    self_mb = round(self_bytes / 1024^2),
+    children_mb = round(children_bytes / 1024^2),
+    n_children = n_children
+  )
+}
+
+#' Estimate compressed `.rds` size on disk from in-memory object size (pure)
+#'
+#' Avoids the ~5x overestimate of raw `object.size()` by applying a calibrated
+#' compression ratio (default `0.22` for typical Seurat / expression matrices).
+#'
+#' @param object_bytes Numeric scalar, in-memory size in bytes (e.g. from
+#'   `object.size(obj)`).
+#' @param compression_ratio Non-negative finite numeric scalar (default `0.22`).
+#' @return Numeric scalar (estimated `.rds` size in MB, rounded to 2 decimals),
+#'   or `NA_real_` on `NA`/invalid input. Never throws.
+ts_estimate_rds_size_mb <- function(object_bytes, compression_ratio = 0.22) {
+  if (!is.numeric(object_bytes) || length(object_bytes) != 1L ||
+      is.na(object_bytes) || !is.finite(object_bytes) || object_bytes < 0) {
+    return(NA_real_)
+  }
+  if (!is.numeric(compression_ratio) || length(compression_ratio) != 1L ||
+      is.na(compression_ratio) || !is.finite(compression_ratio) ||
+      compression_ratio < 0) {
+    return(NA_real_)
+  }
+  round(max(0, as.numeric(object_bytes)) * as.numeric(compression_ratio) / 1024^2, 2)
+}
