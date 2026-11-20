@@ -59,7 +59,9 @@ communication_views_public_api <- function() {
     "plot_ccc_comparison_flow",
     # W2.2 §11.8 Gem #2 : consensus multi-méthodes par rangs intra-méthode.
     "build_communication_consensus",
-    "plot_communication_consensus"
+    "plot_communication_consensus",
+    # W2.2 §11.8 Gem #4 : vue alluviale 3 tiers Sender -> Pathway/Ligand -> Receiver.
+    "plot_communication_alluvial"
   )
 }
 
@@ -1701,6 +1703,301 @@ plot_communication_consensus <- function(consensus_result, top_n = 25L) {
     ggplot2::theme_minimal(base_size = 11) +
     ggplot2::theme(
       panel.grid.minor = ggplot2::element_blank()
+    )
+}
+
+# =============================================================================
+# W2.2 §11.8 Gem #4 : Vue alluviale 3 tiers (Sender -> Pathway/Ligand -> Receiver)
+# =============================================================================
+
+.alluvial_stack_tier <- function(agg, col_name, x_pos, gap_ratio = 0.04) {
+  totals <- tapply(agg$weight, agg[[col_name]], sum)
+  ord <- order(-as.numeric(totals), names(totals))
+  nodes <- rev(names(totals)[ord])
+  vals <- rev(as.numeric(totals)[ord])
+  total_w <- sum(vals)
+  gap <- if (length(nodes) > 1L) total_w * gap_ratio else 0
+
+  ymins <- numeric(length(nodes))
+  ymaxs <- numeric(length(nodes))
+  cur <- 0
+  for (i in seq_along(nodes)) {
+    ymins[i] <- cur
+    ymaxs[i] <- cur + vals[i]
+    cur <- ymaxs[i] + gap
+  }
+  data.frame(
+    tier = col_name,
+    node = nodes,
+    x = x_pos,
+    ymin = ymins,
+    ymax = ymaxs,
+    ymid = (ymins + ymaxs) / 2,
+    total = vals,
+    stringsAsFactors = FALSE
+  )
+}
+
+.alluvial_allocate_slices <- function(agg, tier_df, col_name, order_cols) {
+  y0 <- numeric(nrow(agg))
+  y1 <- numeric(nrow(agg))
+  for (k in seq_len(nrow(tier_df))) {
+    nd <- tier_df$node[k]
+    idx <- which(agg[[col_name]] == nd)
+    if (length(idx) > 1L) {
+      ord_args <- lapply(order_cols, function(oc) agg[[oc]][idx])
+      idx <- idx[do.call(order, ord_args)]
+    }
+    cur <- tier_df$ymin[k]
+    for (j in idx) {
+      y0[j] <- cur
+      y1[j] <- cur + agg$weight[j]
+      cur <- y1[j]
+    }
+  }
+  list(y0 = y0, y1 = y1)
+}
+
+.alluvial_ribbon_poly <- function(poly_id, fill_group, x_start, x_end,
+                                  y_start_bot, y_start_top,
+                                  y_end_bot, y_end_top, n_pts = 25L) {
+  t_seq <- seq(0, 1, length.out = n_pts)
+  blend <- 3 * t_seq^2 - 2 * t_seq^3
+  x_top <- x_start + (x_end - x_start) * t_seq
+  y_top <- y_start_top + (y_end_top - y_start_top) * blend
+  y_bot <- y_start_bot + (y_end_bot - y_start_bot) * blend
+  data.frame(
+    poly_id = poly_id,
+    fill_group = fill_group,
+    x = c(x_top, rev(x_top)),
+    y = c(y_top, rev(y_bot)),
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Vue alluviale 3 tiers Sender -> Pathway/Ligand -> Receiver (ggplot2 pur)
+#'
+#' Agrege les flux sur la table (filtree ou canonique) et trace un diagramme
+#' alluvial pur ggplot2 sans dependance externe (rubans lisses par interpolation
+#' cubique entre 3 colonnes). VUE DESCRIPTIVE — aucune lecture causale.
+#'
+#' @param communication_result Resultat canonique (assert_communication_result).
+#' @param filtered_table Table filtree optionnelle ou NULL (table complete).
+#' @param seurat_obj Objet Seurat courant optionnel (verification de peremption).
+#' @param top_n_pathways Nombre maximal de noeuds intermediaires (pathway ou
+#'   ligand) conserves par poids total decroissant (defaut `10L`).
+#' @param middle_by Colonne du tier intermediaire : `"pathway"` (defaut) ou
+#'   `"ligand"`.
+#' @param top_n_flows Nombre maximal de chemins 3-tiers conserves par poids
+#'   decroissant (defaut `30L`).
+#' @return Objet `ggplot`.
+#' @export
+plot_communication_alluvial <- function(communication_result,
+                                        filtered_table = NULL,
+                                        seurat_obj = NULL,
+                                        top_n_pathways = 10L,
+                                        middle_by = c("pathway", "ligand"),
+                                        top_n_flows = 30L) {
+  r <- assert_communication_result(
+    communication_result, seurat_obj = seurat_obj,
+    context = "alluvial communication"
+  )
+  middle_by <- match.arg(middle_by)
+  mid_col <- if (identical(middle_by, "pathway")) "pathway" else "ligand"
+  mid_label <- if (identical(middle_by, "pathway")) "Pathway" else "Ligand"
+  title_str <- sprintf("Flux Sender \u2192 %s \u2192 Receiver (resultats importes)", mid_label)
+  subtitle_base <- .communication_score_caption(r)
+
+  table <- .communication_node_keys(
+    if (is.null(filtered_table)) r$canonical_table else filtered_table
+  )
+
+  if (nrow(table) == 0L) {
+    return(.communication_empty_view_plot(
+      "Aucune interaction apres filtres : elargissez les filtres ou reimportez.",
+      title_str, subtitle_base
+    ))
+  }
+
+  mid_vals <- as.character(table[[mid_col]])
+  valid_nodes <- !is.na(table$sender_node) & nzchar(trimws(table$sender_node)) &
+    !is.na(mid_vals) & nzchar(trimws(mid_vals)) &
+    !is.na(table$receiver_node) & nzchar(trimws(table$receiver_node))
+  table <- table[valid_nodes, , drop = FALSE]
+
+  if (nrow(table) == 0L) {
+    return(.communication_empty_view_plot(
+      sprintf("Aucun flux exploitable : colonne %s ou noeuds vides/NA.", mid_col),
+      title_str, subtitle_base
+    ))
+  }
+
+  has_rank <- "rank" %in% colnames(table) &&
+    any(is.finite(suppressWarnings(as.numeric(table$rank))))
+  sc_num <- suppressWarnings(as.numeric(table$score))
+  has_finite_score <- any(is.finite(sc_num))
+
+  if (!has_rank && has_finite_score) {
+    keep_pos <- is.finite(sc_num) & sc_num > 0
+    table <- table[keep_pos, , drop = FALSE]
+    row_weights <- sc_num[keep_pos]
+  } else {
+    row_weights <- rep(1, nrow(table))
+  }
+
+  if (nrow(table) == 0L) {
+    return(.communication_empty_view_plot(
+      "Aucun flux positif apres exclusion des scores nuls ou manquants.",
+      title_str, subtitle_base
+    ))
+  }
+
+  table$.mid_node <- as.character(table[[mid_col]])
+  table$.row_weight <- row_weights
+
+  keys <- paste(table$sender_node, table$.mid_node, table$receiver_node, sep = "\r")
+  agg <- do.call(rbind, lapply(split(seq_len(nrow(table)), keys), function(idx) {
+    data.frame(
+      sender_node = table$sender_node[idx[1L]],
+      mid_node = table$.mid_node[idx[1L]],
+      receiver_node = table$receiver_node[idx[1L]],
+      weight = sum(table$.row_weight[idx]),
+      n_interactions = length(idx),
+      stringsAsFactors = FALSE
+    )
+  }))
+  agg <- agg[is.finite(agg$weight) & agg$weight > 0, , drop = FALSE]
+
+  if (nrow(agg) == 0L) {
+    return(.communication_empty_view_plot(
+      "Aucun flux agrege positif disponible.",
+      title_str, subtitle_base
+    ))
+  }
+
+  if (!is.null(top_n_pathways) && is.numeric(top_n_pathways) &&
+      length(top_n_pathways) == 1L && is.finite(top_n_pathways) &&
+      top_n_pathways > 0) {
+    mid_tot <- tapply(agg$weight, agg$mid_node, sum)
+    n_mid_keep <- min(length(mid_tot), as.integer(top_n_pathways))
+    keep_mid <- names(sort(mid_tot, decreasing = TRUE))[seq_len(n_mid_keep)]
+    agg <- agg[agg$mid_node %in% keep_mid, , drop = FALSE]
+  }
+
+  agg <- .communication_top_n_rows(agg, top_n_flows, agg$weight, agg$n_interactions)
+  if (nrow(agg) == 0L) {
+    return(.communication_empty_view_plot(
+      "Aucun flux apres application des limites top-N.",
+      title_str, subtitle_base
+    ))
+  }
+
+  t_sender <- .alluvial_stack_tier(agg, "sender_node", 1)
+  t_mid <- .alluvial_stack_tier(agg, "mid_node", 2)
+  t_receiver <- .alluvial_stack_tier(agg, "receiver_node", 3)
+
+  agg$.s_ymid <- t_sender$ymid[match(agg$sender_node, t_sender$node)]
+  agg$.m_ymid <- t_mid$ymid[match(agg$mid_node, t_mid$node)]
+  agg$.r_ymid <- t_receiver$ymid[match(agg$receiver_node, t_receiver$node)]
+
+  s_slices <- .alluvial_allocate_slices(agg, t_sender, "sender_node", c(".m_ymid", ".r_ymid"))
+  m_slices <- .alluvial_allocate_slices(agg, t_mid, "mid_node", c(".s_ymid", ".r_ymid"))
+  r_slices <- .alluvial_allocate_slices(agg, t_receiver, "receiver_node", c(".m_ymid", ".s_ymid"))
+
+  node_w <- 0.18
+  polys <- vector("list", nrow(agg) * 2L)
+  for (i in seq_len(nrow(agg))) {
+    polys[[2L * i - 1L]] <- .alluvial_ribbon_poly(
+      poly_id = paste0("sm_", i),
+      fill_group = agg$sender_node[i],
+      x_start = 1 + node_w / 2,
+      x_end = 2 - node_w / 2,
+      y_start_bot = s_slices$y0[i],
+      y_start_top = s_slices$y1[i],
+      y_end_bot = m_slices$y0[i],
+      y_end_top = m_slices$y1[i]
+    )
+    polys[[2L * i]] <- .alluvial_ribbon_poly(
+      poly_id = paste0("mr_", i),
+      fill_group = agg$sender_node[i],
+      x_start = 2 + node_w / 2,
+      x_end = 3 - node_w / 2,
+      y_start_bot = m_slices$y0[i],
+      y_start_top = m_slices$y1[i],
+      y_end_bot = r_slices$y0[i],
+      y_end_top = r_slices$y1[i]
+    )
+  }
+  ribbon_df <- do.call(rbind, polys)
+
+  node_df <- rbind(t_sender, t_mid, t_receiver)
+  node_df$xmin <- node_df$x - node_w / 2
+  node_df$xmax <- node_df$x + node_w / 2
+  node_df$label_x <- ifelse(
+    node_df$tier == "sender_node", node_df$xmin - 0.03,
+    ifelse(node_df$tier == "receiver_node", node_df$xmax + 0.03, node_df$x)
+  )
+  node_df$hjust <- ifelse(
+    node_df$tier == "sender_node", 1,
+    ifelse(node_df$tier == "receiver_node", 0, 0.5)
+  )
+
+  max_y <- max(node_df$ymax, na.rm = TRUE)
+  header_df <- data.frame(
+    x = c(1, 2, 3),
+    y = max_y * 1.04,
+    label = c("Sender", mid_label, "Receiver"),
+    stringsAsFactors = FALSE
+  )
+
+  weight_note <- if (has_rank || !has_finite_score) {
+    "Epaisseur : nombre d'interactions (sans score scalaire)."
+  } else {
+    "Epaisseur : somme des scores importes."
+  }
+
+  ggplot2::ggplot() +
+    ggplot2::geom_polygon(
+      data = ribbon_df,
+      ggplot2::aes(x = .data$x, y = .data$y, group = .data$poly_id,
+                   fill = .data$fill_group),
+      alpha = 0.45,
+      colour = NA
+    ) +
+    ggplot2::geom_rect(
+      data = node_df,
+      ggplot2::aes(xmin = .data$xmin, xmax = .data$xmax,
+                   ymin = .data$ymin, ymax = .data$ymax),
+      fill = "#DCE6F1",
+      colour = "#2C3E50",
+      linewidth = 0.4
+    ) +
+    ggplot2::geom_text(
+      data = node_df,
+      ggplot2::aes(x = .data$label_x, y = .data$ymid, label = .data$node,
+                   hjust = .data$hjust),
+      size = 3.1,
+      colour = "#1A1A1A"
+    ) +
+    ggplot2::geom_text(
+      data = header_df,
+      ggplot2::aes(x = .data$x, y = .data$y, label = .data$label),
+      fontface = "bold",
+      size = 3.8,
+      vjust = 0
+    ) +
+    ggplot2::coord_cartesian(xlim = c(0.45, 3.55), clip = "off") +
+    ggplot2::theme_void(base_size = 11) +
+    ggplot2::theme(
+      legend.position = "none",
+      plot.margin = ggplot2::margin(10, 16, 10, 16)
+    ) +
+    ggplot2::labs(
+      title = title_str,
+      subtitle = sprintf(
+        "%s — %d flux, %d %s(s). %s",
+        subtitle_base, nrow(agg), nrow(t_mid), tolower(mid_label), weight_note
+      )
     )
 }
 
