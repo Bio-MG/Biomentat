@@ -14268,6 +14268,50 @@
     {
       "fr": "Valeur(s) exacte(s) (issues de la table)",
       "en": "Exact value(s) (from the table)"
+    },
+    {
+      "fr": "Vérification d'expression L-R (single-cell)",
+      "en": "Single-cell L-R expression verification"
+    },
+    {
+      "fr": "Vérifie la proportion et le niveau d'expression des gènes ligand/récepteur dans l'objet Seurat courant.",
+      "en": "Checks the proportion and expression level of ligand/receptor genes in the current Seurat object."
+    },
+    {
+      "fr": "Interaction à vérifier",
+      "en": "Interaction to verify"
+    },
+    {
+      "fr": "Flux alluviaux (Sender -> Intermédiaire -> Receiver)",
+      "en": "Alluvial flows (Sender -> Intermediate -> Receiver)"
+    },
+    {
+      "fr": "Tier intermédiaire",
+      "en": "Middle tier"
+    },
+    {
+      "fr": "Ligand",
+      "en": "Ligand"
+    },
+    {
+      "fr": "Top N intermédiaires (Alluvial)",
+      "en": "Top N intermediates (Alluvial)"
+    },
+    {
+      "fr": "Objet Seurat indisponible pour la vérification d'expression L-R.",
+      "en": "Seurat object unavailable for L-R expression verification."
+    },
+    {
+      "fr": "Aucune interaction sélectionnée pour la vérification L-R.",
+      "en": "No interaction selected for L-R verification."
+    },
+    {
+      "fr": "Format d'interaction L-R invalide.",
+      "en": "Invalid L-R interaction format."
+    },
+    {
+      "fr": "Colonne d'identités cellulaires non définie.",
+      "en": "Cell identity column not defined."
     }
   ]
 }

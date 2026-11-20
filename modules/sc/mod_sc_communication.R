@@ -327,7 +327,17 @@ mod_sc_communication_output_ui <- function(id) {
                 plotOutput(ns("comm_dotplot"), fill = TRUE),
                 fluidRow(
                   column(6, downloadButton(ns("dl_comm_dotplot_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
-                  column(6, downloadButton(ns("dl_comm_dotplot_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
+                  column(6, downloadButton(ns("dl_comm_dotplot_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary"))),
+                tags$hr(class = "my-3"),
+                div(class = "m-2",
+                    h5(i18n$t("Vérification d'expression L-R (single-cell)")),
+                    div(class = "small text-muted mb-2",
+                        i18n$t("Vérifie la proportion et le niveau d'expression des gènes ligand/récepteur dans l'objet Seurat courant.")),
+                    selectInput(ns("comm_lr_verify_pair"),
+                                i18n$t("Interaction à vérifier"),
+                                choices = character(0),
+                                width = "100%")),
+                plotOutput(ns("comm_lr_verify_plot"), height = "340px")),
       nav_panel(i18n$t("Heatmap pathways"), value = "ccc_tab_heatmap",
                 div(class = "m-2",
                     numericInput(ns("comm_heatmap_top_n"),
@@ -345,7 +355,26 @@ mod_sc_communication_output_ui <- function(id) {
                 plotOutput(ns("comm_circle"), height = "520px"),
                 fluidRow(
                   column(6, downloadButton(ns("dl_comm_circle_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
-                  column(6, downloadButton(ns("dl_comm_circle_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
+                  column(6, downloadButton(ns("dl_comm_circle_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary"))),
+                tags$hr(class = "my-3"),
+                div(class = "m-2",
+                    h5(i18n$t("Flux alluviaux (Sender -> Intermédiaire -> Receiver)")),
+                    fluidRow(class = "align-items-end",
+                      column(4, selectInput(ns("comm_alluvial_middle_by"),
+                                            i18n$t("Tier intermédiaire"),
+                                            choices = setNames(c("pathway", "ligand"),
+                                                               c(.tr_plain("Voie de signalisation"),
+                                                                 .tr_plain("Ligand"))),
+                                            selected = "pathway",
+                                            width = "100%")),
+                      column(4, numericInput(ns("comm_alluvial_top_n"),
+                                             i18n$t("Top N intermédiaires (Alluvial)"),
+                                             value = 10L, min = 2L, max = 30L, step = 1L,
+                                             width = "100%")))),
+                plotOutput(ns("comm_alluvial_plot"), height = "420px"),
+                fluidRow(
+                  column(6, downloadButton(ns("dl_comm_alluvial_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
+                  column(6, downloadButton(ns("dl_comm_alluvial_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
       nav_panel(i18n$t("Centralité"), value = "ccc_tab_centralite",
                 div(class = "small text-muted m-2",
                     i18n$t("Centralité dérivée du réseau, descriptive — ce n'est pas un contrôle biologique.")),
@@ -574,6 +603,12 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                           c("human", "mouse"),
                           c(.tr("Humain (CellChatDB.human)"),
                             .tr("Souris (CellChatDB.mouse)"))))
+      updateSelectInput(session, "comm_alluvial_middle_by",
+                        choices = setNames(
+                          c("pathway", "ligand"),
+                          c(.tr("Voie de signalisation"),
+                            .tr("Ligand"))),
+                        selected = input$comm_alluvial_middle_by %||% "pathway")
     }, ignoreInit = TRUE)
 
     # 2L (O28, spéc §2.23 point 2) : carte des sous-panneaux pour les sauts du
@@ -2060,6 +2095,89 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       )
     })
 
+    .build_alluvial_plot <- function() {
+      mid <- input$comm_alluvial_middle_by %||% "pathway"
+      if (!mid %in% c("pathway", "ligand")) mid <- "pathway"
+      top_n <- .parse_top_n(input$comm_alluvial_top_n) %||% 10L
+      plot_communication_alluvial(comm_state$result, comm_filtered()$table,
+                                  seurat_obj = .view_object(),
+                                  top_n_pathways = top_n,
+                                  middle_by = mid)
+    }
+
+    output$comm_alluvial_plot <- renderPlot({
+      req(comm_state$result)
+      .check_fingerprint()
+      tryCatch(.build_alluvial_plot(), error = function(e) .error_plot(e))
+    })
+
+    observeEvent(comm_filtered(), {
+      tbl <- comm_filtered()$table
+      if (is.null(tbl) || !is.data.frame(tbl) || nrow(tbl) == 0L) {
+        updateSelectInput(session, "comm_lr_verify_pair",
+                          choices = character(0), selected = character(0))
+        return()
+      }
+      s_vec <- if ("sender_mapped" %in% colnames(tbl)) {
+        ifelse(!is.na(tbl$sender_mapped) & nzchar(trimws(tbl$sender_mapped)),
+               as.character(tbl$sender_mapped), as.character(tbl$sender))
+      } else {
+        as.character(tbl$sender)
+      }
+      r_vec <- if ("receiver_mapped" %in% colnames(tbl)) {
+        ifelse(!is.na(tbl$receiver_mapped) & nzchar(trimws(tbl$receiver_mapped)),
+               as.character(tbl$receiver_mapped), as.character(tbl$receiver))
+      } else {
+        as.character(tbl$receiver)
+      }
+      pairs <- unique(sprintf("%s -> %s | %s -> %s",
+                              s_vec, r_vec,
+                              as.character(tbl$ligand),
+                              as.character(tbl$receptor)))
+      pairs <- pairs[!is.na(pairs) & nzchar(trimws(pairs))]
+      if (length(pairs) > 200L) pairs <- utils::head(pairs, 200L)
+      cur <- input$comm_lr_verify_pair
+      sel <- if (!is.null(cur) && cur %in% pairs) cur else if (length(pairs) > 0L) pairs[1L] else character(0)
+      updateSelectInput(session, "comm_lr_verify_pair", choices = pairs, selected = sel)
+    })
+
+    output$comm_lr_verify_plot <- renderPlot({
+      req(comm_state$result)
+      .check_fingerprint()
+      sc_obj <- global_data$sc_obj
+      if (is.null(sc_obj)) {
+        return(.error_plot(simpleError(.tr("Objet Seurat indisponible pour la vérification d'expression L-R."))))
+      }
+      pair_str <- input$comm_lr_verify_pair
+      if (is.null(pair_str) || !nzchar(trimws(pair_str))) {
+        return(.error_plot(simpleError(.tr("Aucune interaction sélectionnée pour la vérification L-R."))))
+      }
+      parts <- strsplit(pair_str, " | ", fixed = TRUE)[[1L]]
+      if (length(parts) != 2L) {
+        return(.error_plot(simpleError(.tr("Format d'interaction L-R invalide."))))
+      }
+      sr <- strsplit(parts[1L], " -> ", fixed = TRUE)[[1L]]
+      lr <- strsplit(parts[2L], " -> ", fixed = TRUE)[[1L]]
+      if (length(sr) != 2L || length(lr) != 2L) {
+        return(.error_plot(simpleError(.tr("Format d'interaction L-R invalide."))))
+      }
+      id_col <- comm_state$result$identity_column %||% input$comm_identity_column
+      if (is.null(id_col) || !nzchar(trimws(id_col))) {
+        return(.error_plot(simpleError(.tr("Colonne d'identités cellulaires non définie."))))
+      }
+      tryCatch({
+        lr_res <- build_communication_lr_expression(
+          seurat_obj = sc_obj,
+          sender = trimws(sr[1L]),
+          receiver = trimws(sr[2L]),
+          ligand = trimws(lr[1L]),
+          receptor = trimws(lr[2L]),
+          identity_column = id_col
+        )
+        plot_communication_lr_expression(lr_res)
+      }, error = function(e) .error_plot(e))
+    })
+
     # CC-1 : la vue Centralité consomme les RÔLES CellChat (moteur, quand
     # l'extraction a tourné) et retombe sur la vue dérivée sinon — un seul
     # calcul, partagé par la table et l'export CSV (jamais deux sources).
@@ -2623,6 +2741,14 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                                   seurat_obj = .view_object(),
                                   top_n_edges = .parse_top_n(input$comm_circle_top_n))
       }, file)
+    )
+    output$dl_comm_alluvial_png <- downloadHandler(
+      filename = function() communication_export_filename(comm_state$result, "communication_alluvial", "png"),
+      content = function(file) .export_figure(.build_alluvial_plot, file)
+    )
+    output$dl_comm_alluvial_pdf <- downloadHandler(
+      filename = function() communication_export_filename(comm_state$result, "communication_alluvial", "pdf"),
+      content = function(file) .export_figure(.build_alluvial_plot, file)
     )
 
     output$dl_comm_mapping <- downloadHandler(
