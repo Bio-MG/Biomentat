@@ -91,6 +91,44 @@
 # v7 (Phase 5 — niches spatiales): 6th top-level tab, "Niches spatiales".
 # =============================================================================
 
+# Pure helper: compact pipeline progress items derived from existing shared_rv
+# completion signals (no Shiny dependency, no re-inference).
+.spatial_pipeline_progress_items <- function(state_list) {
+  if (is.null(state_list) || !is.list(state_list)) state_list <- list()
+  has_val <- function(x) {
+    if (is.null(x)) return(FALSE)
+    if (is.data.frame(x)) return(nrow(x) > 0L)
+    length(x) > 0L
+  }
+  mk <- function(code, step, short, label, done, i18n_key = TRUE) {
+    done <- isTRUE(done)
+    list(
+      code     = code,
+      step     = step,
+      short    = short,
+      label    = label,
+      done     = done,
+      symbol   = if (done) "\u2705" else "\u26aa",
+      i18n_key = isTRUE(i18n_key)
+    )
+  }
+  list(
+    mk("qc",      "1a", "QC",     "1. QC & Autocorrelation",
+       has_val(state_list$qc_metrics)),
+    mk("moran",   "1b", "Moran",  "Autocorr\u00e9lation spatiale (Moran) \u2014 g\u00e8nes spatialement variables",
+       has_val(state_list$moran_results)),
+    mk("cluster", "2",  "Clust",  "2. Clustering (BANKSY-lite)",
+       has_val(state_list$cluster_labels)),
+    mk("deconv",  "3",  "Deconv", "3. Deconvolution",
+       has_val(state_list$deconv_props)),
+    mk("niche",   "6",  "Niches", "6. Niches spatiales \u2014 micro-environnements cellulaires",
+       has_val(state_list$niche_composition)),
+    mk("stats",   "S",  "Stats",  "Hotspots (Gi*) / Ripley's K",
+       has_val(state_list$hotspot_result) || has_val(state_list$ripley_result),
+       i18n_key = FALSE)
+  )
+}
+
 mod_spatial_ui <- function(id) {
   ns <- NS(id)
   # ── V1.x UX: standard container (LEFT = workflow steps, RIGHT = results) ──
@@ -144,7 +182,8 @@ mod_spatial_ui <- function(id) {
           uiOutput(ns("active_dataset_ui")),
           uiOutput(ns("daemon_status_ui")),
           actionButton(ns("btn_reset_daemons"), i18n$t("Reinitialiser les daemons"),
-                       class = "btn-outline-warning btn-sm w-100 mt-1", icon = icon("rotate"))),
+                       class = "btn-outline-warning btn-sm w-100 mt-1", icon = icon("rotate")),
+          uiOutput(ns("spatial_progress_ribbon_ui"))),
       hr(),
       accordion(
         id = ns("steps"),
@@ -341,6 +380,40 @@ mod_spatial_server <- function(id, global_data) {
     .clear_shared_rv <- function() {
       for (f in .cacheable_fields) shared_rv[[f]] <- NULL
     }
+
+    # ── Compact pipeline progress ribbon (sticky head, Part B) ─────────────
+    output$spatial_progress_ribbon_ui <- renderUI({
+      global_data$language
+      items <- .spatial_pipeline_progress_items(list(
+        qc_metrics        = shared_rv$qc_metrics,
+        moran_results     = shared_rv$moran_results,
+        cluster_labels    = shared_rv$cluster_labels,
+        deconv_props      = shared_rv$deconv_props,
+        niche_composition = shared_rv$niche_composition,
+        hotspot_result    = shared_rv$hotspot_result,
+        ripley_result     = shared_rv$ripley_result
+      ))
+      div(
+        class = "ts-spatial-progress-ribbon",
+        style = paste0(
+          "display:flex;align-items:center;justify-content:space-between;gap:2px;",
+          "font-size:0.7rem;line-height:1.2;background:#f8f9fa;",
+          "border:1px solid #e3e6e8;border-radius:6px;padding:3px 5px;margin-top:4px;",
+          "white-space:nowrap;overflow:hidden;"
+        ),
+        lapply(items, function(it) {
+          tip_lbl <- if (isTRUE(it$i18n_key)) .tr(it$label) else it$label
+          tags$span(
+            class = "ts-spatial-progress-step",
+            `data-step` = it$code,
+            `data-done` = if (isTRUE(it$done)) "true" else "false",
+            title = paste0(tip_lbl, " : ", it$symbol),
+            style = "padding:1px 2px;cursor:default;",
+            it$symbol, it$short
+          )
+        })
+      )
+    })
 
     # ── Daemon status (i18n-aware) ─────────────────────────────────────────
     output$daemon_status_ui <- renderUI({
