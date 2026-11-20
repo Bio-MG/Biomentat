@@ -152,6 +152,7 @@ mod_sc_mapping_server <- function(id, global_data) {
             type="warning", duration=10)
 
         global_data$sc_obj <- result$object
+        global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L
 
         mapping_status_rv(paste0(
           .t_fmt(.tr("✓ {mapped} mappés, {unmapped} non-mappés ({pct}%), {collapsed} fusion(s) de doublon → {final} gènes finaux."), mapped = result$n_mapped, unmapped = result$n_unmapped, pct = sprintf("%.1f", pct_unmapped), collapsed = result$n_collapsed, final = nrow(result$object)),
