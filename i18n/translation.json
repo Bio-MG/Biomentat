@@ -14084,6 +14084,10 @@
     {
       "fr": "Aucun dossier personnalisé enregistré.",
       "en": "No custom folders saved."
+    },
+    {
+      "fr": "Spatial: Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation spatiale → Multi-echantillons (integration Harmony conjointe, asynchrone) → Export (paquet .zip / script R reproductible)",
+      "en": "Spatial: Auto pipeline (1 click) OR QC → Clustering (BANKSY, async) → Deconvolution (RCTD/Label Transfer/STdeconvolve, async) → Spatial visualization → Multi-sample (joint Harmony integration, async) → Export (.zip bundle / reproducible R script)"
     }
   ]
 }
