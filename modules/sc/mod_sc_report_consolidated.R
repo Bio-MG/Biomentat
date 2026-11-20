@@ -29,6 +29,8 @@ mod_sc_report_consolidated_ui <- function(id) {
                    class = "btn-outline-secondary w-100 mt-1"),
     downloadButton(ns("dl_methods_md"), i18n$t("📝 Brouillon Matériels & Méthodes (.md)"),
                    class = "btn-outline-secondary w-100 mt-1"),
+    downloadButton(ns("dl_lite_explorer"), i18n$t("📦 Explorateur Lite autonome (.zip)"),
+                   class = "btn-outline-secondary w-100 mt-1"),
     div(class = "small text-muted mt-1", textOutput(ns("rep_consolide_status")))
   )
 }
@@ -256,6 +258,35 @@ mod_sc_report_consolidated_server <- function(id, global_data, shared_rv = NULL)
         }
         draft <- build_methods_draft(prov_src %||% list(), lang = lang)
         writeLines(draft$markdown, file, useBytes = TRUE)
+      }
+    )
+
+    # ── Téléchargement : BK-01 Explorateur Lite autonome (.zip) ───────────────
+    output$dl_lite_explorer <- downloadHandler(
+      filename = function() consolidated_report_export_filename("biomentat_lite", "zip"),
+      content = function(file) {
+        req(global_data$sc_obj)
+        cv <- tryCatch(.collect_and_validate(), error = function(e) NULL)
+        tbls <- if (!is.null(cv) && is.list(cv$ri$tables)) Filter(is.data.frame, cv$ri$tables) else list()
+        if (!length(tbls) && !is.null(cv$ri$provenance_df) && is.data.frame(cv$ri$provenance_df)) {
+          tbls <- list(provenance = cv$ri$provenance_df)
+        }
+        withProgress(message = .tr_plain("Assemblage de l'explorateur Lite..."), value = 0.5, {
+          tmp_dir <- tempfile("biomentat_lite_")
+          on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+          tryCatch({
+            lite <- generate_biomentat_lite_app(
+              out_dir = tmp_dir,
+              title = input$rep_title %||% "Biomentat Lite Explorer",
+              tables = tbls,
+              metadata = list(provenance = cv$ri$provenance_df %||% list())
+            )
+            zip::zip(file, files = c(lite$app_path, lite$bundle_path, lite$readme_path), mode = "cherry-pick")
+            showNotification(paste0("✓ ", .tr("Explorateur Lite autonome généré.")), type = "message", duration = 4)
+          }, error = function(e) {
+            showNotification(paste0("✗ ", .tr("Échec de l'explorateur Lite : "), conditionMessage(e)), type = "error", duration = 12)
+          })
+        })
       }
     )
   })

@@ -14004,6 +14004,22 @@
     {
       "fr": "Borner les couleurs (q1-q99)",
       "en": "Clip colors to quantiles (q1-q99)"
+    },
+    {
+      "fr": "📦 Explorateur Lite autonome (.zip)",
+      "en": "📦 Standalone Lite Explorer (.zip)"
+    },
+    {
+      "fr": "Explorateur Lite autonome généré.",
+      "en": "Standalone Lite Explorer generated."
+    },
+    {
+      "fr": "Échec de l'explorateur Lite : ",
+      "en": "Lite Explorer failed: "
+    },
+    {
+      "fr": "Assemblage de l'explorateur Lite...",
+      "en": "Building Lite Explorer..."
     }
   ]
 }
