@@ -134,6 +134,12 @@ mod_sc_viz_ui <- function(id) {
       checkboxInput(ns("violin_boxplot"), i18n$t("Superposer Boxplot"), value = FALSE)
     ),
 
+    # FeaturePlot: BK-04 1st/99th percentile color clipping
+    conditionalPanel(
+      condition = "input.viz_type == 'feature'", ns = ns,
+      checkboxInput(ns("clip_quantiles"), i18n$t("Borner les couleurs (q1-q99)"), value = FALSE)
+    ),
+
     # Volcano settings
     conditionalPanel(
       condition = "input.viz_type == 'volcano'", ns = ns,
@@ -459,6 +465,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
         multi_gene         = input$multi_gene,
         multi_plot_type    = input$multi_plot_type,
         violin_boxplot     = input$violin_boxplot,
+        clip_quantiles     = input$clip_quantiles,
         volcano_group1     = input$volcano_group1,
         volcano_group2     = input$volcano_group2,
         volcano_logfc      = input$volcano_logfc,
@@ -743,7 +750,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
 
       # Deduplicated: reuse .current_cfg() (check_duplication guard, 15-line threshold)
       base_cfg <- .current_cfg()
-      cfg <- base_cfg[c("type","reduction","feat_sel","group_by","scatter_gene1","scatter_gene2","scatter_cor_method","scatter_smooth","multi_gene","multi_plot_type","violin_boxplot","volcano_group1","volcano_group2","volcano_logfc","volcano_pval","volcano_show_labels","pt_size","plot_theme")]
+      cfg <- base_cfg[c("type","reduction","feat_sel","group_by","scatter_gene1","scatter_gene2","scatter_cor_method","scatter_smooth","multi_gene","multi_plot_type","violin_boxplot","clip_quantiles","volcano_group1","volcano_group2","volcano_logfc","volcano_pval","volcano_show_labels","pt_size","plot_theme")]
       cfg$type <- type
 
       # Step-3.8B: fast preview on large objects (see .preview_obj() above) --

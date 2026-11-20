@@ -14000,6 +14000,10 @@
     {
       "fr": "Pipeline automatique asynchrone (mirai) — le statut reste visible ci-dessous. Les étapes lourdes tournent hors de la session R ; en cas de blocage, réinitialisez les daemons.",
       "en": "Asynchronous pipeline (mirai) — the status remains visible below. Heavy steps run outside the R session; if blocked, reset the daemons."
+    },
+    {
+      "fr": "Borner les couleurs (q1-q99)",
+      "en": "Clip colors to quantiles (q1-q99)"
     }
   ]
 }
