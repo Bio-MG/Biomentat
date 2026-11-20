@@ -779,6 +779,44 @@ run_markers <- function(input, global_data, shared_rv, session) {
   NULL
 }
 
+# Pure helper: compact pipeline progress items derived from existing SC
+# object / shared_rv completion signals (no Shiny or Seurat dependency).
+.sc_pipeline_progress_items <- function(state_list) {
+  if (is.null(state_list) || !is.list(state_list)) state_list <- list()
+  has_val <- function(x) {
+    if (is.null(x)) return(FALSE)
+    if (is.data.frame(x) || is.matrix(x)) return(nrow(x) > 0L)
+    length(x) > 0L
+  }
+  meta_cols <- if (is.null(state_list$meta_cols)) character(0) else as.character(state_list$meta_cols)
+  red_names <- if (is.null(state_list$reductions)) character(0) else as.character(state_list$reductions)
+  mk <- function(code, step, short, label, done, i18n_key = TRUE) {
+    done <- isTRUE(done)
+    list(
+      code     = code,
+      step     = step,
+      short    = short,
+      label    = label,
+      done     = done,
+      symbol   = if (done) "\u2705" else "\u26aa",
+      i18n_key = isTRUE(i18n_key)
+    )
+  }
+  annot_done <- isTRUE(state_list$has_annot)
+  if (!annot_done && length(meta_cols) > 0L &&
+      exists(".singler_annotation_column_pattern", mode = "function")) {
+    annot_done <- any(grepl(.singler_annotation_column_pattern(), meta_cols))
+  }
+  list(
+    mk("qc",      "1a", "QC",    "QC",        isTRUE(state_list$qc_done) || ("percent.mt" %in% meta_cols)),
+    mk("norm",    "1b", "Norm",  "Norm",      isTRUE(state_list$has_var_features)),
+    mk("cluster", "1c", "Clust", "Cluster",   isTRUE(state_list$cluster_done) || ("seurat_clusters" %in% meta_cols)),
+    mk("umap",    "1d", "UMAP",  "UMAP",      isTRUE(state_list$umap_done) || ("umap" %in% red_names)),
+    mk("annot",   "2",  "Annot", "Annot",     annot_done),
+    mk("markers", "3",  "Marq",  "Marqueurs", has_val(state_list$markers_data))
+  )
+}
+
 mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
   ns <- NS(id)
   layout_sidebar(
@@ -792,14 +830,20 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
         ".sc-auto-log-wrap pre, #", ns("acc_workflow"), " pre, .bslib-card:has(#", ns("main_tabs"), ") pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }\n",
         ".bslib-card:has(#", ns("main_tabs"), ") > .tab-content > .tab-pane { overflow-y: auto; overflow-x: hidden; }\n",
         ".bslib-card:has(#", ns("main_tabs"), ") > .tab-content > .tab-pane .card { min-height: min-content; }\n",
-        ".ts-sc-step-sync-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.85rem; }",
+        ".ts-sc-step-sync-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.85rem; }\n",
+        "#", ns("acc_workflow"), " .accordion-body { padding: 0.5rem 0.65rem; }\n",
+        "#", ns("acc_workflow"), " .accordion-button { padding: 0.45rem 0.75rem; }\n",
+        ".ts-sc-side-head { position: sticky; top: 0; z-index: 3; background: var(--bs-body-bg, #fff); padding-bottom: 0.35rem; margin-bottom: 0.35rem; }\n",
+        ".ts-sc-side-head::after { content: \"\"; display: block; position: absolute; left: -0.5rem; right: -0.5rem; bottom: 0; height: 1px; background: var(--bs-border-color, #dee2e6); }\n",
         paste0("#", ns("annotation"), "-annotation_out_tabs { flex-wrap: wrap; margin-left: 0 !important; max-width: 100%; }")
       ))),
-      # LOT 1 (V1.x UX): paradigm badge — auto-pipeline exists, manual steps stay optional.
-      div(class = "alert alert-success", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
-          icon("bolt"), " ", i18n$t("Auto-pipeline disponible — les étapes manuelles restent optionnelles")),
-      div(class = "alert alert-info", style = "font-size:0.8rem;padding:5px;",
-          bsicons::bs_icon("info-circle"), " ", i18n$t("Étapes séquentielles recommandées.")),
+      div(class = "ts-sc-side-head",
+          # LOT 1 (V1.x UX): paradigm badge — auto-pipeline exists, manual steps stay optional.
+          div(class = "alert alert-success", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
+              icon("bolt"), " ", i18n$t("Auto-pipeline disponible — les étapes manuelles restent optionnelles")),
+          div(class = "alert alert-info", style = "font-size:0.8rem;padding:5px;margin-bottom:4px;",
+              bsicons::bs_icon("info-circle"), " ", i18n$t("Étapes séquentielles recommandées.")),
+          uiOutput(ns("sc_progress_ribbon_ui"))),
       # Mutualized auto-pipeline paradigm (V1.x UX): in EVERY domain the 1-click
       # auto pipeline is the FIRST accordion panel (0.), manual steps follow.
       accordion(
@@ -1547,6 +1591,56 @@ mod_sc_server <- function(id, global_data) {
       red <- .ms_pick_reduction(obj)
       req(red)
       .ms_dim_plot(obj, "condition", red, .tr("Projection par condition"))
+    })
+
+    # ── Compact pipeline progress ribbon (sticky head, Part B) ─────────────
+    output$sc_progress_ribbon_ui <- renderUI({
+      global_data$language
+      obj <- global_data$sc_obj
+      meta_cols <- if (!is.null(obj)) {
+        tryCatch(colnames(obj@meta.data), error = function(e) character(0))
+      } else {
+        character(0)
+      }
+      has_var_features <- if (!is.null(obj)) {
+        length(tryCatch(VariableFeatures(obj), error = function(e) character(0))) > 0L
+      } else {
+        FALSE
+      }
+      red_names <- if (!is.null(obj)) {
+        tryCatch(names(obj@reductions), error = function(e) character(0))
+      } else {
+        character(0)
+      }
+      has_annot <- length(meta_cols) > 0L &&
+        any(grepl(.singler_annotation_column_pattern(), meta_cols))
+      items <- .sc_pipeline_progress_items(list(
+        meta_cols        = meta_cols,
+        has_var_features = has_var_features,
+        reductions       = red_names,
+        has_annot        = has_annot,
+        markers_data     = state_get(shared_rv, "markers_data")
+      ))
+      div(
+        class = "ts-sc-progress-ribbon",
+        style = paste0(
+          "display:flex;align-items:center;justify-content:space-between;gap:2px;",
+          "font-size:0.7rem;line-height:1.2;background:#f8f9fa;",
+          "border:1px solid #e3e6e8;border-radius:6px;padding:3px 5px;margin-top:4px;",
+          "white-space:nowrap;overflow:hidden;"
+        ),
+        lapply(items, function(it) {
+          tip_lbl <- if (isTRUE(it$i18n_key)) .tr(it$label) else it$label
+          tags$span(
+            class = "ts-sc-progress-step",
+            `data-step` = it$code,
+            `data-done` = if (isTRUE(it$done)) "true" else "false",
+            title = paste0(tip_lbl, " : ", it$symbol),
+            style = "padding:1px 2px;cursor:default;",
+            it$symbol, it$short
+          )
+        })
+      )
     })
 
     # ── Pipeline status bar ───────────────────────────────────────────────────

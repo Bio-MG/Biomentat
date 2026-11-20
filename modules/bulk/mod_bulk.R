@@ -46,6 +46,42 @@
   list(ready = has_vst && has_contrast, has_vst = has_vst, has_contrast = has_contrast)
 }
 
+# Pure helper: compact pipeline progress items derived from existing shared_rv
+# completion signals (no Shiny dependency, no re-inference).
+.bulk_pipeline_progress_items <- function(state_list) {
+  if (is.null(state_list) || !is.list(state_list)) state_list <- list()
+  has_val <- function(x) {
+    if (is.null(x)) return(FALSE)
+    if (is.data.frame(x) || is.matrix(x)) return(nrow(x) > 0L)
+    length(x) > 0L
+  }
+  mk <- function(code, step, short, label, done, locked = FALSE, i18n_key = TRUE) {
+    done <- isTRUE(done)
+    locked <- !done && isTRUE(locked)
+    sym <- if (done) "\u2705" else if (locked) "\U0001f512" else "\u26aa"
+    list(
+      code     = code,
+      step     = step,
+      short    = short,
+      label    = label,
+      done     = done,
+      locked   = locked,
+      symbol   = sym,
+      i18n_key = isTRUE(i18n_key)
+    )
+  }
+  has_filtered  <- has_val(state_list$filtered_counts)
+  has_contrasts <- has_val(state_list$contrasts)
+  has_vst       <- has_val(state_list$vst_mat)
+  list(
+    mk("map",     "0", "Map",     "Map",     isTRUE(state_list$mapping_applied)),
+    mk("filter",  "1", "Filtre",  "Filtre",  has_filtered),
+    mk("de",      "2", "DE",      "DE",      has_contrasts, locked = !has_filtered),
+    mk("pathway", "3", "Pathway", "Pathway", has_val(state_list$pathway_results), locked = !has_contrasts),
+    mk("report",  "7", "Rapport", "Rapport", FALSE, locked = !has_vst)
+  )
+}
+
 mod_bulk_ui <- function(id) {
   ns <- NS(id)
   # BULK-9 (fix 2026-11-06) : layout_sidebar est rendu ENFANT UNIQUE direct du
@@ -59,12 +95,18 @@ mod_bulk_ui <- function(id) {
       sidebar = sidebar(
         width = 420,
         title = i18n$t("RNA Bulk \u2014 Analyse"),
-        # LOT 1 (V1.x UX): paradigm badge — guided manual pipeline is the norm here.
-        div(class = "alert alert-warning", style = "font-size:0.8rem;padding:5px;margin-bottom:5px;",
-            icon("list-check"), " ", i18n$t("Mode guidé — suivez les étapes numérotées dans l'ordre")),
-        div(class = "alert alert-info", style = "font-size:0.8rem;padding:5px;",
-            bsicons::bs_icon("info-circle"),
-            " ", i18n$t("Importez d'abord vos donn\u00e9es dans l'onglet 'Import Donn\u00e9es > RNA Bulk'.")),
+        tags$style(HTML(sprintf(
+          "#%s .accordion-body { padding: 0.5rem 0.65rem; }\n#%1$s .accordion-button { padding: 0.45rem 0.75rem; }\n.ts-bulk-side-head { position: sticky; top: 0; z-index: 3; background: var(--bs-body-bg, #fff); padding-bottom: 0.35rem; margin-bottom: 0.35rem; }\n.ts-bulk-side-head::after { content: \"\"; display: block; position: absolute; left: -0.5rem; right: -0.5rem; bottom: 0; height: 1px; background: var(--bs-border-color, #dee2e6); }",
+          ns("acc_bulk")
+        ))),
+        div(class = "ts-bulk-side-head",
+            # LOT 1 (V1.x UX): paradigm badge — guided manual pipeline is the norm here.
+            div(class = "alert alert-warning", style = "font-size:0.8rem;padding:5px;margin-bottom:5px;",
+                icon("list-check"), " ", i18n$t("Mode guidé — suivez les étapes numérotées dans l'ordre")),
+            div(class = "alert alert-info", style = "font-size:0.8rem;padding:5px;margin-bottom:4px;",
+                bsicons::bs_icon("info-circle"),
+                " ", i18n$t("Importez d'abord vos donn\u00e9es dans l'onglet 'Import Donn\u00e9es > RNA Bulk'.")),
+            uiOutput(ns("bulk_progress_ribbon_ui"))),
         # Mutualized auto-pipeline paradigm (V1.x UX): in EVERY domain the
         # 1-click auto pipeline is the FIRST accordion panel (0.).
         accordion(
@@ -367,6 +409,39 @@ mod_bulk_server <- function(id, global_data) {
         role = "alert",
         span("\U0001f512"),
         span(paste(msgs, collapse = " "))
+      )
+    })
+
+    # ── Compact pipeline progress ribbon (sticky head, Part B) ─────────────
+    output$bulk_progress_ribbon_ui <- renderUI({
+      global_data$language
+      items <- .bulk_pipeline_progress_items(list(
+        mapping_applied = shared_rv$mapping_applied,
+        filtered_counts = shared_rv$filtered_counts,
+        contrasts       = shared_rv$contrasts,
+        pathway_results = shared_rv$pathway_results,
+        vst_mat         = shared_rv$vst_mat
+      ))
+      div(
+        class = "ts-bulk-progress-ribbon",
+        style = paste0(
+          "display:flex;align-items:center;justify-content:space-between;gap:2px;",
+          "font-size:0.7rem;line-height:1.2;background:#f8f9fa;",
+          "border:1px solid #e3e6e8;border-radius:6px;padding:3px 5px;margin-top:4px;",
+          "white-space:nowrap;overflow:hidden;"
+        ),
+        lapply(items, function(it) {
+          tip_lbl <- if (isTRUE(it$i18n_key)) .tr(it$label) else it$label
+          tags$span(
+            class = "ts-bulk-progress-step",
+            `data-step` = it$code,
+            `data-done` = if (isTRUE(it$done)) "true" else "false",
+            `data-locked` = if (isTRUE(it$locked)) "true" else "false",
+            title = paste0(tip_lbl, " : ", it$symbol),
+            style = "padding:1px 2px;cursor:default;",
+            it$symbol, it$short
+          )
+        })
       )
     })
 
