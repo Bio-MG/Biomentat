@@ -1060,6 +1060,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     # le panneau humain est inchangé.
     .vel_drive_ok <- exists("ts_drive_publish_importer", where = globalenv(),
                             inherits = FALSE) &&
+      exists("ts_drive_registry", where = globalenv(), inherits = FALSE) &&
       exists("TS_DRIVE_SC_VELOCITY_IMPORT_MODULE", where = globalenv(),
              inherits = FALSE)
     if (.vel_drive_ok) ts_drive_publish_importer(global_data,
