@@ -313,9 +313,45 @@ mod_import_bulk_ui <- function(id) {
 
             conditionalPanel(
               condition = sprintf("input['%s'] === 'merged_matrix'", ns("bulk_import_mode")),
-              numericInput(ns("min_counts"), i18n$t("Counts minimum par gène (pré-filtre grossier)"),
-                           value = 10, min = 0, step = 1),
-              helpText(i18n$t("Les gènes avec moins de counts seront filtrés dès l'import."))
+              selectInput(
+                ns("bulk_data_type"),
+                i18n$t("Type de données"),
+                choices = setNames(
+                  c("rna_counts", "generic_omics"),
+                  c(.tr_plain("RNA-seq (counts bruts)"),
+                    .tr_plain("Omics générique (protéomique / métabolomique / ATAC)"))
+                ),
+                selected = "rna_counts"
+              ),
+              conditionalPanel(
+                condition = sprintf("input['%s'] !== 'generic_omics'", ns("bulk_data_type")),
+                numericInput(ns("min_counts"), i18n$t("Counts minimum par gène (pré-filtre grossier)"),
+                             value = 10, min = 0, step = 1),
+                helpText(i18n$t("Les gènes avec moins de counts seront filtrés dès l'import."))
+              ),
+              conditionalPanel(
+                condition = sprintf("input['%s'] === 'generic_omics'", ns("bulk_data_type")),
+                selectInput(
+                  ns("generic_modality"),
+                  i18n$t("Modalité omics"),
+                  choices = c("proteomics", "metabolomics", "lipidomics", "methylation", "generic"),
+                  selected = "proteomics"
+                ),
+                checkboxInput(ns("generic_log_transform"),
+                              i18n$t("Transformation log2(x + 1)"), value = FALSE),
+                selectInput(
+                  ns("generic_impute"),
+                  i18n$t("Imputation des NA"),
+                  choices = c("none", "min_half", "median"),
+                  selected = "none"
+                ),
+                selectInput(
+                  ns("generic_normalize"),
+                  i18n$t("Normalisation"),
+                  choices = c("none", "median_center", "zscore"),
+                  selected = "none"
+                )
+              )
             )
           ),
           
@@ -731,7 +767,12 @@ mod_import_bulk_server <- function(id, global_data) {
     #
     # `counts`   : data.frame/matrix gènes × échantillons.
     # `metadata` : data.frame aligné par ROWNAMES, ou NULL.
-    assemble_bulk_obj <- function(counts, metadata, min_counts, project_name) {
+    assemble_bulk_obj <- function(counts, metadata, min_counts, project_name,
+                                  data_type = "rna_counts",
+                                  generic_modality = "generic",
+                                  generic_log_transform = FALSE,
+                                  generic_impute = "none",
+                                  generic_normalize = "none") {
       add_log(.tr(" → Conversion des valeurs en numérique..."))
       counts <- as.data.frame(counts, check.names = FALSE, stringsAsFactors = FALSE)
       for (col in colnames(counts)) {
@@ -741,18 +782,41 @@ mod_import_bulk_server <- function(id, global_data) {
       if (anyNA(as.matrix(counts)))
         add_log(.tr(" ⚠️ Certaines valeurs ne sont pas numériques (NA après conversion)"))
 
-      counts_matrix <- as.matrix(counts)
-      gene_counts   <- rowSums(counts_matrix, na.rm = TRUE)
-      keep_genes    <- gene_counts >= min_counts
-      counts_matrix <- counts_matrix[keep_genes, , drop = FALSE]
-      add_log(sprintf(.tr(" → Gènes filtrés: %d retirés, %d conservés"),
-                    sum(!keep_genes), sum(keep_genes)))
+      if (identical(data_type, "generic_omics") &&
+          exists("prepare_generic_omics_matrix", mode = "function")) {
+        prep <- prepare_generic_omics_matrix(
+          as.matrix(counts),
+          modality = generic_modality,
+          log_transform = isTRUE(generic_log_transform),
+          impute = generic_impute,
+          normalize = generic_normalize
+        )
+        counts_matrix <- prep$matrix
+        add_log(sprintf(.tr(" → Omics générique (%s): %d/%d entités conservées"),
+                        prep$modality, nrow(counts_matrix), prep$qc$n_features_in))
+        bulk_obj <- list(counts          = counts_matrix,
+                         metadata        = NULL,
+                         project         = project_name,
+                         type            = "bulk",
+                         data_type       = "generic_omics",
+                         modality        = prep$modality,
+                         is_count_matrix = FALSE,
+                         generic_omics   = prep,
+                         timestamp       = Sys.time())
+      } else {
+        counts_matrix <- as.matrix(counts)
+        gene_counts   <- rowSums(counts_matrix, na.rm = TRUE)
+        keep_genes    <- gene_counts >= min_counts
+        counts_matrix <- counts_matrix[keep_genes, , drop = FALSE]
+        add_log(sprintf(.tr(" → Gènes filtrés: %d retirés, %d conservés"),
+                      sum(!keep_genes), sum(keep_genes)))
 
-      bulk_obj <- list(counts    = counts_matrix,
-                       metadata  = NULL,
-                       project   = project_name,
-                       type      = "bulk",
-                       timestamp = Sys.time())
+        bulk_obj <- list(counts    = counts_matrix,
+                         metadata  = NULL,
+                         project   = project_name,
+                         type      = "bulk",
+                         timestamp = Sys.time())
+      }
 
       if (!is.null(metadata)) {
         sample_names   <- colnames(counts_matrix)
@@ -782,6 +846,9 @@ mod_import_bulk_server <- function(id, global_data) {
     # mesuré 2026-10-24) ; ce signal prévient DÈS le chargement : notification
     # PERSISTANTE (duration = NULL) + ligne de log, jamais bloquant.
     .warn_if_transformed_bulk <- function(obj) {
+      if (identical(obj$data_type, "generic_omics") || isFALSE(obj$is_count_matrix)) {
+        return(invisible(NULL))
+      }
       sig <- tryCatch(bulk_counts_transformed_signature(obj$counts),
                       error = function(e) NULL)
       if (is.null(sig) || identical(sig$verdict, "raw") ||
@@ -1717,8 +1784,15 @@ mod_import_bulk_server <- function(id, global_data) {
           # chemins produisent donc le même objet, et une correction future ne
           # peut plus n'en atteindre qu'un. Aucune autre ligne ne change ici :
           # le corps extrait a été déplacé tel quel.
-          bulk_obj <- assemble_bulk_obj(counts, metadata,
-                                        input$min_counts, input$project_name)
+          bulk_obj <- assemble_bulk_obj(
+            counts, metadata,
+            input$min_counts, input$project_name,
+            data_type = input$bulk_data_type %||% "rna_counts",
+            generic_modality = input$generic_modality %||% "generic",
+            generic_log_transform = isTRUE(input$generic_log_transform),
+            generic_impute = input$generic_impute %||% "none",
+            generic_normalize = input$generic_normalize %||% "none"
+          )
           
           global_data$bulk_obj <- bulk_obj
           global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)

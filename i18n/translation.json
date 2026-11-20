@@ -14032,6 +14032,34 @@
     {
       "fr": "Chargement dataset spatial : ",
       "en": "Loading spatial dataset: "
+    },
+    {
+      "fr": "Type de données",
+      "en": "Data type"
+    },
+    {
+      "fr": "RNA-seq (counts bruts)",
+      "en": "RNA-seq (raw counts)"
+    },
+    {
+      "fr": "Omics générique (protéomique / métabolomique / ATAC)",
+      "en": "Generic omics (proteomics / metabolomics / ATAC)"
+    },
+    {
+      "fr": "Modalité omics",
+      "en": "Omics modality"
+    },
+    {
+      "fr": "Transformation log2(x + 1)",
+      "en": "log2(x + 1) transformation"
+    },
+    {
+      "fr": "Imputation des NA",
+      "en": "NA imputation"
+    },
+    {
+      "fr": " → Omics générique (%s): %d/%d entités conservées",
+      "en": " → Generic omics (%s): %d/%d features kept"
     }
   ]
 }
