@@ -62,7 +62,11 @@ sc_ap_normalize_params <- function(p = list()) {
     sc_ap_doublets             = FALSE,
     sc_ap_run_ambient          = FALSE,
     sc_ap_doublet_score_cutoff = TS_SC_QC_DOUBLET_SCORE_CUTOFF,
-    sc_ap_max_contamination    = TS_SC_QC_MAX_CONTAMINATION
+    sc_ap_max_contamination    = TS_SC_QC_MAX_CONTAMINATION,
+    # W1.1 #11 : Rareté par population (opt-in strict, règle & seuil déclarés)
+    sc_ap_population_rarity    = FALSE,
+    sc_ap_rarity_rule          = "absolute_n_cells",
+    sc_ap_rarity_threshold     = NA_real_
   )
   for (k in names(d)) d[[k]] <- p[[k]] %||% d[[k]]
   d
@@ -532,6 +536,7 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
   n_cl <- length(unique(obj$seurat_clusters))
 
   # ── Step 6: SingleR (optional) ─────────────────────────────────────────────
+  singler_col <- NULL
   if (isTRUE(p_norm$sc_ap_singler)) {
     if (requireNamespace("SingleR", quietly = TRUE) && requireNamespace("celldex", quietly = TRUE) &&
         exists(".run_singler_safe", mode = "function")) {
@@ -544,6 +549,7 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
       if (!is.null(result)) {
         col_name <- paste0("SingleR_", p_norm$sc_ap_singler_ref, "_", p_norm$sc_ap_singler_level)
         obj[[col_name]] <- result$labels
+        singler_col <- col_name
         log_fn(sprintf("✓ Annoté [%s] — %d types", result$method, length(unique(result$labels))))
       }
     } else {
@@ -671,6 +677,62 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
     step_times$trajectory_s <- as.numeric(difftime(Sys.time(), t_traj, units = "secs"))
   }
 
+  # ── Step 10: Population Rarity (opt-in, descriptive) ──────────────────────
+  rarity_res <- NULL
+  if (isTRUE(p_norm$sc_ap_population_rarity)) {
+    t_rarity <- Sys.time()
+    .rarity_warn <- function(msg) {
+      log_fn(sprintf("⚠ Rareté par population ignorée : %s", msg))
+      warning(structure(
+        list(message = paste0("Rareté par population ignorée : ", msg), call = NULL),
+        class = c("sc_ap_population_rarity_warning", "warning", "condition")
+      ))
+    }
+    rule_val <- p_norm$sc_ap_rarity_rule
+    thr_val <- suppressWarnings(as.numeric(p_norm$sc_ap_rarity_threshold))
+    allowed_rules <- if (exists("TS_POPULATION_RARITY_RULES", inherits = TRUE)) {
+      TS_POPULATION_RARITY_RULES
+    } else {
+      c("absolute_n_cells", "relative_fraction")
+    }
+    if (!is.character(rule_val) || length(rule_val) != 1L || !rule_val %in% allowed_rules) {
+      .rarity_warn(sprintf("règle invalide '%s' (attendu : %s).",
+                           as.character(rule_val)[1L], paste(allowed_rules, collapse = ", ")))
+    } else if (length(thr_val) != 1L || is.na(thr_val) || !is.finite(thr_val) || thr_val <= 0) {
+      .rarity_warn("seuil déclaré manquant ou non positif.")
+    } else if (!exists("compute_population_rarity", mode = "function")) {
+      .rarity_warn("moteur compute_population_rarity() indisponible.")
+    } else {
+      id_col <- if (!is.null(singler_col) && singler_col %in% colnames(obj@meta.data)) {
+        singler_col
+      } else if ("seurat_clusters" %in% colnames(obj@meta.data)) {
+        "seurat_clusters"
+      } else {
+        NULL
+      }
+      sample_col <- if ("orig.ident" %in% colnames(obj@meta.data)) "orig.ident" else NULL
+      rarity_res <- tryCatch(
+        compute_population_rarity(
+          meta = obj@meta.data,
+          identity_column = id_col,
+          rule_type = rule_val,
+          threshold = thr_val,
+          sample_column = sample_col,
+          seurat_obj = obj
+        ),
+        error = function(e) {
+          .rarity_warn(conditionMessage(e))
+          NULL
+        }
+      )
+      if (!is.null(rarity_res)) {
+        log_fn(sprintf("✓ Rareté par population (%s) : %d/%d populations rares",
+                       id_col, rarity_res$summary$n_rare, rarity_res$summary$n_populations))
+      }
+    }
+    step_times$population_rarity_s <- as.numeric(difftime(Sys.time(), t_rarity, units = "secs"))
+  }
+
   t_end <- Sys.time()
   step_times$total_s <- as.numeric(difftime(t_end, t_start, units = "secs"))
 
@@ -691,16 +753,17 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
   )
 
   list(
-    obj              = obj,
-    metrics          = metrics,
-    timings          = step_times,
-    log              = log_lines,
-    markers_data     = markers,
-    pathway_results  = pw,
-    correlated_genes = corr_res,
-    qc_snapshot      = qc_snapshot,
-    doublets_provenance = m4_provenance,   # M4 : entrée new_provenance_entry (NULL si step désactivé)
-    qc_distributions    = m4_distributions # M4 : distributions nCount/nFeature avant/après (NULL si step désactivé)
+    obj                      = obj,
+    metrics                  = metrics,
+    timings                  = step_times,
+    log                      = log_lines,
+    markers_data             = markers,
+    pathway_results          = pw,
+    correlated_genes         = corr_res,
+    qc_snapshot              = qc_snapshot,
+    doublets_provenance      = m4_provenance,    # M4 : entrée new_provenance_entry (NULL si step désactivé)
+    qc_distributions         = m4_distributions, # M4 : distributions nCount/nFeature avant/après (NULL si step désactivé)
+    population_rarity_result = rarity_res
   )
 }
 
@@ -1187,6 +1250,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
             state_set(shared_rv, "corr_target_gene", res$markers_data$gene[1])
           }
         }
+        state_set(shared_rv, "population_rarity_result", res$population_rarity_result)
         if ("pseudotime" %in% colnames(obj@meta.data)) {
           traj_red_use <- if ("umap" %in% names(obj@reductions)) "umap" else "pca"
           state_set(shared_rv, "traj_reduction", traj_red_use)

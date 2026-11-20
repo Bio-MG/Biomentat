@@ -37,7 +37,9 @@ assign(".tr", function(key) key, envir = globalenv())
   "sc_ap_correlation", "sc_ap_trajectory",
   # M4 (2026-10-26) : QC doublets & ambiant — opt-in, défauts = defaults.R.
   "sc_ap_doublets", "sc_ap_run_ambient",
-  "sc_ap_doublet_score_cutoff", "sc_ap_max_contamination"
+  "sc_ap_doublet_score_cutoff", "sc_ap_max_contamination",
+  # W1.1 #11 : Rareté par population (opt-in, règle & seuil déclarés).
+  "sc_ap_population_rarity", "sc_ap_rarity_rule", "sc_ap_rarity_threshold"
 )
 
 test_that("sc_ap_normalize_params rend le jeu FERMÉ avec les défauts canoniques", {
@@ -56,6 +58,9 @@ test_that("sc_ap_normalize_params rend le jeu FERMÉ avec les défauts canonique
   expect_false(isTRUE(p$sc_ap_run_ambient))
   expect_equal(p$sc_ap_doublet_score_cutoff, TS_SC_QC_DOUBLET_SCORE_CUTOFF)
   expect_equal(p$sc_ap_max_contamination,    TS_SC_QC_MAX_CONTAMINATION)
+  expect_true(isFALSE(p$sc_ap_population_rarity))
+  expect_identical(p$sc_ap_rarity_rule, "absolute_n_cells")
+  expect_true(is.na(p$sc_ap_rarity_threshold))
 })
 
 test_that("les valeurs fournies gagnent, les clés inconnues sont PERDUES", {

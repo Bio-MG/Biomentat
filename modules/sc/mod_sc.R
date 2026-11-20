@@ -1968,6 +1968,20 @@ mod_sc_server <- function(id, global_data) {
                  .tr("Requiert 'Marqueurs' coché. Corrèle le gène à p-adj minimal avec tous les autres.")),
         checkboxInput(ns_m("sc_ap_trajectory"),
                       paste("\U0001f9ec", .tr("Trajectory / Pseudotemps (UMAP, racine auto)")), value=FALSE),
+        checkboxInput(ns_m("sc_ap_population_rarity"),
+                      paste("\U0001f9ec", .tr("Rareté par population (descriptif)")), value=FALSE),
+        conditionalPanel(
+          condition = sprintf("input['%s'] == true", ns_m("sc_ap_population_rarity")),
+          fluidRow(
+            column(6, selectInput(ns_m("sc_ap_rarity_rule"), .tr("Règle de rareté"),
+                       choices = stats::setNames(
+                         c("absolute_n_cells", "relative_fraction"),
+                         c(.tr("Nombre de cellules sous le seuil"),
+                           .tr("Fraction du jeu sous le seuil"))))),
+            column(6, numericInput(ns_m("sc_ap_rarity_threshold"), .tr("Seuil déclaré"),
+                       value = 20, min = 1))
+          )
+        ),
 
         footer=tagList(
           modalButton(.tr("Annuler")),
@@ -2157,6 +2171,7 @@ mod_sc_server <- function(id, global_data) {
                 state_set(shared_rv, "corr_target_gene", markers_res$gene[1])
               }
             }
+            state_set(shared_rv, "population_rarity_result", res$population_rarity_result)
             state_set(shared_rv, "active_tab", "tab_viz")
             # DSTV-1b (§8.4) : « done » + rafraîchissement business_state —
             # le nouvel objet est en place (global_data$sc_obj <- res$obj),
