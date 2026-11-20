@@ -18,13 +18,15 @@ mod_sc_communication_perturbation_ui <- function(id) {
         i18n$t("IN SILICO PERTURBATION — simulation sur le réseau INFÉRÉ : ce n'est PAS une expérience KO, PAS un effet biologique validé. Effets de premier ordre sur les scores importés (aucune propagation modélisée).")),
     fluidRow(
       column(4, selectInput(ns("pert_target"), i18n$t("Cible"),
-                            choices = setNames(communication_perturbation_targets(),
+                            choices = setNames(c(communication_perturbation_targets(), "pathway", "population"),
                                                c(.tr_plain("Ligand"), .tr_plain("Récepteur"),
                                                  .tr_plain("Interaction (ligand -> récepteur)"),
-                                                 .tr_plain("Population sender"), .tr_plain("Population receiver"))),
+                                                 .tr_plain("Population sender"), .tr_plain("Population receiver"),
+                                                 .tr_plain("Voie de signalisation"),
+                                                 .tr_plain("Population cellulaire (sender + receiver)"))),
                             width = "100%")),
-      column(4, selectInput(ns("pert_value"), i18n$t("Valeur (exacte, issue de la table)"),
-                            choices = character(0), width = "100%")),
+      column(4, selectizeInput(ns("pert_value"), i18n$t("Valeur(s) exacte(s) (issues de la table)"),
+                               choices = character(0), multiple = TRUE, width = "100%")),
       column(4,
              radioButtons(ns("pert_mode"), i18n$t("Mode"),
                           choices = setNames(c("remove", "attenuate"),
@@ -104,7 +106,8 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
     .target_col <- function() {
       switch(input$pert_target %||% "ligand",
              ligand = "ligand", receptor = "receptor", interaction = "interaction",
-             sender = "sender_node", receiver = "receiver_node")
+             sender = "sender_node", receiver = "receiver_node",
+             pathway = "pathway", population = "population")
     }
     .node_table <- function() {
       t <- comm_state$result$canonical_table
@@ -114,16 +117,23 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
       t$receiver_node <- ifelse(!is.na(rm), rm, t$receiver)
       t
     }
-    .update_value_choices <- function() {
-      if (is.null(comm_state$result)) {
-        updateSelectInput(session, "pert_value", choices = character(0), selected = character(0))
-        return()
-      }
+    .target_values <- function() {
       t <- .node_table()
       col <- .target_col()
-      vals <- sort(unique(stats::na.omit(as.character(t[[col]]))))
-      updateSelectInput(session, "pert_value", choices = vals,
-                        selected = if (length(vals)) vals[1] else character(0))
+      if (identical(col, "population")) {
+        return(sort(unique(stats::na.omit(as.character(c(t$sender_node, t$receiver_node))))))
+      }
+      if (!col %in% names(t)) return(character(0))
+      sort(unique(stats::na.omit(as.character(t[[col]]))))
+    }
+    .update_value_choices <- function() {
+      if (is.null(comm_state$result)) {
+        updateSelectizeInput(session, "pert_value", choices = character(0), selected = character(0))
+        return()
+      }
+      vals <- .target_values()
+      updateSelectizeInput(session, "pert_value", choices = vals,
+                           selected = if (length(vals)) vals[1] else character(0))
     }
     observeEvent(input$pert_target, { .update_value_choices() }, ignoreInit = TRUE)
     # UN SEUL observateur par déclencheur (garde anti-duplication) : reset du
@@ -131,7 +141,7 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
     observeEvent(comm_state$result, {
       pert_ctx(NULL)
       .update_value_choices()
-    }, ignoreInit = TRUE)
+    }, ignoreInit = TRUE, ignoreNULL = FALSE)
 
     # ── 3F (O28, spéc §2.18) : garde préventive + jauge ─────────────────────
     # Sans résultat de communication importé, la simulation n'a AUCUNE table à
@@ -146,9 +156,7 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
 
     output$pert_target_info <- renderText({
       req(comm_state$result)
-      t <- .node_table()
-      col <- .target_col()
-      n <- length(unique(stats::na.omit(as.character(t[[col]]))))
+      n <- length(.target_values())
       sprintf(.tr("%d valeur(s) disponible(s) dans la table pour cette cible — la perturbation s'applique à une copie d'affichage, la table canonique n'est jamais modifiée."), n)
     })
 
@@ -197,7 +205,7 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
       req(ctx)
       paste0(
         "IN SILICO PERTURBATION\n",
-        sprintf("Cible   : %s = %s\n", ctx$target, ctx$value),
+        sprintf("Cible   : %s = %s\n", ctx$target, paste(ctx$value, collapse = ", ")),
         sprintf("Mode    : %s (facteur %s)\n", ctx$mode,
                 if (is.na(ctx$params$factor)) "—" else format(ctx$params$factor)),
         sprintf("Réseau  : %d → %d interactions\n",

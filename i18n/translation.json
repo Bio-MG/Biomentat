@@ -14256,6 +14256,18 @@
     {
       "fr": "Top N arêtes (Réseau, 0 = toutes)",
       "en": "Top N edges (Network, 0 = all)"
+    },
+    {
+      "fr": "Voie de signalisation",
+      "en": "Signaling pathway"
+    },
+    {
+      "fr": "Population cellulaire (sender + receiver)",
+      "en": "Cell population (sender + receiver)"
+    },
+    {
+      "fr": "Valeur(s) exacte(s) (issues de la table)",
+      "en": "Exact value(s) (from the table)"
     }
   ]
 }
