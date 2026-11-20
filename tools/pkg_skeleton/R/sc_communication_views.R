@@ -56,7 +56,10 @@ communication_views_public_api <- function() {
     "build_communication_multimodal_synthesis",
     "plot_communication_multimodal_synthesis",
     # CC-3 : graphe comparatif de flux par voie (@netP$prob).
-    "plot_ccc_comparison_flow"
+    "plot_ccc_comparison_flow",
+    # W2.2 §11.8 Gem #2 : consensus multi-méthodes par rangs intra-méthode.
+    "build_communication_consensus",
+    "plot_communication_consensus"
   )
 }
 
@@ -1272,6 +1275,435 @@ plot_ccc_comparison_flow <- function(comparison_result,
     ggplot2::theme_minimal(base_size = 11) +
     ggplot2::theme(panel.grid.major.y = ggplot2::element_blank())
 }
+
+# =============================================================================
+# W2.2 §11.8 Gem #2 — Consensus multi-méthodes CCC par rangs intra-méthode
+# =============================================================================
+
+.consensus_stop <- function(message, state = "invalid_input") {
+  stop(errorCondition(
+    message,
+    state = state,
+    class = "communication_context_error"
+  ))
+}
+
+.consensus_method_names <- function(results_list, validated_results) {
+  raw_names <- names(results_list)
+  if (is.null(raw_names)) raw_names <- rep("", length(validated_results))
+  raw_names <- trimws(as.character(raw_names))
+  raw_names[is.na(raw_names)] <- ""
+
+  methods <- vapply(seq_along(validated_results), function(i) {
+    if (nzchar(raw_names[i])) {
+      raw_names[i]
+    } else {
+      sm <- as.character(validated_results[[i]]$source_method %||% "")
+      if (length(sm) == 1L && !is.na(sm) && nzchar(trimws(sm))) {
+        trimws(sm)
+      } else {
+        paste0("method_", i)
+      }
+    }
+  }, character(1L))
+
+  if (any(duplicated(methods))) {
+    counts <- integer(0)
+    for (i in seq_along(methods)) {
+      m <- methods[i]
+      k <- (counts[m] %||% 0L)
+      if (is.na(k)) k <- 0L
+      k <- k + 1L
+      counts[m] <- k
+    }
+    seen <- integer(0)
+    dup_set <- unique(methods[duplicated(methods)])
+    for (i in seq_along(methods)) {
+      m <- methods[i]
+      if (m %in% dup_set) {
+        idx <- (seen[m] %||% 0L)
+        if (is.na(idx)) idx <- 0L
+        idx <- idx + 1L
+        seen[m] <- idx
+        methods[i] <- paste0(m, "_", idx)
+      }
+    }
+  }
+  methods
+}
+
+.consensus_within_method_pct <- function(comm_res) {
+  tbl <- .communication_node_keys(comm_res$canonical_table)
+  if (nrow(tbl) == 0L) {
+    return(data.frame(
+      key = character(0),
+      sender_node = character(0),
+      receiver_node = character(0),
+      ligand = character(0),
+      receptor = character(0),
+      within_pct = numeric(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  has_rank <- "rank" %in% colnames(tbl) &&
+    any(is.finite(suppressWarnings(as.numeric(tbl$rank))))
+  has_score <- "score" %in% colnames(tbl) &&
+    any(is.finite(suppressWarnings(as.numeric(tbl$score))))
+
+  if (has_rank) {
+    val <- suppressWarnings(as.numeric(tbl$rank))
+    keep <- is.finite(val)
+    tbl <- tbl[keep, , drop = FALSE]
+    val <- val[keep]
+    # Direction : lower_is_better (rang 1 = meilleur)
+    ord_metric <- val
+  } else if (has_score) {
+    val <- suppressWarnings(as.numeric(tbl$score))
+    keep <- is.finite(val)
+    tbl <- tbl[keep, , drop = FALSE]
+    val <- val[keep]
+    # Direction : higher_is_better (score élevé = meilleur -> tri sur -val)
+    ord_metric <- -val
+  } else {
+    return(data.frame(
+      key = character(0),
+      sender_node = character(0),
+      receiver_node = character(0),
+      ligand = character(0),
+      receptor = character(0),
+      within_pct = numeric(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  if (nrow(tbl) == 0L) {
+    return(data.frame(
+      key = character(0),
+      sender_node = character(0),
+      receiver_node = character(0),
+      ligand = character(0),
+      receptor = character(0),
+      within_pct = numeric(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  keys <- paste(
+    as.character(tbl$sender_node),
+    as.character(tbl$receiver_node),
+    as.character(tbl$ligand),
+    as.character(tbl$receptor),
+    sep = "\r"
+  )
+
+  # Dédoublonnage par paire (sender_node, receiver_node, ligand, receptor) en
+  # conservant la meilleure mesure intra-méthode avant calcul des rangs.
+  if (any(duplicated(keys))) {
+    ord_best <- order(ord_metric, seq_along(ord_metric))
+    tbl <- tbl[ord_best, , drop = FALSE]
+    ord_metric <- ord_metric[ord_best]
+    keys <- keys[ord_best]
+    keep_uniq <- !duplicated(keys)
+    tbl <- tbl[keep_uniq, , drop = FALSE]
+    ord_metric <- ord_metric[keep_uniq]
+    keys <- keys[keep_uniq]
+  }
+
+  n_pairs <- nrow(tbl)
+  # Rangs intra-méthode déterministes (ties.method = "min") dans (0, 1] :
+  # meilleur = 1 / n_pairs, pire = 1.0.
+  within_ranks <- rank(ord_metric, ties.method = "min")
+  within_pct <- as.numeric(within_ranks) / as.numeric(n_pairs)
+
+  data.frame(
+    key = keys,
+    sender_node = as.character(tbl$sender_node),
+    receiver_node = as.character(tbl$receiver_node),
+    ligand = as.character(tbl$ligand),
+    receptor = as.character(tbl$receptor),
+    within_pct = within_pct,
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Consensus multi-méthodes CCC par rangs percentiles intra-méthode (W2.2 §11.8)
+#'
+#' Compare >= 2 résultats canoniques de communication intercellulaire (p. ex.
+#' `CellChat × LIANA`) en calculant les rangs percentiles **intra-méthode** dans
+#' `(0, 1]` (meilleur = plus petit percentile : outils par rang triés par
+#' `rank` croissant, outils par score triés par `score` décroissant) et en
+#' harmonisant les quadruplets `(sender_node, receiver_node, ligand, receptor)`
+#' via `.communication_node_keys()`.
+#'
+#' **INVARIANT SCIENTIFIQUE** : les scores bruts ne sont JAMAIS moyennés entre
+#' outils (échelles incompatibles : probabilité d'action de masse CellChat vs
+#' rang agrégé RRA LIANA vs moyenne CellPhoneDB).
+#'
+#' @param results_list Liste (nommée ou non) d'au moins 2 résultats canoniques
+#'   valides (`assert_communication_result()`).
+#' @param top_pct Seuil de percentile intra-méthode dans `(0, 1]` définissant
+#'   le top de chaque méthode (défaut `0.15`).
+#' @param min_methods Nombre minimal de méthodes dans lesquelles une paire doit
+#'   figurer dans le top `top_pct` pour être déclarée consensus (défaut `2L`,
+#'   entier `>= 2L`).
+#' @return Liste structurée avec `table`, `methods`, `params`, `qc` et
+#'   `epistemic_note`.
+#' @export
+build_communication_consensus <- function(results_list,
+                                          top_pct = 0.15,
+                                          min_methods = 2L) {
+  if (!is.list(results_list) || inherits(results_list, "data.frame") ||
+      length(results_list) < 2L) {
+    .consensus_stop(
+      "build_communication_consensus() : 'results_list' doit être une liste d'au moins 2 résultats de communication."
+    )
+  }
+  if (!is.numeric(top_pct) || length(top_pct) != 1L || !is.finite(top_pct) ||
+      top_pct <= 0 || top_pct > 1) {
+    .consensus_stop(
+      "build_communication_consensus() : 'top_pct' doit être un numérique dans (0, 1]."
+    )
+  }
+  if (!is.numeric(min_methods) || length(min_methods) != 1L ||
+      !is.finite(min_methods) || as.integer(min_methods) < 2L) {
+    .consensus_stop(
+      "build_communication_consensus() : 'min_methods' doit être un entier >= 2."
+    )
+  }
+  min_methods_int <- as.integer(min_methods)
+  top_pct_num <- as.numeric(top_pct)
+
+  validated <- lapply(seq_along(results_list), function(i) {
+    tryCatch(
+      assert_communication_result(
+        results_list[[i]],
+        context = sprintf("consensus communication (élément %d)", i)
+      ),
+      error = function(e) {
+        .consensus_stop(
+          sprintf(
+            "build_communication_consensus() : élément %d invalide (%s).",
+            i, conditionMessage(e)
+          ),
+          state = e$state %||% "invalid_input"
+        )
+      }
+    )
+  })
+
+  methods <- .consensus_method_names(results_list, validated)
+  n_methods <- length(methods)
+  pct_dfs <- lapply(validated, .consensus_within_method_pct)
+  epistemic_note <- "Consensus par rangs intra-méthode — scores bruts jamais moyennés entre outils"
+
+  all_keys <- unique(unlist(lapply(pct_dfs, function(d) d$key), use.names = FALSE))
+  if (length(all_keys) == 0L) {
+    empty_tbl <- data.frame(
+      sender_node = character(0),
+      receiver_node = character(0),
+      ligand = character(0),
+      receptor = character(0),
+      n_methods_present = integer(0),
+      n_methods_top = integer(0),
+      is_consensus = logical(0),
+      mean_within_rank_pct = numeric(0),
+      methods_present = character(0),
+      stringsAsFactors = FALSE
+    )
+    for (m in methods) {
+      empty_tbl[[paste0("pct_", m)]] <- numeric(0)
+    }
+    return(list(
+      type = "ccc_consensus",
+      table = empty_tbl,
+      methods = methods,
+      params = list(top_pct = top_pct_num, min_methods = min_methods_int),
+      qc = list(n_total_pairs = 0L, n_consensus = 0L, n_methods = n_methods),
+      epistemic_note = epistemic_note
+    ))
+  }
+
+  key_parts <- do.call(rbind, strsplit(all_keys, "\r", fixed = TRUE))
+  out <- data.frame(
+    sender_node = key_parts[, 1L],
+    receiver_node = key_parts[, 2L],
+    ligand = key_parts[, 3L],
+    receptor = key_parts[, 4L],
+    stringsAsFactors = FALSE
+  )
+
+  pct_mat <- matrix(NA_real_, nrow = length(all_keys), ncol = n_methods)
+  colnames(pct_mat) <- methods
+  for (j in seq_along(methods)) {
+    df_j <- pct_dfs[[j]]
+    if (nrow(df_j) > 0L) {
+      idx <- match(all_keys, df_j$key)
+      pct_mat[, j] <- df_j$within_pct[idx]
+    }
+  }
+
+  n_present <- as.integer(rowSums(!is.na(pct_mat)))
+  n_top <- as.integer(rowSums(!is.na(pct_mat) & (pct_mat <= top_pct_num + 1e-12)))
+  is_cons <- n_top >= min_methods_int
+  mean_pct <- rowMeans(pct_mat, na.rm = TRUE)
+  mean_pct[!is.finite(mean_pct)] <- NA_real_
+
+  methods_present <- apply(!is.na(pct_mat), 1L, function(mask) {
+    paste(methods[mask], collapse = ", ")
+  })
+
+  out$n_methods_present <- n_present
+  out$n_methods_top <- n_top
+  out$is_consensus <- is_cons
+  out$mean_within_rank_pct <- mean_pct
+  out$methods_present <- methods_present
+
+  for (j in seq_along(methods)) {
+    out[[paste0("pct_", methods[j])]] <- pct_mat[, j]
+  }
+
+  ord <- order(
+    !out$is_consensus,
+    -out$n_methods_top,
+    out$mean_within_rank_pct,
+    out$sender_node,
+    out$receiver_node,
+    out$ligand,
+    out$receptor
+  )
+  out <- out[ord, , drop = FALSE]
+  rownames(out) <- NULL
+
+  list(
+    type = "ccc_consensus",
+    table = out,
+    methods = methods,
+    params = list(top_pct = top_pct_num, min_methods = min_methods_int),
+    qc = list(
+      n_total_pairs = as.integer(nrow(out)),
+      n_consensus = as.integer(sum(out$is_consensus)),
+      n_methods = as.integer(n_methods)
+    ),
+    epistemic_note = epistemic_note
+  )
+}
+
+#' Visualisation ggplot2 des interactions L-R consensus multi-méthodes (W2.2 §11.8)
+#'
+#' Affiche les meilleures interactions ligand-récepteur consensus ordonnées par
+#' rang percentile intra-méthode moyen (`mean_within_rank_pct`) et nombre de
+#' méthodes dans le top (`n_methods_top`). Si aucune paire n'atteint le seuil de
+#' consensus, retourne un graphique d'état vide explicite portant la note
+#' épistémique en sous-titre.
+#'
+#' @param consensus_result Résultat retourné par `build_communication_consensus()`.
+#' @param top_n Nombre maximal d'interactions consensus affichées (défaut `25L`).
+#' @return Objet `ggplot`.
+#' @export
+plot_communication_consensus <- function(consensus_result, top_n = 25L) {
+  if (!is.list(consensus_result) ||
+      !is.data.frame(consensus_result$table) ||
+      !all(c("sender_node", "receiver_node", "ligand", "receptor",
+             "n_methods_top", "is_consensus", "mean_within_rank_pct") %in%
+           colnames(consensus_result$table))) {
+    .consensus_stop(
+      "plot_communication_consensus() : objet valide issu de build_communication_consensus() requis."
+    )
+  }
+
+  epistemic_note <- as.character(
+    consensus_result$epistemic_note %||%
+      "Consensus par rangs intra-méthode — scores bruts jamais moyennés entre outils"
+  )[1L]
+  tbl <- consensus_result$table
+  cons_rows <- tbl[tbl$is_consensus %in% TRUE, , drop = FALSE]
+
+  if (nrow(cons_rows) == 0L) {
+    return(.communication_empty_view_plot(
+      "Aucune interaction consensus au seuil choisi.",
+      "Consensus multi-méthodes CCC",
+      epistemic_note
+    ))
+  }
+
+  n_keep <- if (is.null(top_n) || !is.numeric(top_n) || length(top_n) != 1L ||
+                !is.finite(top_n) || top_n <= 0) {
+    nrow(cons_rows)
+  } else {
+    min(nrow(cons_rows), max(1L, as.integer(top_n)))
+  }
+  sub <- cons_rows[seq_len(n_keep), , drop = FALSE]
+  sub$interaction_label <- sprintf(
+    "%s -> %s : %s - %s",
+    sub$sender_node, sub$receiver_node, sub$ligand, sub$receptor
+  )
+  # Déduplication d'étiquettes au cas où
+  if (any(duplicated(sub$interaction_label))) {
+    sub$interaction_label <- make.unique(sub$interaction_label, sep = " #")
+  }
+  sub$interaction_label <- factor(
+    sub$interaction_label,
+    levels = rev(sub$interaction_label)
+  )
+  sub$support_score <- 1 - sub$mean_within_rank_pct
+
+  methods_str <- paste(as.character(consensus_result$methods %||% character(0)),
+                       collapse = " \u00d7 ")
+  top_pct_val <- as.numeric(consensus_result$params$top_pct %||% 0.15)
+  min_m_val <- as.integer(consensus_result$params$min_methods %||% 2L)
+  sub_full <- sprintf(
+    "%s — %s (top %.0f%%, >= %d méthodes, %d/%d paires consensus)",
+    epistemic_note,
+    if (nzchar(methods_str)) methods_str else "Multi-méthodes",
+    top_pct_val * 100,
+    min_m_val,
+    nrow(sub),
+    nrow(cons_rows)
+  )
+
+  ggplot2::ggplot(
+    sub,
+    ggplot2::aes(
+      x = .data$mean_within_rank_pct,
+      y = .data$interaction_label,
+      size = .data$n_methods_top,
+      colour = .data$mean_within_rank_pct
+    )
+  ) +
+    ggplot2::geom_segment(
+      ggplot2::aes(
+        x = 0,
+        xend = .data$mean_within_rank_pct,
+        y = .data$interaction_label,
+        yend = .data$interaction_label
+      ),
+      linewidth = 0.6,
+      colour = "grey70"
+    ) +
+    ggplot2::geom_point(alpha = 0.9) +
+    ggplot2::scale_colour_gradient(
+      low = "#084594",
+      high = "#9ECAE1",
+      name = "Rang pct moyen\n(plus bas = meilleur)"
+    ) +
+    ggplot2::scale_size_continuous(
+      range = c(3.5, 7),
+      breaks = sort(unique(sub$n_methods_top)),
+      name = "Méthodes\n(top %)"
+    ) +
+    ggplot2::labs(
+      x = "Rang percentile intra-méthode moyen (plus proche de 0 = meilleur)",
+      y = NULL,
+      title = "Consensus multi-méthodes CCC (interactions L-R)",
+      subtitle = sub_full
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      panel.grid.minor = ggplot2::element_blank()
+    )
+}
+
 
 
 
