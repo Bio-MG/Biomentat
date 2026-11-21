@@ -304,6 +304,17 @@ mod_sc_viz_output_ui <- function(id) {
 }
 
 
+# W1.1 #13 : budget de rendu UMAP interactif (> 25k cellules => sous-échantillon
+# stratifié déterministe qui préserve les clusters rares). Retourne NULL quand
+# le dataset complet doit être conservé (<= 25000 cellules ou helpers absents).
+.sc_viz_umap_budget_idx <- function(n_cells, groups = NULL) {
+  if (!exists("sc_umap_render_budget", mode = "function") ||
+      !exists("sc_subsample_umap_indices", mode = "function")) return(NULL)
+  budget <- sc_umap_render_budget(n_cells)
+  if (!isTRUE(budget$should_subsample)) return(NULL)
+  sc_subsample_umap_indices(n_cells, max_points = budget$target_points, groups = groups)
+}
+
 # ── Server ────────────────────────────────────────────────────────────────────
 
 mod_sc_viz_server <- function(id, global_data, shared_rv) {
@@ -379,12 +390,25 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
     # RAM-safety); export re-renders build_sc_viz_plot() on the FULL object
     # on demand so the exported file is always full-fidelity regardless of
     # what the live preview showed.
-    .PREVIEW_MAX_CELLS  <- 50000L
+    .PREVIEW_MAX_CELLS  <- 25000L   # W1.1 #13 : aligné sur sc_umap_render_budget()
     .PREVIEW_CELL_TYPES <- c("dim", "feature", "scatter", "violin")
     preview_subsampled  <- reactiveVal(FALSE)
 
     .preview_obj <- function(obj, type, grp_col) {
-      if (!type %in% .PREVIEW_CELL_TYPES || ncol(obj) <= .PREVIEW_MAX_CELLS) {
+      if (!type %in% .PREVIEW_CELL_TYPES) {
+        preview_subsampled(FALSE)
+        return(obj)
+      }
+      # W1.1 #13 : budget UMAP (> 25k) stratifié par groupe, déterministe.
+      idx <- .sc_viz_umap_budget_idx(ncol(obj), obj@meta.data[[grp_col]])
+      if (!is.null(idx)) {
+        sub <- tryCatch(obj[, colnames(obj)[idx]], error = function(e) NULL)
+        if (!is.null(sub)) {
+          preview_subsampled(TRUE)
+          return(sub)
+        }
+      }
+      if (ncol(obj) <= .PREVIEW_MAX_CELLS) {
         preview_subsampled(FALSE)
         return(obj)
       }
