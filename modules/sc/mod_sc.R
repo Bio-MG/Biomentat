@@ -747,6 +747,56 @@ run_markers <- function(input, global_data, shared_rv, session) {
   "9b_report_consolide" = list(group = "grp_livrables", acc = "acc_livrables", tab = "tab_report_consolide", label_key = "5b. Rapport consolidé (4F)")
 )
 
+.SC_STEP_ORDER <- names(.SC_STEP_TAB_MAP)
+
+.sc_breadcrumb_step_index <- function(step, step_order = .SC_STEP_ORDER) {
+  if (is.null(step) || !length(step)) return(1L)
+  idx <- match(as.character(step[1L]), step_order)
+  if (is.na(idx)) 1L else as.integer(idx)
+}
+
+.sc_breadcrumb_adjacent_step <- function(step, direction = c("prev", "next"),
+                                         step_order = .SC_STEP_ORDER) {
+  direction <- match.arg(direction)
+  if (is.null(step) || !length(step)) return(NULL)
+  idx <- match(as.character(step[1L]), step_order)
+  if (is.na(idx)) return(NULL)
+  if (identical(direction, "prev")) {
+    if (idx > 1L) step_order[idx - 1L] else NULL
+  } else {
+    if (idx < length(step_order)) step_order[idx + 1L] else NULL
+  }
+}
+
+.sc_breadcrumb_ui_tag <- function(ns, step, tr = function(x) x,
+                                  step_order = .SC_STEP_ORDER) {
+  idx <- .sc_breadcrumb_step_index(step, step_order = step_order)
+  step_key <- step_order[idx]
+  info <- .SC_STEP_TAB_MAP[[step_key]]
+  lbl <- tr(info$label_key)
+  div(
+    class = "ts-sc-step-sync-bar",
+    div(
+      class = "d-flex align-items-center gap-2 text-truncate",
+      span(class = "badge bg-primary", tr("Single-Cell Workflow")),
+      span(class = "fw-semibold text-truncate", lbl)
+    ),
+    div(
+      class = "d-flex align-items-center gap-1 flex-shrink-0",
+      actionButton(ns("btn_prev_step"), NULL, icon = icon("chevron-left"),
+                   class = paste("btn-sm btn-outline-secondary py-0 px-2",
+                                 if (idx <= 1L) "disabled")),
+      span(class = "text-muted small px-1", sprintf("%d / %d", idx, length(step_order))),
+      actionButton(ns("btn_next_step"), NULL, icon = icon("chevron-right"),
+                   class = paste("btn-sm btn-outline-secondary py-0 px-2",
+                                 if (idx >= length(step_order)) "disabled")),
+      actionButton(ns("sc_sync_open_step"), NULL, icon = icon("sliders"),
+                   title = lbl,
+                   class = "btn-sm btn-outline-primary py-0 px-2 flex-shrink-0")
+    )
+  )
+}
+
 .sc_step_to_tab_map <- function(step, da_tab = NULL, da_method_tab = NULL) {
   if (is.null(step) || !nzchar(as.character(step[1]))) return(NULL)
   s <- as.character(step[1])
@@ -1123,7 +1173,9 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
     # les libellés).
     navset_card_underline(
       id = ns("main_tabs"), title = i18n$t("Résultats"),
-      header = bslib::card_body(fill = FALSE, class = "p-0", uiOutput(ns("sc_step_sync_bar"))),
+      header = bslib::card_body(fill = FALSE, class = "p-0",
+                                uiOutput(ns("active_step_breadcrumb_ui")),
+                                uiOutput(ns("sc_step_sync_bar"))),
       # P2-ÉTAPE 2 : menus numérotés — chaque chiffre = le préfixe des étapes
       # de la sidebar qui l'alimentent (1a-1d → Exploration, 2a-2b → Différentiel
       # & DA, 3a-3c → Réseaux & Signalisation, 4a-4b → Dynamique, 5a-5b →
@@ -1517,26 +1569,67 @@ mod_sc_server <- function(id, global_data) {
       invisible(NULL)
     }, ignoreInit = TRUE)
 
-    output$sc_step_sync_bar <- renderUI({
-      global_data$language
-      cur_tab <- input$main_tabs %||% state_get(shared_rv, "active_tab") %||% "tab_qc"
-      info <- .sc_tab_to_step_info(cur_tab)
-      if (is.null(info)) return(NULL)
-      div(
-        class = "ts-sc-step-sync-bar",
-        div(
-          class = "d-flex align-items-center gap-2 text-truncate",
-          span(class = "badge bg-primary", .tr("Single-Cell Workflow")),
-          span(class = "fw-semibold text-truncate", .tr(info$label_key))
-        ),
-        actionButton(
-          ns("sc_sync_open_step"),
-          label = .tr(info$label_key),
-          icon = icon("sliders"),
-          class = "btn-sm btn-outline-primary py-0 px-2 flex-shrink-0"
-        )
+    .activate_sc_step <- function(step) {
+      if (is.null(step) || !step %in% .SC_STEP_ORDER) return(invisible(NULL))
+      info <- .SC_STEP_TAB_MAP[[step]]
+      if (is.null(info)) return(invisible(NULL))
+      .sc_sync_guard$from_tab_step <- step
+      .sc_sync_guard$from_tab_ts <- proc.time()[["elapsed"]]
+      if (!identical(step, isolate(active_sc_step_rv()))) {
+        active_sc_step_rv(step)
+      }
+      target_tab <- .sc_step_to_tab_map(
+        step,
+        da_tab = isolate(input$da_tabs),
+        da_method_tab = isolate(input$da_methods_tabs)
       )
+      if (!is.null(target_tab)) {
+        state_set(shared_rv, "active_tab", target_tab)
+        if (!identical(target_tab, isolate(input$main_tabs))) {
+          try(nav_select(id = "main_tabs", selected = target_tab, session = session), silent = TRUE)
+        }
+      }
+      try(bslib::accordion_panel_open(id = "acc_workflow", values = info$group, session = session), silent = TRUE)
+      try(bslib::accordion_panel_open(id = info$acc, values = step, session = session), silent = TRUE)
+      invisible(step)
+    }
+
+    output$active_step_breadcrumb_ui <- renderUI({
+      global_data$language
+      cur <- active_sc_step_rv()
+      if (is.null(cur) || !cur %in% .SC_STEP_ORDER) {
+        cur_tab <- input$main_tabs %||% state_get(shared_rv, "active_tab") %||% "tab_qc"
+        tab_info <- .sc_tab_to_step_info(cur_tab)
+        if (!is.null(tab_info)) cur <- tab_info$panel
+      }
+      .sc_breadcrumb_ui_tag(ns, cur, tr = .tr)
     })
+
+    # Retained as an empty mount for backward-compatible test assertions on
+    # uiOutput(ns("sc_step_sync_bar")); active_step_breadcrumb_ui owns the bar.
+    output$sc_step_sync_bar <- renderUI({ NULL })
+
+    observeEvent(input$btn_prev_step, {
+      cur <- isolate(active_sc_step_rv())
+      if (is.null(cur) || !cur %in% .SC_STEP_ORDER) {
+        cur_tab <- isolate(input$main_tabs) %||% isolate(state_get(shared_rv, "active_tab")) %||% "tab_qc"
+        tab_info <- .sc_tab_to_step_info(cur_tab)
+        if (!is.null(tab_info)) cur <- tab_info$panel
+      }
+      prev_step <- .sc_breadcrumb_adjacent_step(cur, "prev")
+      if (!is.null(prev_step)) .activate_sc_step(prev_step)
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$btn_next_step, {
+      cur <- isolate(active_sc_step_rv())
+      if (is.null(cur) || !cur %in% .SC_STEP_ORDER) {
+        cur_tab <- isolate(input$main_tabs) %||% isolate(state_get(shared_rv, "active_tab")) %||% "tab_qc"
+        tab_info <- .sc_tab_to_step_info(cur_tab)
+        if (!is.null(tab_info)) cur <- tab_info$panel
+      }
+      next_step <- .sc_breadcrumb_adjacent_step(cur, "next")
+      if (!is.null(next_step)) .activate_sc_step(next_step)
+    }, ignoreInit = TRUE)
 
     observeEvent(input$sc_sync_open_step, {
       cur_tab <- isolate(input$main_tabs) %||% isolate(state_get(shared_rv, "active_tab")) %||% "tab_qc"
