@@ -196,7 +196,10 @@ mod_spatial_ui <- function(id) {
 
         accordion_panel(i18n$t("0. Pipeline auto"), icon = icon("bolt"),
                         value = "panel_pipeline",
-                        mod_spatial_pipeline_ui(ns("pipeline"))),
+                        # Step-0 marker harmonised with Bulk/SC (metadata only).
+                        div(class = "grp_0_preparation",
+                            `data-ts-step` = "panel_0_preparation",
+                            mod_spatial_pipeline_ui(ns("pipeline")))),
 
         # LOT 5 (V1.x UX): tooltip demystifies "Moran" on the QC step.
         accordion_panel(uiOutput(ns("step_title_qc"), inline = TRUE),
