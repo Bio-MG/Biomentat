@@ -768,8 +768,27 @@ run_markers <- function(input, global_data, shared_rv, session) {
   }
 }
 
+.sc_step_lock_reason <- function(step_key, sc_obj = NULL) {
+  if (is.null(step_key) || !length(step_key) || is.na(step_key[1L])) return(NULL)
+  step_key <- as.character(step_key[1L])
+  if (identical(step_key, .SC_STEP_ORDER[1L])) return(NULL)
+  if (is.null(sc_obj)) {
+    return("Aucun objet Single-Cell chargé.")
+  }
+  if (identical(step_key, "1_pipeline")) return(NULL)
+  meta <- tryCatch(sc_obj@meta.data, error = function(e) NULL)
+  reds <- tryCatch(names(sc_obj@reductions), error = function(e) character(0))
+  has_reduction <- any(c("pca", "pca.full", "umap", "tsne") %in% reds)
+  has_clusters <- is.data.frame(meta) && "seurat_clusters" %in% colnames(meta)
+  if (!has_reduction || !has_clusters) {
+    return("Réduction non trouvée. Lancez le pipeline d'abord.")
+  }
+  NULL
+}
+
 .sc_breadcrumb_ui_tag <- function(ns, step, tr = function(x) x,
-                                  step_order = .SC_STEP_ORDER) {
+                                  step_order = .SC_STEP_ORDER,
+                                  reason_key = NULL) {
   idx <- .sc_breadcrumb_step_index(step, step_order = step_order)
   step_key <- step_order[idx]
   info <- .SC_STEP_TAB_MAP[[step_key]]
@@ -779,7 +798,13 @@ run_markers <- function(input, global_data, shared_rv, session) {
     div(
       class = "d-flex align-items-center gap-2 text-truncate",
       span(class = "badge bg-primary", tr("Single-Cell Workflow")),
-      span(class = "fw-semibold text-truncate", lbl)
+      span(class = "fw-semibold text-truncate", lbl),
+      if (!is.null(reason_key)) {
+        span(
+          class = "badge bg-warning-subtle text-warning-emphasis border border-warning-subtle text-truncate",
+          "\U0001F512 ", tr(reason_key)
+        )
+      }
     ),
     div(
       class = "d-flex align-items-center gap-1 flex-shrink-0",
@@ -1602,7 +1627,8 @@ mod_sc_server <- function(id, global_data) {
         tab_info <- .sc_tab_to_step_info(cur_tab)
         if (!is.null(tab_info)) cur <- tab_info$panel
       }
-      .sc_breadcrumb_ui_tag(ns, cur, tr = .tr)
+      reason_key <- .sc_step_lock_reason(cur, sc_obj = global_data$sc_obj)
+      .sc_breadcrumb_ui_tag(ns, cur, tr = .tr, reason_key = reason_key)
     })
 
     # Retained as an empty mount for backward-compatible test assertions on

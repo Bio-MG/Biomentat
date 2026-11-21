@@ -153,4 +153,94 @@ test_that("mod_sc.R wires active_step_breadcrumb_ui and btn_prev_step / btn_next
   expect_match(src, 'actionButton(ns("btn_prev_step")', fixed = TRUE)
   expect_match(src, 'actionButton(ns("btn_next_step")', fixed = TRUE)
   expect_match(src, 'sprintf("%d / %d", idx, length(step_order))', fixed = TRUE)
+  expect_match(src, ".sc_step_lock_reason(cur, sc_obj = global_data$sc_obj)", fixed = TRUE)
+})
+
+test_that(".sc_step_lock_reason distinguishes unlocked, missing sc_obj, and missing PCA/clusters states", {
+  e <- .load_sc_bc_env()
+
+  if (!methods::isClass("MockScLockObj")) {
+    methods::setClass(
+      "MockScLockObj",
+      slots = c(meta.data = "data.frame", reductions = "list")
+    )
+  }
+  mk_obj <- function(cols = character(0), reds = character(0)) {
+    meta <- data.frame(row.names = c("c1", "c2"))
+    for (col in cols) meta[[col]] <- c("0", "1")
+    red_list <- stats::setNames(vector("list", length(reds)), reds)
+    methods::new("MockScLockObj", meta.data = meta, reductions = red_list)
+  }
+
+  # First step and NULL/NA step keys are never locked
+  expect_null(e$.sc_step_lock_reason("0_autopipeline", sc_obj = NULL))
+  expect_null(e$.sc_step_lock_reason(NULL, sc_obj = NULL))
+  expect_null(e$.sc_step_lock_reason(NA_character_, sc_obj = NULL))
+
+  # Without sc_obj: 1_pipeline and downstream steps are locked
+  expect_identical(
+    e$.sc_step_lock_reason("1_pipeline", sc_obj = NULL),
+    "Aucun objet Single-Cell chargé."
+  )
+  expect_identical(
+    e$.sc_step_lock_reason("3_viz", sc_obj = NULL),
+    "Aucun objet Single-Cell chargé."
+  )
+  expect_identical(
+    e$.sc_step_lock_reason("9b_report_consolide", sc_obj = NULL),
+    "Aucun objet Single-Cell chargé."
+  )
+
+  # Raw sc_obj (no reductions, no clusters): 1_pipeline unlocked, downstream locked
+  raw_obj <- mk_obj()
+  expect_null(e$.sc_step_lock_reason("1_pipeline", sc_obj = raw_obj))
+  expect_identical(
+    e$.sc_step_lock_reason("2_annotation", sc_obj = raw_obj),
+    "Réduction non trouvée. Lancez le pipeline d'abord."
+  )
+  expect_identical(
+    e$.sc_step_lock_reason("4_markers", sc_obj = raw_obj),
+    "Réduction non trouvée. Lancez le pipeline d'abord."
+  )
+
+  # Partial sc_obj (only PCA or only clusters): downstream still locked
+  pca_only <- mk_obj(reds = "pca")
+  clusters_only <- mk_obj(cols = "seurat_clusters")
+  expect_identical(
+    e$.sc_step_lock_reason("3_viz", sc_obj = pca_only),
+    "Réduction non trouvée. Lancez le pipeline d'abord."
+  )
+  expect_identical(
+    e$.sc_step_lock_reason("3_viz", sc_obj = clusters_only),
+    "Réduction non trouvée. Lancez le pipeline d'abord."
+  )
+
+  # Ready sc_obj (PCA or UMAP + seurat_clusters): downstream unlocked
+  ready_pca <- mk_obj(cols = "seurat_clusters", reds = "pca")
+  ready_umap <- mk_obj(cols = "seurat_clusters", reds = "umap")
+  for (st in e$.SC_STEP_ORDER) {
+    expect_null(e$.sc_step_lock_reason(st, sc_obj = ready_pca))
+    expect_null(e$.sc_step_lock_reason(st, sc_obj = ready_umap))
+  }
+})
+
+test_that(".sc_breadcrumb_ui_tag renders lock badge when reason_key is set and omits it when NULL", {
+  e <- .load_sc_bc_env()
+  ns <- NS("sc")
+
+  # Unlocked: no lock badge
+  html_open <- as.character(e$.sc_breadcrumb_ui_tag(ns, "3_viz", reason_key = NULL))
+  expect_false(grepl("\U0001F512", html_open, fixed = TRUE))
+  expect_false(grepl("bg-warning-subtle", html_open, fixed = TRUE))
+
+  # Locked: lock badge with Spatial-parity classes and translated text
+  reason <- e$.sc_step_lock_reason("3_viz", sc_obj = NULL)
+  html_locked <- as.character(e$.sc_breadcrumb_ui_tag(
+    ns, "3_viz",
+    tr = function(x) paste0("[TR]", x),
+    reason_key = reason
+  ))
+  expect_match(html_locked, "bg-warning-subtle text-warning-emphasis border border-warning-subtle", fixed = TRUE)
+  expect_match(html_locked, "\U0001F512", fixed = TRUE)
+  expect_match(html_locked, paste0("[TR]", reason), fixed = TRUE)
 })
