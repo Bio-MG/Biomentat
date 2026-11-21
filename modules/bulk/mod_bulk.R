@@ -96,7 +96,7 @@ mod_bulk_ui <- function(id) {
         width = 420,
         title = i18n$t("RNA Bulk \u2014 Analyse"),
         tags$style(HTML(sprintf(
-          "#%s .accordion-body { padding: 0.5rem 0.65rem; }\n#%1$s .accordion-button { padding: 0.45rem 0.75rem; }\n.ts-bulk-side-head { position: sticky; top: 0; z-index: 3; background: var(--bs-body-bg, #fff); padding-bottom: 0.35rem; margin-bottom: 0.35rem; }\n.ts-bulk-side-head::after { content: \"\"; display: block; position: absolute; left: -0.5rem; right: -0.5rem; bottom: 0; height: 1px; background: var(--bs-border-color, #dee2e6); }",
+          "#%s .accordion-body { padding: 0.5rem 0.65rem; }\n#%1$s .accordion-button { padding: 0.45rem 0.75rem; }\n.ts-bulk-side-head { position: sticky; top: 0; z-index: 3; background: var(--bs-body-bg, #fff); padding-bottom: 0.35rem; margin-bottom: 0.35rem; }\n.ts-bulk-side-head::after { content: \"\"; display: block; position: absolute; left: -0.5rem; right: -0.5rem; bottom: 0; height: 1px; background: var(--bs-border-color, #dee2e6); }\n.ts-bulk-step-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.85rem; }",
           ns("acc_bulk")
         ))),
         div(class = "ts-bulk-side-head",
@@ -201,6 +201,7 @@ mod_bulk_ui <- function(id) {
         # Étape 2, source de vérité) — synchro dans mod_bulk_de_run.R.
         header = tagList(
           mod_bulk_de_contrast_bar_ui(ns("de")),
+          uiOutput(ns("active_step_breadcrumb_ui")),
           uiOutput(ns("bulk_step_sync_bar")),
           uiOutput(ns("bulk_signatures_guard_ui"))
         ),
@@ -318,14 +319,62 @@ mod_bulk_server <- function(id, global_data) {
     # ne livre JAMAIS son payload ensuite (même avec suspendWhenHidden=FALSE) ;
     # une invalidation pendant VISIBLE la débloque. C'est le clan
     # « DT jamais rendue » (Up/Down table, tables multi/venn…).
+    .step_results <- c(
+      panel_filter     = "tab_pca",
+      panel_de         = "tab_volcano",
+      panel_pathways   = "tab_pathway",
+      panel_signatures = "tab_signatures",
+      panel_wgcna      = "tab_wgcna",
+      panel_survival   = "tab_survival",
+      panel_pattern    = "tab_pattern",
+      panel_dose       = "tab_dose",
+      panel_network    = "tab_bulk_network",
+      panel_datasets   = "tab_bulk_multi",
+      panel_merge      = "tab_bulk_merge",
+      panel_report     = "tab_resume"
+    )
+    .step_labels <- c(
+      panel_filter     = "1. Pipeline Bulk — Contrôle qualité & filtrage",
+      panel_de         = "2. Design & Contrastes",
+      panel_pathways   = "3. Pathway Enrichment",
+      panel_signatures = "4a. Signatures cellulaires",
+      panel_wgcna      = "4b. Réseau de co-expression (WGCNA)",
+      panel_survival   = "4c. Survie & association clinique",
+      panel_pattern    = "4d. Clustering de profils",
+      panel_dose       = "4e. Dose–réponse / time-course",
+      panel_network    = "5. Réseau PCSF (interactome)",
+      panel_datasets   = "6a. Multi-jeux — Datasets enregistrés",
+      panel_merge      = "6b. Multi-jeux — Fusion de jeux",
+      panel_report     = "7. Livrables — Rapport & Script R"
+    )
+    .step_order <- names(.step_results)
+    current_step_rv <- reactiveVal("panel_filter")
+
+    .activate_bulk_step <- function(panel, sync_accordion = TRUE, sync_results = TRUE) {
+      if (is.null(panel) || !panel %in% .step_order) return(invisible(NULL))
+      current_step_rv(panel)
+      sel <- .step_results[[panel]]
+      if (isTRUE(sync_results) && !is.null(sel) && !identical(isolate(input$main_tabs), sel)) {
+        shared_rv$active_tab <- sel
+        try(nav_select(id = "main_tabs", selected = sel, session = session), silent = TRUE)
+      }
+      if (isTRUE(sync_accordion)) {
+        try(bslib::accordion_panel_open(id = "acc_bulk", values = panel, session = session), silent = TRUE)
+      }
+      invisible(NULL)
+    }
+
     observeEvent(input$main_tabs, {
       shared_rv$main_tabs_current <- input$main_tabs
+      meta <- .bulk_tab_step_meta(input$main_tabs)
+      if (!is.null(meta) && meta$panel %in% .step_order) {
+        current_step_rv(meta$panel)
+      }
       # P1-ÉTAPE 3 (proposal 2026-11-15) : en mode SPÉCIALISÉ, l'onglet de
       # résultats ouvre son étape dans la sidebar (miroir de la synchro
       # bidirectionnelle spatiale) — la visibilité ne laisse voir QUE cette
       # étape. En COMPLET, comportement historique (aucune ouverture forcée).
       if (identical(global_data$workflow_display_mode %||% "specialise", "specialise")) {
-        meta <- .bulk_tab_step_meta(input$main_tabs)
         if (!is.null(meta)) {
           try(bslib::accordion_panel_open(id = "acc_bulk", values = meta$panel,
                                           session = session), silent = TRUE)
@@ -344,7 +393,10 @@ mod_bulk_server <- function(id, global_data) {
       panels <- input$acc_bulk
       if (!is.null(panels) && length(panels) > 0) {
         p <- utils::tail(panels, 1)
-        if (length(p) == 1L && !is.na(p) && nzchar(p)) .ts_wf_last_panel(p)
+        if (length(p) == 1L && !is.na(p) && nzchar(p)) {
+          .ts_wf_last_panel(p)
+          if (p %in% .step_order) current_step_rv(p)
+        }
       } else if (identical(global_data$workflow_display_mode %||% "specialise", "specialise")) {
         # P1-FLICKER parity : open() (idempotent) au lieu de set() (toggle).
         try(bslib::accordion_panel_open(id = "acc_bulk", values = .ts_wf_last_panel(),
@@ -390,6 +442,43 @@ mod_bulk_server <- function(id, global_data) {
         try(bslib::accordion_panel_open(id = "acc_bulk", values = meta$panel, session = session),
             silent = TRUE)
       }
+    }, ignoreInit = TRUE)
+
+    output$active_step_breadcrumb_ui <- renderUI({
+      global_data$language
+      cur <- current_step_rv()
+      idx <- match(cur, .step_order)
+      if (is.na(idx)) idx <- 1L
+      step_key <- .step_order[idx]
+      lbl <- .tr(.step_labels[[step_key]])
+      div(
+        class = "ts-bulk-step-bar",
+        div(
+          class = "d-flex align-items-center gap-2 text-truncate",
+          span(class = "badge bg-primary", .tr("Bulk RNA")),
+          span(class = "fw-semibold text-truncate", lbl)
+        ),
+        div(
+          class = "d-flex align-items-center gap-1 flex-shrink-0",
+          actionButton(session$ns("btn_prev_step"), NULL, icon = icon("chevron-left"),
+                       class = paste("btn-sm btn-outline-secondary py-0 px-2",
+                                     if (idx <= 1L) "disabled")),
+          span(class = "text-muted small px-1", sprintf("%d / %d", idx, length(.step_order))),
+          actionButton(session$ns("btn_next_step"), NULL, icon = icon("chevron-right"),
+                       class = paste("btn-sm btn-outline-secondary py-0 px-2",
+                                     if (idx >= length(.step_order)) "disabled"))
+        )
+      )
+    })
+
+    observeEvent(input$btn_prev_step, {
+      idx <- match(isolate(current_step_rv()), .step_order)
+      if (!is.na(idx) && idx > 1L) .activate_bulk_step(.step_order[idx - 1L])
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$btn_next_step, {
+      idx <- match(isolate(current_step_rv()), .step_order)
+      if (!is.na(idx) && idx < length(.step_order)) .activate_bulk_step(.step_order[idx + 1L])
     }, ignoreInit = TRUE)
 
     output$bulk_signatures_guard_ui <- renderUI({
