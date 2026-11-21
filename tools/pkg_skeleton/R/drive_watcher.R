@@ -1996,6 +1996,238 @@ ts_drive_append_audit <- function(entry, audit_path = ts_drive_path("agent_audit
 
 
 #' @noRd
+ts_drive_read_audit <- function(audit_path = ts_drive_path("agent_audit.jsonl"),
+                                limit = NULL) {
+  empty_df <- data.frame(
+    timestamp = character(0),
+    seq       = integer(0),
+    tool      = character(0),
+    status    = character(0),
+    summary   = character(0),
+    raw_json  = character(0),
+    stringsAsFactors = FALSE
+  )
+
+  if (!is.character(audit_path) || length(audit_path) != 1L ||
+      is.na(audit_path) || !nzchar(audit_path) ||
+      !file.exists(audit_path) || dir.exists(audit_path)) {
+    return(empty_df)
+  }
+
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop("Package 'jsonlite' is required to read agent_audit.jsonl.", call. = FALSE)
+  }
+
+  raw_lines <- tryCatch(
+    readLines(audit_path, warn = FALSE, encoding = "UTF-8"),
+    error = function(e) {
+      warning(sprintf("Failed to read audit file '%s': %s", audit_path, conditionMessage(e)),
+              call. = FALSE)
+      character(0)
+    }
+  )
+  if (length(raw_lines) == 0L) return(empty_df)
+
+  non_empty <- raw_lines[nzchar(trimws(raw_lines))]
+  if (length(non_empty) == 0L) return(empty_df)
+
+  .str1 <- function(val) {
+    if (is.null(val) || length(val) == 0L) return("")
+    s <- as.character(val)[1L]
+    if (is.na(s)) "" else s
+  }
+
+  .int1 <- function(val) {
+    if (is.null(val) || length(val) == 0L) return(NA_integer_)
+    n <- suppressWarnings(as.integer(val)[1L])
+    if (is.na(n)) NA_integer_ else n
+  }
+
+  .build_summary <- function(obj) {
+    explicit <- .str1(obj$summary %||% obj$message)
+    if (nzchar(explicit)) return(substr(explicit, 1L, 200L))
+    parts <- character(0)
+    mod <- .str1(obj$module)
+    if (nzchar(mod)) parts <- c(parts, paste0("module=", mod))
+    err <- .str1(obj$error)
+    if (nzchar(err)) parts <- c(parts, paste0("error=", err))
+    if (!is.null(obj$elapsed_s) && length(obj$elapsed_s) > 0L && !is.na(obj$elapsed_s[1L])) {
+      parts <- c(parts, paste0("elapsed_s=", as.character(obj$elapsed_s)[1L]))
+    }
+    if (length(parts) == 0L) return("")
+    substr(paste(parts, collapse = "; "), 1L, 200L)
+  }
+
+  rows <- list()
+  for (i in seq_along(non_empty)) {
+    ln <- non_empty[[i]]
+    obj <- tryCatch(
+      jsonlite::fromJSON(ln, simplifyVector = FALSE),
+      error = function(e) {
+        warning(sprintf("Skipping malformed audit JSONL line %d: %s", i, conditionMessage(e)),
+                call. = FALSE)
+        NULL
+      }
+    )
+    if (is.null(obj) || !is.list(obj)) {
+      if (!is.null(obj)) {
+        warning(sprintf("Skipping non-object audit JSONL line %d.", i), call. = FALSE)
+      }
+      next
+    }
+    tool_val <- .str1(obj$tool %||% obj$action %||% obj$command)
+    rows[[length(rows) + 1L]] <- list(
+      timestamp = .str1(obj$timestamp),
+      seq       = .int1(obj$seq),
+      tool      = tool_val,
+      status    = .str1(obj$status),
+      summary   = .build_summary(obj),
+      raw_json  = ln
+    )
+  }
+
+  if (length(rows) == 0L) return(empty_df)
+
+  df <- data.frame(
+    timestamp = vapply(rows, `[[`, character(1), "timestamp"),
+    seq       = vapply(rows, `[[`, integer(1), "seq"),
+    tool      = vapply(rows, `[[`, character(1), "tool"),
+    status    = vapply(rows, `[[`, character(1), "status"),
+    summary   = vapply(rows, `[[`, character(1), "summary"),
+    raw_json  = vapply(rows, `[[`, character(1), "raw_json"),
+    stringsAsFactors = FALSE
+  )
+
+  if (!is.null(limit)) {
+    if (!is.numeric(limit) || length(limit) != 1L || is.na(limit) || limit < 1) {
+      stop("'limit' must be NULL or a positive integer.", call. = FALSE)
+    }
+    lim <- as.integer(limit)
+    if (nrow(df) > lim) {
+      df <- utils::tail(df, lim)
+      rownames(df) <- NULL
+    }
+  }
+
+  df
+}
+
+
+#' @noRd
+ts_drive_export_audit_qmd <- function(audit_path = ts_drive_path("agent_audit.jsonl"),
+                                      out_path = NULL,
+                                      title = "Biomentat Agent Audit Notebook",
+                                      format = c("qmd", "rmd")) {
+  format <- match.arg(format)
+  df <- ts_drive_read_audit(audit_path = audit_path)
+
+  .escape_yaml <- function(x) {
+    s <- gsub("\\", "\\\\", as.character(x)[1L], fixed = TRUE)
+    gsub("\"", "\\\"", s, fixed = TRUE)
+  }
+
+  .escape_md_cell <- function(x) {
+    s <- as.character(x)
+    s[is.na(s)] <- ""
+    s <- gsub("[\r\n]+", " ", s)
+    gsub("|", "\\|", s, fixed = TRUE)
+  }
+
+  yaml_format <- if (identical(format, "qmd")) {
+    "format: html"
+  } else {
+    "output: html_document"
+  }
+
+  ts_non_empty <- df$timestamp[nzchar(df$timestamp)]
+  ts_range <- if (length(ts_non_empty) > 0L) {
+    paste0(min(ts_non_empty), " .. ", max(ts_non_empty))
+  } else {
+    "N/A"
+  }
+
+  safe_audit_path <- gsub("\\\\", "/", as.character(audit_path)[1L])
+
+  lines <- c(
+    "---",
+    sprintf('title: "%s"', .escape_yaml(title)),
+    sprintf('date: "%s"', format(Sys.Date(), "%Y-%m-%d")),
+    yaml_format,
+    "---",
+    "",
+    "## Overview",
+    "",
+    sprintf("- **Source**: `%s`", safe_audit_path),
+    sprintf("- **Total events**: %d", nrow(df)),
+    sprintf("- **Timestamp range**: %s", ts_range),
+    "",
+    "## Audit Events",
+    ""
+  )
+
+  if (nrow(df) == 0L) {
+    lines <- c(lines, "_No audit events recorded._", "")
+  } else {
+    seq_str <- ifelse(is.na(df$seq), "", as.character(df$seq))
+    table_rows <- sprintf(
+      "| %s | %s | %s | %s | %s |",
+      .escape_md_cell(seq_str),
+      .escape_md_cell(df$timestamp),
+      .escape_md_cell(df$tool),
+      .escape_md_cell(df$status),
+      .escape_md_cell(df$summary)
+    )
+    lines <- c(
+      lines,
+      "| Seq | Timestamp | Tool | Status | Summary |",
+      "| --- | --- | --- | --- | --- |",
+      table_rows,
+      ""
+    )
+  }
+
+  lines <- c(
+    lines,
+    "## Reproducible Inspection",
+    "",
+    "```{r}",
+    "library(jsonlite)",
+    sprintf('audit_path <- "%s"', .escape_yaml(safe_audit_path)),
+    "if (file.exists(audit_path)) {",
+    '  raw_lines <- readLines(audit_path, warn = FALSE, encoding = "UTF-8")',
+    "  raw_lines <- raw_lines[nzchar(trimws(raw_lines))]",
+    "  entries <- lapply(raw_lines, function(ln) {",
+    "    tryCatch(jsonlite::fromJSON(ln, simplifyVector = FALSE), error = function(e) NULL)",
+    "  })",
+    "  entries <- Filter(Negate(is.null), entries)",
+    "  length(entries)",
+    "}",
+    "```"
+  )
+
+  if (!is.null(out_path)) {
+    if (!is.character(out_path) || length(out_path) != 1L || is.na(out_path) || !nzchar(out_path)) {
+      stop("'out_path' must be NULL or a non-empty file path.", call. = FALSE)
+    }
+    parent <- dirname(out_path)
+    if (!dir.exists(parent)) {
+      dir.create(parent, recursive = TRUE, showWarnings = FALSE)
+    }
+    con <- file(out_path, open = "wb")
+    on.exit(close(con), add = TRUE)
+    writeLines(enc2utf8(lines), con, sep = "\n", useBytes = TRUE)
+  }
+
+  invisible(list(
+    path = out_path,
+    format = format,
+    n_events = nrow(df),
+    content = lines
+  ))
+}
+
+
+#' @noRd
 ts_drive_write_result <- function(seq, status, active_module, armed,
                                  preserve_data = TRUE, errors = character(0),
                                  warnings = character(0), snapshot = NULL,
