@@ -350,7 +350,12 @@ mod_sc_communication_output_ui <- function(id) {
                 div(class = "m-2",
                     numericInput(ns("comm_heatmap_top_n"),
                                  i18n$t("Top N voies (Heatmap, 0 = toutes)"),
-                                 value = 25L, min = 0L, max = 200L, step = 5L, width = "240px")),
+                                 value = 25L, min = 0L, max = 200L, step = 5L, width = "240px"),
+                    selectInput(ns("comm_pathway_role"), "role",
+                                choices = c("both", "outgoing", "incoming"),
+                                selected = "both", width = "240px"),
+                    numericInput(ns("comm_pathway_top_n"), "top_n",
+                                 value = 20L, min = 0L, max = 200L, step = 5L, width = "240px")),
                 plotOutput(ns("comm_heatmap"), fill = TRUE),
                 fluidRow(
                   column(6, downloadButton(ns("dl_comm_heatmap_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
@@ -2113,6 +2118,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       }, error = function(e) NULL)
       shared_rv$ccc_gene_basket <- basket
     })
+    .pathway_role <- function() {
+      r <- input$comm_pathway_role %||% "both"
+      if (!r %in% c("both", "outgoing", "incoming")) "both" else r
+    }
     .parse_top_n <- function(val) {
       if (!is.null(val) && is.finite(val) && val > 0) as.integer(val) else NULL
     }
@@ -2134,7 +2143,9 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       tryCatch(
         plot_communication_pathway_heatmap(comm_state$result, comm_filtered()$table,
                                            seurat_obj = .view_object(),
-                                           top_n_pathways = .parse_top_n(input$comm_heatmap_top_n)),
+                                           top_n_pathways = .parse_top_n(input$comm_heatmap_top_n),
+                                           role = .pathway_role(),
+                                           top_n = .parse_top_n(input$comm_pathway_top_n)),
         error = function(e) .error_plot(e)
       )
     })
@@ -2846,7 +2857,9 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       content = function(file) .export_figure(function() {
         plot_communication_pathway_heatmap(comm_state$result, comm_filtered()$table,
                                            seurat_obj = .view_object(),
-                                           top_n_pathways = .parse_top_n(input$comm_heatmap_top_n))
+                                           top_n_pathways = .parse_top_n(input$comm_heatmap_top_n),
+                                           role = .pathway_role(),
+                                           top_n = .parse_top_n(input$comm_pathway_top_n))
       }, file)
     )
     output$dl_comm_heatmap_pdf <- downloadHandler(
@@ -2854,7 +2867,9 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       content = function(file) .export_figure(function() {
         plot_communication_pathway_heatmap(comm_state$result, comm_filtered()$table,
                                            seurat_obj = .view_object(),
-                                           top_n_pathways = .parse_top_n(input$comm_heatmap_top_n))
+                                           top_n_pathways = .parse_top_n(input$comm_heatmap_top_n),
+                                           role = .pathway_role(),
+                                           top_n = .parse_top_n(input$comm_pathway_top_n))
       }, file)
     )
     output$dl_comm_circle_png <- downloadHandler(
