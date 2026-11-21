@@ -4,19 +4,19 @@
   paste(readLines(file.path(root, "modules/sc/mod_sc_communication.R"), warn = FALSE), collapse = "\n")
 }
 
-test_that("pathway heatmap tab exposes role and top_n controls", {
+test_that("pathway heatmap tab exposes role and deduplicated top_n controls", {
   src <- .pw_src()
+  expect_match(src, 'numericInput(ns("comm_heatmap_top_n")', fixed = TRUE)
   expect_match(src, 'selectInput(ns("comm_pathway_role")', fixed = TRUE)
   expect_match(src, 'choices = c("both", "outgoing", "incoming")', fixed = TRUE)
-  expect_match(src, 'numericInput(ns("comm_pathway_top_n")', fixed = TRUE)
-  expect_match(src, 'value = 20L', fixed = TRUE)
+  expect_false(grepl("comm_pathway_top_n", src, fixed = TRUE))
 })
 
-test_that("role and top_n are passed to the heatmap view (render + exports)", {
+test_that("role and top_n_pathways are passed to the heatmap view (render + exports)", {
   src <- .pw_src()
   n_calls <- lengths(regmatches(src, gregexpr("plot_communication_pathway_heatmap(", src, fixed = TRUE)))
   n_role <- lengths(regmatches(src, gregexpr("role = .pathway_role()", src, fixed = TRUE)))
-  n_topn <- lengths(regmatches(src, gregexpr("top_n = .parse_top_n(input$comm_pathway_top_n)", src, fixed = TRUE)))
+  n_topn <- lengths(regmatches(src, gregexpr("top_n_pathways = .parse_top_n(input$comm_heatmap_top_n)", src, fixed = TRUE)))
   expect_gte(n_calls, 3L)
   expect_equal(n_role, n_calls)
   expect_equal(n_topn, n_calls)
