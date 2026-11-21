@@ -229,7 +229,7 @@ mod_bulk_network_server <- function(id, global_data, shared_rv) {
       updateNumericInput(session, "network_mu", label = .tr("μ (par relais)"))
       updateActionButton(session, "run_network",
                          label = .tr("Calculer le sous-réseau"))
-    }, ignoreInit = TRUE)
+    }, ignoreInit = FALSE)
 
     # Rend le critère de rentabilité LISIBLE : « ω = 10 » ne dit rien, « les
     # groupes séparés par au plus 5 arêtes peuvent être reliés » dit tout.
