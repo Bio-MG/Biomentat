@@ -193,7 +193,6 @@ has_deseq2       <- FALSE
 has_bpcells      <- FALSE
 has_spacexr      <- FALSE
 has_stdeconvolve <- FALSE
-has_leafgl       <- FALSE
 has_mirai        <- FALSE
 has_rann         <- FALSE
 has_slingshot    <- FALSE
@@ -641,7 +640,6 @@ clean_mem <- function() { gc() }
   has_stdeconvolve <<- requireNamespace("STdeconvolve", quietly = TRUE) &&
     requireNamespace("topicmodels", quietly = TRUE) &&
     requireNamespace("slam", quietly = TRUE)
-  has_leafgl       <<- requireNamespace("leafgl", quietly = TRUE)
   has_mirai        <<- requireNamespace("mirai", quietly = TRUE)
   has_rann         <<- requireNamespace("RANN", quietly = TRUE)
   # Trajectoire : Slingshot optionnel a l'echelle de l'app — le module
@@ -663,7 +661,7 @@ clean_mem <- function() { gc() }
   # install.packages("arrow", repos = c("https://apache.r-universe.dev", getOption("repos")))
   has_arrow        <<- requireNamespace("arrow", quietly = TRUE)
 
-  for (dep in c("bpcells", "spacexr", "stdeconvolve", "leafgl", "mirai", "rann", "schard", "arrow")) {
+  for (dep in c("bpcells", "spacexr", "stdeconvolve", "mirai", "rann", "schard", "arrow")) {
     if (!get(paste0("has_", dep))) {
       message(sprintf("[spatial] Package(s) pour '%s' non installe(s) — fonctionnalite associee indisponible tant que non installee (voir commentaire ci-dessus pour la commande d'installation).", dep))
     }
