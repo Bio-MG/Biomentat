@@ -45,6 +45,57 @@ options(future.globals.maxSize = 10000 * 1024^2)
 
 options(shiny.maxRequestSize = 5000 * 1024^2)
 
+# --- 1quater. MODE OFFLINE STRICT : GARDE RENV / CRAN (W3.2) ----------------
+ts_enforce_renv_offline_guard <- function() {
+  is_offline <- if (exists("ts_is_offline_strict", mode = "function")) {
+    isTRUE(ts_is_offline_strict())
+  } else {
+    opt <- getOption("biomentat.offline_strict", NULL)
+    if (!is.null(opt)) {
+      isTRUE(opt)
+    } else {
+      tolower(trimws(Sys.getenv("BIOMENTAT_OFFLINE_STRICT", ""))) %in%
+        c("1", "true", "yes", "on")
+    }
+  }
+  if (!is_offline) return(invisible(FALSE))
+  options(
+    renv.config.auto.snapshot = FALSE,
+    renv.config.synchronized.check = FALSE,
+    renv.config.repos.override = character(0),
+    repos = c(CRAN = "")
+  )
+  invisible(TRUE)
+}
+
+ts_renv_restore_guarded <- function(...) {
+  if (exists("ts_require_online", mode = "function")) {
+    ts_require_online("renv_cran", "renv::restore() / CRAN egress")
+  } else {
+    opt <- getOption("biomentat.offline_strict", NULL)
+    is_offline <- if (!is.null(opt)) {
+      isTRUE(opt)
+    } else {
+      tolower(trimws(Sys.getenv("BIOMENTAT_OFFLINE_STRICT", ""))) %in%
+        c("1", "true", "yes", "on")
+    }
+    if (is_offline) {
+      msg <- paste0(
+        "Mode Offline strict actif -- appel reseau bloque (renv_cran : ",
+        "renv::restore() / CRAN egress). Desactivez BIOMENTAT_OFFLINE_STRICT / ",
+        "options(biomentat.offline_strict = FALSE) pour autoriser l'egress."
+      )
+      stop(errorCondition(msg, class = "biomentat_offline_error", egress_id = "renv_cran"))
+    }
+  }
+  if (!requireNamespace("renv", quietly = TRUE)) {
+    stop("Le paquet 'renv' n'est pas installe.")
+  }
+  renv::restore(...)
+}
+
+ts_enforce_renv_offline_guard()
+
 # --- 1ter. PYTHON / RETICULATE ENVIRONNEMENT PAR DEFAUT ----------------------
 # Resolution automatique vers le venv projet python_env_sccoda (scCODA + scVelo)
 # si RETICULATE_PYTHON n'est pas deja explicitement defini dans l'environnement.
