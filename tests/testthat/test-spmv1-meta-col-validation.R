@@ -390,8 +390,8 @@ test_that("T6 SPMV-1 pins d'arbre : app.R source, test-app-sourcing 163->164, ma
   # RE-BASAGE 170 -> 171 (2026-11-10, jalon PK-1 186e88c : manifeste
   # 170 -> 171 avec packs.R) — même leçon que test-biostat-m3-ui (run #10).
   # RE-BASAGE 171 -> 175 (2026-11-20, W2.3/P2.4 : mod_dataset_dirs_options + spatial_roi_de/banksy/milo)
-  expect_true(grepl("179L", pins_src, fixed = TRUE),
-              info = "test-app-sourcing.R doit porter le compte 179L (re-basage W3.1/W3.2 mesuré)")
+  expect_true(grepl("180L", pins_src, fixed = TRUE),
+              info = "test-app-sourcing.R doit porter le compte 180L (re-basage W3.1/W3.2 mesuré)")
 
   # (c) Manifeste des sources contient le chemin (Rscript tools/sources_manifest.R --build).
   man <- file.path(ts_project_root(), "R", ".sources_manifest.txt")
