@@ -1,6 +1,13 @@
 # =============================================================================
 # tests/testthat/test-bulk-dtu.R — Unit tests for pure-R DTU engine
 # =============================================================================
+if (!exists("run_bulk_dtu", mode = "function")) {
+  if (exists("source_project_file", mode = "function")) {
+    source_project_file("tools/pkg_skeleton/R/bulk_dtu.R")
+  } else {
+    source(file.path("..", "..", "tools", "pkg_skeleton", "R", "bulk_dtu.R"))
+  }
+}
 
 test_that("run_bulk_dtu detects strong isoform switching and opposite logFC signs", {
   skip_if_not_installed("edgeR")

@@ -248,6 +248,8 @@ source("tools/pkg_skeleton/R/bulk_network.R")       # NEW-3 : interactome local 
 source("tools/pkg_skeleton/R/sc_multi.R")             # MD-4 : conteneur sc_datasets & double jeu SC (pur, contrat gelé)
 source("tools/pkg_skeleton/R/bulk_report_engine.R")
 source("tools/pkg_skeleton/R/bulk_import_engine.R")
+source("tools/pkg_skeleton/R/bulk_dtu.R")
+source("tools/pkg_skeleton/R/bulk_meta_analysis.R")
 
 # ── Bloc 07 : R/spatial → paquet (logique pure) ─────────────────────────────
 # D2 M5 lot 4 (2026-10-25) : les 11 fichiers du domaine spatial vivent dans
