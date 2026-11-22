@@ -415,11 +415,35 @@ find_correlated_genes <- function(seurat_obj, target_gene,
 
   
 
-  # Convertir en matrice dense si sparse
+  # Sélectionner les gènes à comparer AVANT conversion dense (évite de
 
-  if(inherits(expr_matrix, "dgCMatrix")) {
+  # matérialiser > 5000 gènes depuis BPCells / dgCMatrix / S4)
 
-    expr_matrix <- as.matrix(expr_matrix)
+  all_genes <- rownames(expr_matrix)
+
+  all_genes <- setdiff(all_genes, target_gene)
+
+  if (length(all_genes) > 5000) {
+
+    var_genes <- VariableFeatures(seurat_obj)
+
+    if (length(var_genes) > 0) {
+
+      all_genes <- intersect(all_genes, var_genes)
+
+    }
+
+  }
+
+  
+
+  # Convertir en matrice dense (gère dgCMatrix, BPCells IterableMatrix S4, etc.)
+
+  if (!is.matrix(expr_matrix)) {
+
+    genes_keep <- unique(c(target_gene, all_genes))
+
+    expr_matrix <- as.matrix(expr_matrix[genes_keep, , drop = FALSE])
 
   }
 
@@ -428,30 +452,6 @@ find_correlated_genes <- function(seurat_obj, target_gene,
   # Expression du gène cible
 
   target_expr <- as.numeric(expr_matrix[target_gene, ])
-
-  
-
-  # Calculer corrélations avec tous les autres gènes
-
-  all_genes <- rownames(expr_matrix)
-
-  all_genes <- setdiff(all_genes, target_gene)
-
-  
-
-  # Pour performance, limiter aux gènes variables si > 5000 gènes
-
-  if(length(all_genes) > 5000) {
-
-    var_genes <- VariableFeatures(seurat_obj)
-
-    if(length(var_genes) > 0) {
-
-      all_genes <- intersect(all_genes, var_genes)
-
-    }
-
-  }
 
   
 

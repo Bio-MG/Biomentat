@@ -207,6 +207,7 @@ APP_DAEMON_SOURCE_FILES <- c(
   "tools/pkg_skeleton/R/sc_helpers.R",
   "tools/pkg_skeleton/R/sc_batch_metrics.R",
   "tools/pkg_skeleton/R/sc_trajectory.R",
+  "tools/pkg_skeleton/R/sc_population_rarity.R",
   "tools/pkg_skeleton/R/pathway_helpers.R",
   "tools/pkg_skeleton/R/sc_pipeline.R",
   # --- Bulk : analyse differentielle (D4, 2026-10-20) ----------------------
