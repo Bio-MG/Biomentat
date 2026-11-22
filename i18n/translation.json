@@ -14528,6 +14528,22 @@
     {
       "fr": "Visium HD detecte ('binned_outputs/'). Choisissez UNE resolution a importer — reimportez ce meme dossier pour ajouter l'autre resolution comme echantillon distinct (onglet Spatial > \"5. Multi-echantillons\").",
       "en": "Visium HD detected ('binned_outputs/'). Choose ONE resolution to import — re-import this same folder to add the other resolution as a distinct sample (Spatial > \"5. Multi-sample\" tab)."
+    },
+    {
+      "fr": "Méthode méta-analyse (BK-07)",
+      "en": "Meta-analysis method (BK-07)"
+    },
+    {
+      "fr": "Méta-analyse (BK-07)",
+      "en": "Meta-analysis (BK-07)"
+    },
+    {
+      "fr": "Combinaison horizontale inter-études sans fusion des matrices brutes (Stouffer / Fisher / maxP / minP).",
+      "en": "Horizontal cross-study combination without pooling raw count matrices (Stouffer / Fisher / maxP / minP)."
+    },
+    {
+      "fr": "Méta-analyse : méthode=%s | %d études | %d gènes harmonisés | %d gènes FDR < %s",
+      "en": "Meta-analysis: method=%s | %d studies | %d harmonized genes | %d genes FDR < %s"
     }
   ]
 }

@@ -32,6 +32,12 @@ mod_bulk_multi_ui <- function(id) {
                    min = 0, step = 0.25),
       numericInput(ns("padj_thresh"), i18n$t("Seuil p-adj"), 0.05,
                    min = 1e-04, max = 1, step = 0.01),
+      selectInput(ns("meta_method"), i18n$t("Méthode méta-analyse (BK-07)"),
+                  choices = stats::setNames(
+                    c("stouffer", "fisher", "maxP", "minP"),
+                    c("Stouffer (Z-score)", "Fisher (chi2)", "maxP (Wilkinson)", "minP (Tippett)")
+                  ),
+                  selected = "stouffer"),
       actionButton(ns("run"), i18n$t("Lancer la comparaison"),
                    icon = icon("layer-group"), class = "btn-primary w-100 mb-2"),
       verbatimTextOutput(ns("status"), placeholder = TRUE)
@@ -49,7 +55,12 @@ mod_bulk_multi_ui <- function(id) {
                     i18n$t("Jaccard = recouvrement des ensembles Up (resp. Down) entre deux jeux. « % même direction » = proportion des gènes significatifs communs qui varient dans le même sens.")),
                 DTOutput(ns("concordance_table"))),
       nav_panel(i18n$t("Détail des datasets"), value = "tab_detail",
-                DTOutput(ns("per_dataset_table")))
+                DTOutput(ns("per_dataset_table"))),
+      nav_panel(i18n$t("Méta-analyse (BK-07)"), value = "tab_meta",
+                div(class = "alert alert-light", style = "font-size:0.8rem;",
+                    i18n$t("Combinaison horizontale inter-études sans fusion des matrices brutes (Stouffer / Fisher / maxP / minP).")),
+                verbatimTextOutput(ns("meta_summary"), placeholder = TRUE),
+                DTOutput(ns("meta_table")))
     )
   )
 }
@@ -223,6 +234,45 @@ mod_bulk_multi_server <- function(id, global_data) {
       res <- req(last_result())
       ts_datatable(res$per_dataset, page_length = 15L,
                    filename_base = "bulk_multi_per_dataset")
+    })
+
+    # ── BK-07 Horizontal Multi-Study DE Meta-Analysis ────────────────────
+    meta_result <- reactive({
+      res <- req(last_result())
+      ds <- global_data$bulk_datasets
+      missing <- setdiff(res$datasets, names(ds))
+      validate(need(length(missing) == 0L,
+                    .tr("Un dataset comparé a été supprimé depuis le calcul — relancez la comparaison.")))
+      study_tables <- stats::setNames(
+        lapply(res$datasets, function(nm) ds[[nm]]$pipeline$contrasts[[res$contrast]]),
+        res$datasets
+      )
+      tryCatch(
+        run_horizontal_meta_de(
+          study_tables = study_tables,
+          method = input$meta_method %||% "stouffer",
+          min_studies = min(2L, length(study_tables))
+        ),
+        bulk_meta_analysis_error = function(e) {
+          validate(need(FALSE, conditionMessage(e)))
+        }
+      )
+    })
+
+    output$meta_summary <- renderText({
+      global_data$language
+      res <- req(last_result())
+      m <- req(meta_result())
+      n_sig <- sum(m$table$FDR < res$padj_thresh, na.rm = TRUE)
+      sprintf(.tr("Méta-analyse : méthode=%s | %d études | %d gènes harmonisés | %d gènes FDR < %s"),
+              m$method, m$n_studies, m$n_genes, n_sig, format(res$padj_thresh, digits = 3))
+    })
+
+    output$meta_table <- renderDT({
+      global_data$language
+      m <- req(meta_result())
+      ts_datatable(m$table, page_length = 15L,
+                   filename_base = "bulk_multi_meta_analysis")
     })
 
     output$status <- renderText({
