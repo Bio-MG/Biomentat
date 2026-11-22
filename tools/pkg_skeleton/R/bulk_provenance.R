@@ -236,3 +236,172 @@ bulk_provenance_dataframe <- function(prov) {
     row.names = NULL
   )
 }
+
+#' Calculer l'empreinte SHA-256 complete d'un fichier de jeu de donnees (BK-08)
+#'
+#' Verifie que `path` designe un fichier regulier existant (non repertoire),
+#' puis calcule son condensat cryptographique SHA-256 complet via `digest`.
+#'
+#' @param path Chemin unique vers un fichier existant.
+#' @return Liste nommee `path`, `size_bytes`, `sha256`, `algo`.
+#' @export
+ts_dataset_sha256 <- function(path) {
+  if (is.null(path) || !is.character(path) || length(path) != 1L ||
+      is.na(path) || !nzchar(trimws(path))) {
+    stop(errorCondition(
+      "ts_dataset_sha256() : 'path' doit etre une chaine de caracteres non vide de longueur 1.",
+      class = "biomentat_provenance_error"
+    ))
+  }
+  if (!file.exists(path) || dir.exists(path) || isTRUE(file.info(path)$isdir)) {
+    stop(errorCondition(
+      sprintf("ts_dataset_sha256() : fichier introuvable ou repertoire invalide (%s).", path),
+      class = "biomentat_provenance_error"
+    ))
+  }
+  if (!requireNamespace("digest", quietly = TRUE)) {
+    stop(errorCondition(
+      "ts_dataset_sha256() : le package 'digest' est requis pour le calcul SHA-256.",
+      class = "biomentat_provenance_error"
+    ))
+  }
+
+  sha <- digest::digest(file = path, algo = "sha256")
+  list(
+    path       = normalizePath(path, winslash = "/", mustWork = FALSE),
+    size_bytes = as.numeric(file.info(path)$size),
+    sha256     = sha,
+    algo       = "sha256"
+  )
+}
+
+#' Construire des plis de validation croisee sans fuite de groupe (BK-08)
+#'
+#' Assigne les echantillons en `k` plis de sorte que tous les echantillons
+#' partageant le meme `group_ids` (ex. donneur/patient) appartiennent exactement
+#' au meme pli (fuite de groupe nulle). Si `strata` est fourni, les groupes sont
+#' repartis en round-robin stratifie par strate.
+#'
+#' @param sample_ids Vecteur unique d'identifiants d'echantillons.
+#' @param group_ids Vecteur d'identifiants de groupe (meme longueur que `sample_ids`).
+#' @param strata Vecteur optionnel de strates (meme longueur que `sample_ids`).
+#' @param k Nombre de plis (>= 2, <= nombre de groupes uniques).
+#' @param seed Graine aleatoire optionnelle (NULL pour ne pas fixer la graine).
+#' @return Liste nommee `fold_id`, `folds`, `k`, `n_samples`, `n_groups`,
+#'   `leakage_verified`.
+#' @export
+ts_cv_leakage_free_folds <- function(sample_ids, group_ids, strata = NULL,
+                                     k = 5L, seed = 42L) {
+  if (is.null(sample_ids) || length(sample_ids) == 0L || anyNA(sample_ids) ||
+      anyDuplicated(sample_ids) > 0L) {
+    stop(errorCondition(
+      "ts_cv_leakage_free_folds() : 'sample_ids' doit etre un vecteur non vide, sans NA ni doublons.",
+      class = "biomentat_provenance_error"
+    ))
+  }
+  n_samples <- length(sample_ids)
+  if (is.null(group_ids) || length(group_ids) != n_samples || anyNA(group_ids)) {
+    stop(errorCondition(
+      "ts_cv_leakage_free_folds() : 'group_ids' doit avoir la meme longueur que 'sample_ids' et aucun NA.",
+      class = "biomentat_provenance_error"
+    ))
+  }
+  if (!is.null(strata) && (length(strata) != n_samples || anyNA(strata))) {
+    stop(errorCondition(
+      "ts_cv_leakage_free_folds() : 'strata' doit avoir la meme longueur que 'sample_ids' et aucun NA.",
+      class = "biomentat_provenance_error"
+    ))
+  }
+  if (is.null(k) || !is.numeric(k) || length(k) != 1L || is.na(k) ||
+      k < 2 || k != as.integer(k)) {
+    stop(errorCondition(
+      "ts_cv_leakage_free_folds() : 'k' doit etre un entier >= 2.",
+      class = "biomentat_provenance_error"
+    ))
+  }
+  k <- as.integer(k)
+
+  grp_chr <- as.character(group_ids)
+  uniq_groups <- unique(grp_chr)
+  n_groups <- length(uniq_groups)
+  if (n_groups < k) {
+    stop(errorCondition(
+      sprintf("ts_cv_leakage_free_folds() : k (%d) depasse le nombre de groupes uniques (%d).",
+              k, n_groups),
+      class = "biomentat_provenance_error"
+    ))
+  }
+
+  if (!is.null(strata)) {
+    str_chr <- as.character(strata)
+    grp_strata <- tapply(str_chr, grp_chr, function(x) length(unique(x)))
+    if (any(grp_strata > 1L)) {
+      stop(errorCondition(
+        "ts_cv_leakage_free_folds() : un meme groupe (group_ids) appartient a plusieurs strates.",
+        class = "biomentat_provenance_error"
+      ))
+    }
+  }
+
+  if (!is.null(seed)) {
+    if (!is.numeric(seed) || length(seed) != 1L || is.na(seed)) {
+      stop(errorCondition(
+        "ts_cv_leakage_free_folds() : 'seed' doit etre un scalaire numerique ou NULL.",
+        class = "biomentat_provenance_error"
+      ))
+    }
+    has_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+    if (has_seed) {
+      old_seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+    }
+    on.exit({
+      if (has_seed) {
+        assign(".Random.seed", old_seed, envir = .GlobalEnv)
+      } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+        rm(".Random.seed", envir = .GlobalEnv)
+      }
+    }, add = TRUE)
+    set.seed(as.integer(seed))
+  }
+
+  group_fold <- integer(n_groups)
+  names(group_fold) <- uniq_groups
+
+  if (is.null(strata)) {
+    shuffled <- sample(uniq_groups, size = n_groups, replace = FALSE)
+    group_fold[shuffled] <- ((seq_len(n_groups) - 1L) %% k) + 1L
+  } else {
+    str_chr <- as.character(strata)
+    grp_to_stratum <- vapply(uniq_groups, function(g) str_chr[match(g, grp_chr)], character(1))
+    uniq_strata <- unique(str_chr)
+    offset <- 0L
+    for (st in uniq_strata) {
+      st_groups <- uniq_groups[grp_to_stratum == st]
+      shuffled_st <- if (length(st_groups) > 1L) sample(st_groups, size = length(st_groups), replace = FALSE) else st_groups
+      idx <- seq_along(shuffled_st) - 1L + offset
+      group_fold[shuffled_st] <- (idx %% k) + 1L
+      offset <- offset + length(shuffled_st)
+    }
+  }
+
+  fold_id <- unname(as.integer(group_fold[grp_chr]))
+  folds <- lapply(seq_len(k), function(f) sample_ids[fold_id == f])
+  names(folds) <- paste0("fold_", seq_len(k))
+
+  fold_groups <- lapply(seq_len(k), function(f) unique(grp_chr[fold_id == f]))
+  if (sum(lengths(fold_groups)) != n_groups) {
+    stop(errorCondition(
+      "ts_cv_leakage_free_folds() : fuite de groupe detectee entre les plis.",
+      class = "biomentat_provenance_error"
+    ))
+  }
+
+  list(
+    fold_id          = fold_id,
+    folds            = folds,
+    k                = k,
+    n_samples        = n_samples,
+    n_groups         = n_groups,
+    leakage_verified = TRUE
+  )
+}
