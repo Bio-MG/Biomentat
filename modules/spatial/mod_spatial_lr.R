@@ -46,7 +46,7 @@ mod_spatial_lr_ui <- function(id) {
       h6(i18n$t("Carte spatiale de signification"), style = "font-weight:bold;"),
       div(class = "alert alert-light", style = "font-size:0.8rem;",
            bsicons::bs_icon("map-marker-alt"),
-           i18n$t("Visualisez la distribution des paires selectionnees (Hotspot/Coldspot/NS) sur le fond histologique.")),
+           i18n$t("Visualisez la distribution des paires sélectionnées (Hotspot/Coldspot/NS) sur le fond histologique.")),
 
       uiOutput(ns("slot_spot_selector")),
       uiOutput(ns("slot_pair_selector"))
@@ -94,7 +94,7 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
       req(shared_rv$lr_result)
       spots <- unique(shared_rv$lr_result$spot_scores$from_spot)
       if (!length(spots)) return(NULL)
-      tags$span(.tr("Selectionnez un spot (pour la carte en dessous, si disponible):"))
+      tags$span(.tr("Sélectionnez un spot (pour la carte en dessous, si disponible):"))
     })
 
     output$slot_pair_selector <- renderUI({
@@ -170,7 +170,7 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
       if (lr_task$status() == "success") {
         res <- lr_task$result()
         shared_rv$lr_result <- res
-        showNotification(.t_fmt(.tr("Scores LR calcules : {pairs} lignes de scores pairs; {spots} spots avec voisins."),
+        showNotification(.t_fmt(.tr("Scores LR calculés : {pairs} lignes de scores pairs; {spots} spots avec voisins."),
                                 pairs = nrow(res$pair_scores),
                                 spots = nrow(res$spot_scores) - ifelse(is.null(res$skipped), 0L, as.integer(res$skipped))))
       } else if (lr_task$status() == "error") {

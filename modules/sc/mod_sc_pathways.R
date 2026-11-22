@@ -1,6 +1,6 @@
 # mod_sc_pathways.R  —  Child 6: GO / KEGG / Reactome enrichment
 # Step-3.6: auto-remap ENSG→Symbol before enrichment when gene IDs are Ensembl
-# Step-3.7: BUG1 fix — pathway_rv (+ the i18n$t("Base de donnees") selector) is now
+# Step-3.7: BUG1 fix — pathway_rv (+ the i18n$t("Base de données") selector) is now
 #   synced from shared_rv$pathway_results / shared_rv$pathway_db, so results
 #   written by the auto-pipeline (mod_sc.R) show up here immediately instead
 #   of needing a manual i18n$t("Lancer Enrichissement") click (same class of bug as
@@ -160,13 +160,13 @@ mod_sc_pathways_ui <- function(id) {
         i18n$t("Analyse d'enrichissement de voies biologiques."),
         tags$br(),
         tags$small(i18n$t("Les IDs Ensembl (ENSG…) sont convertis automatiquement en symboles."))),
-    selectInput(ns("pathway_source"), i18n$t("Source de genes"),
-      choices=setNames(c("markers","correlated","manual"), c(.tr_plain("Marqueurs calculés"), .tr_plain("Genes correles"), .tr_plain("Selection manuelle")))),
+    selectInput(ns("pathway_source"), i18n$t("Source de gènes"),
+      choices=setNames(c("markers","correlated","manual"), c(.tr_plain("Marqueurs calculés"), .tr_plain("Gènes Corrélés"), .tr_plain("Sélection manuelle")))),
     conditionalPanel(condition="input.pathway_source == 'manual'", ns=ns,
-      selectizeInput(ns("pathway_genes"), "Genes", choices=NULL, multiple=TRUE,
-                     options=list(placeholder="Selectionnez genes"))),
+      selectizeInput(ns("pathway_genes"), "Gènes", choices=NULL, multiple=TRUE,
+                     options=list(placeholder="Sélectionnez gènes"))),
     fluidRow(
-      column(6, selectInput(ns("pathway_db"), i18n$t("Base de donnees"),
+      column(6, selectInput(ns("pathway_db"), i18n$t("Base de données"),
                choices=setNames(c("GOBP","KEGG","Reactome","Packs","EnrichrCloud"),
                  c(.tr_plain("GO Biological Process"), .tr_plain("KEGG Pathways"), .tr_plain("Reactome"),
                    .tr_plain("Packs (GMT libraries)"), .tr_plain("Cloud Enrichr (opt-in)"))))),
@@ -244,15 +244,15 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
 
     observeEvent(global_data$language, {
       updateSelectInput(session, "pathway_source",
-        label = .tr("Source de genes"),
+        label = .tr("Source de gènes"),
         choices = setNames(
           c("markers", "correlated", "manual"),
-          c(.tr("Marqueurs calculés"), .tr("Genes correles"), .tr("Selection manuelle"))
+          c(.tr("Marqueurs calculés"), .tr("Gènes Corrélés"), .tr("Sélection manuelle"))
         ),
         selected = isolate(input$pathway_source) %||% "markers"
       )
       updateSelectInput(session, "pathway_db",
-        label = .tr("Base de donnees"),
+        label = .tr("Base de données"),
         choices = setNames(
           c("GOBP", "KEGG", "Reactome"),
           c(.tr("GO Biological Process"), .tr("KEGG Pathways"), .tr("Reactome"))
@@ -430,7 +430,7 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
         showNotification(paste("✅", nrow(res), "pathways enrichis"), type="message")
         shared_rv$active_tab <- "tab_pathway"
       }, error=function(e) {
-        showNotification(paste0(.tr_plain("❌ Erreur pathway: "), as.character(e$message)[1]),
+        showNotification(paste0(.tr_plain("❌ Erreur pathway:"), as.character(e$message)[1]),
                          type="error", duration=5)
         pathway_rv(NULL)
       })

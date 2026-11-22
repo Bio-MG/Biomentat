@@ -76,7 +76,7 @@ mod_sc_viz_ui <- function(id) {
     # Conditional: DimPlot reduction picker
     conditionalPanel(
       condition = "input.viz_type == 'dim'", ns = ns,
-      selectInput(ns("viz_reduction"), i18n$t("Reduction a Visualiser"),
+      selectInput(ns("viz_reduction"), i18n$t("Reduction à Visualiser"),
                   choices  = c("UMAP"="umap","PCA"="pca","t-SNE"="tsne","Diffusion Map"="dm"),
                   selected = "umap")
     ),
@@ -120,7 +120,7 @@ mod_sc_viz_ui <- function(id) {
       ns = ns,
       div(
         class = "border-bottom pb-2 mb-2",
-        selectizeInput(ns("feat_sel"), i18n$t("Genes a Visualiser"),
+        selectizeInput(ns("feat_sel"), i18n$t("Gènes à Visualiser"),
                        choices = NULL, multiple = TRUE,
                        options = list(maxOptions=5000, placeholder="Ex: CD4, PTPRC", maxItems=10)),
         div(class="small text-muted mb-2", textOutput(ns("gene_selection_status"))),
@@ -146,7 +146,7 @@ mod_sc_viz_ui <- function(id) {
       div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
           h6(i18n$t("Groupes de Comparaison"), style="font-weight:bold;"),
           selectInput(ns("volcano_group1"), i18n$t("Group 1 (Test)"),      choices = NULL),
-          selectInput(ns("volcano_group2"), i18n$t("Group 2 (Reference)"), choices = c("All other cells"="rest")),
+          selectInput(ns("volcano_group2"), i18n$t("Group 2 (Référence)"), choices = c("All other cells"="rest")),
           helpText("Compare Group 1 vs Group 2 (ou 'rest' pour vs tous les autres)"),
           # Audit 2026-09-27 (feature 6×10X) : garde scientifique — le volcano
           # traite chaque CELLULE comme une observation. Avec des réplicats
@@ -168,7 +168,7 @@ mod_sc_viz_ui <- function(id) {
       condition = "input.viz_type == 'heatmap_hier'", ns = ns,
       div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
           h6(i18n$t("Heatmap Hierarchique"), style="font-weight:bold;"),
-          helpText("Genes du panier ci-dessus (max 50). Clustering hierarchique lignes/colonnes."),
+          helpText("Gènes du panier ci-dessus (max 50). Clustering hierarchique lignes/colonnes."),
           numericInput(ns("hier_max_cells"), i18n$t("Max cellules avant agregation par groupe"),
                        value = 5000, min = 200, max = 20000, step = 500),
           # PLOT-S4 — memes reglages de clustering que cote Bulk DE.
@@ -203,10 +203,10 @@ mod_sc_viz_ui <- function(id) {
       div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
           h6(i18n$t("Reduction 3D"), style="font-weight:bold;"),
           selectInput(ns("reduction_3d_pick"), i18n$t("Reduction (>= 3 dimensions)"), choices = NULL),
-          numericInput(ns("reduction_3d_max_cells"), i18n$t("Max cellules affichees"),
+          numericInput(ns("reduction_3d_max_cells"), i18n$t("Max cellules affichées"),
                        value = 50000, min = 1000, max = 200000, step = 1000),
           div(class="text-muted", style="font-size:0.72em;",
-              "Utilise 'Grouper/Colorer par' ci-dessous. Si vide, choisissez PCA (UMAP/t-SNE sont 2D par defaut)."))
+              "Utilise 'Grouper/Colorer par' ci-dessous. Si vide, choisissez PCA (UMAP/t-SNE sont 2D par défaut)."))
     ),
 
     sliderInput(ns("pt_size"), i18n$t("Taille points"), 0.1, 3, 0.5, 0.1),
@@ -527,7 +527,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
                            choices=rownames(global_data$sc_obj), server=TRUE)
       state_set(shared_rv, "selected_genes", new_sel)
       if (length(valid) > 0) {
-        showNotification(sprintf("Added %d gene(s) (%d invalid skipped)", length(valid), length(invalid)),
+        showNotification(sprintf("Added %d gène(s) (%d invalid skipped)", length(valid), length(invalid)),
                          type="message", duration=5)
         state_set(shared_rv, "active_tab", "tab_viz")
       } else {

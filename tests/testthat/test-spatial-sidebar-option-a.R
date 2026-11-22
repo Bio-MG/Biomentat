@@ -91,15 +91,17 @@ if (!exists(".tr_plain", envir = globalenv()))
 # -----------------------------------------------------------------------------
 # A1 — the page-level fillable opt-in (source contract on app.R).
 # -----------------------------------------------------------------------------
-test_that("A1: app.R opts ONLY the spatial pane into the page fill chain", {
+test_that("A1: app.R opts the analysis panes into the page fill chain (révisé 2026-11-22)", {
   app_src <- paste(readLines(file.path("..", "..", "app.R"), warn = FALSE),
                    collapse = "\n")
-  expect_true(grepl('fillable = "tab_spatial"', app_src, fixed = TRUE),
-              info = "page_navbar must declare fillable = 'tab_spatial' (option A structural layer)")
-  # The other analysis tabs must NOT be dragged into the fill chain (BULK-9
-  # history: the fill chain is a sensitive seam — only tab_spatial is listed).
-  expect_false(grepl('fillable = c(', app_src, fixed = TRUE),
-               info = "option A must stay a single-pane opt-in (no multi-pane fillable vector)")
+  # DEMANDE OPÉRATEUR (2026-11-22, « spread les 2 choses ») : le fill s'étend
+  # aux 3 workflows — l'option A reste le LAYER STRUCTUREL (tab_spatial reste
+  # dans la chaîne), et le vecteur exact devient un PIN positif : un retrait
+  # silencieux de tab_spatial ou un 4ᵉ id redeviennent visibles. La garde
+  # « page entière fillable = TRUE » reste inchangée.
+  expect_true(grepl('fillable = c("tab_spatial", "tab_sc", "tab_bulk")',
+                    app_src, fixed = TRUE),
+              info = "page_navbar must declare fillable = c(tab_spatial, tab_sc, tab_bulk) (option A + spread opérateur)")
   expect_false(grepl("fillable = TRUE", app_src, fixed = TRUE),
                info = "option A must not flip the whole page fillable (BULK-9 regression guard)")
 })

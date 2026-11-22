@@ -2149,7 +2149,7 @@ mod_sc_server <- function(id, global_data) {
                                          .tr("ImmGen (Mouse)"), .tr("DICE Immune"))))),
             column(6, radioButtons(ns_m("sc_ap_singler_level"), .tr("Niveau"),
                        stats::setNames(c("main","fine"),
-                                       c(.tr("Main (General)"), .tr("Fine (Specifique)"))), inline=TRUE))
+                                       c(.tr("Main (General)"), .tr("Fine (Spécifique)"))), inline=TRUE))
           )
         ),
         # ── SF (2026-11-09) : cell cycle OPT-IN (scoring metadata + régression

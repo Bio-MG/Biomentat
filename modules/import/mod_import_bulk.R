@@ -1,5 +1,5 @@
 # modules/import/mod_import_bulk.R - Import RNA Bulk
-# v3: ajout du mode "One file per sample" (import multi-fichiers bulk)
+# v3: ajout du mode "Un fichier par échantillon" (import multi-fichiers bulk)
 #     en plus du mode "Merged matrix" existant (inchangé).
 #
 # Depends on helpers_io.R (sourced by global.R, not defined there):
@@ -273,7 +273,7 @@ mod_import_bulk_ui <- function(id) {
           ns("bulk_import_mode"),
           label    = i18n$t("Mode d'import"),
           choices  = setNames(c("merged_matrix", "per_sample"),
-                              c(.tr_plain("Merged matrix (un seul fichier)"), .tr_plain("One file per sample"))),
+                              c(.tr_plain("Matrice fusionnée (un seul fichier)"), .tr_plain("Un fichier par échantillon"))),
           selected = "merged_matrix",
           inline   = TRUE
         ),
@@ -300,7 +300,7 @@ mod_import_bulk_ui <- function(id) {
               
               radioButtons(ns("counts_format"), i18n$t("Format de la matrice"),
                            choices  = setNames(c("rows", "cols"),
-                                              c(.tr_plain("Genes en lignes (standard)"), .tr_plain("Genes en colonnes (transposé)"))),
+                                              c(.tr_plain("Gènes en lignes (standard)"), .tr_plain("Gènes en colonnes (transposé)"))),
                            selected = "rows"),
               
               checkboxInput(ns("counts_has_header"),   i18n$t("La 1ère ligne est un en-tête"), value = TRUE),
@@ -457,7 +457,7 @@ mod_import_bulk_ui <- function(id) {
               
               numericInput(
                 ns("ps_dup_threshold"),
-                i18n$t("Seuil max. gene IDs dupliqués (fraction)"),
+                i18n$t("Seuil max. gène IDs dupliqués (fraction)"),
                 value = 0.05, min = 0, max = 1, step = 0.01
               ),
               
@@ -725,7 +725,7 @@ mod_import_bulk_server <- function(id, global_data) {
         label = .tr("Mode d'import"),
         choices = setNames(
           c("merged_matrix", "per_sample"),
-          c(.tr("Merged matrix (un seul fichier)"), .tr("One file per sample"))
+          c(.tr("Matrice fusionnée (un seul fichier)"), .tr("Un fichier par échantillon"))
         ),
         selected = isolate(input$bulk_import_mode) %||% "merged_matrix"
       )
@@ -733,7 +733,7 @@ mod_import_bulk_server <- function(id, global_data) {
         label = .tr("Format de la matrice"),
         choices = setNames(
           c("rows", "cols"),
-          c(.tr("Genes en lignes (standard)"), .tr("Genes en colonnes (transposé)"))
+          c(.tr("Gènes en lignes (standard)"), .tr("Gènes en colonnes (transposé)"))
         ),
         selected = isolate(input$counts_format) %||% "rows"
       )
@@ -979,7 +979,7 @@ mod_import_bulk_server <- function(id, global_data) {
       if (nrow(warns) == 0L) return(invisible(NULL))
       for (i in seq_len(nrow(warns))) add_log(paste(" ⚠️", warns$message[i]))
       showNotification(
-        sprintf(.tr("Santé du dataset : %d anomalie(s) warn — détail dans le panneau « Datasets découverts »."),
+        sprintf(.tr("Santé du dataset : %d avertissement(s) — détail dans le panneau « Datasets découverts »."),
                 nrow(warns)),
         type = "warning", duration = NULL)
       invisible(NULL)
@@ -1047,7 +1047,7 @@ mod_import_bulk_server <- function(id, global_data) {
                          input$counts_has_header, input$counts_has_rownames)
         if (input$counts_format == "cols") {
           df <- as.data.frame(t(df))
-          add_log(.tr(" ↻ Matrice transposée (genes étaient en colonnes)"))
+          add_log(.tr(" ↻ Matrice transposée (gènes étaient en colonnes)"))
         }
         if (nrow(df) == 0 || ncol(df) == 0) {
           stop(errorCondition(.tr("Matrice vide après lecture. Vérifie les options d'en-tête/rownames."), class = "bulk_import_error"))
@@ -1145,7 +1145,7 @@ mod_import_bulk_server <- function(id, global_data) {
       # Le widget `counts_format` est honoré, exactement comme `counts_reactive()`.
       if (identical(shiny::isolate(input$counts_format), "cols")) {
         counts_df <- as.data.frame(t(counts_df))
-        add_log(.tr(" ↻ Matrice transposée (genes étaient en colonnes)"))
+        add_log(.tr(" ↻ Matrice transposée (gènes étaient en colonnes)"))
       }
 
       meta_df <- NULL
@@ -1242,7 +1242,8 @@ mod_import_bulk_server <- function(id, global_data) {
     }
 
     if (exists("dataset_dirs_options_server", mode = "function")) {
-      dataset_dirs_options_server(input, output, session, modality = "bulk")
+      dataset_dirs_options_server(input, output, session, modality = "bulk",
+                                  language = reactive(global_data$language))
     }
 
     observeEvent(input$btn_scan_datasets, {

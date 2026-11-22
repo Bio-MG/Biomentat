@@ -10,7 +10,7 @@
 #      que les sections existantes (voir R/utils_spatial_export.R). NULL-safe
 #      : une section reste grisee/vide si le calcul correspondant n'a jamais
 #      ete lance pour l'echantillon actif.
-#   2. Liens "Tout selectionner" / "Tout deselectionner" au-dessus de la
+#   2. Liens "Tout sélectionner" / "Tout deselectionner" au-dessus de la
 #      liste de sections -- reponse directe au retour "un moyen d'exporter
 #      tous les fichiers/plots deja calcules en memoire" sans devoir cocher
 #      chaque section une par une.
@@ -37,10 +37,10 @@ mod_spatial_export_controls_ui <- function(id) {
   tagList(
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("archive"),
-          i18n$t("Regroupe les resultats DEJA CALCULES (QC, clustering, deconvolution, niches, statistiques spatiales avancees, cartes) pour l'echantillon actif dans une archive .zip, ou genere un script R autonome (+ contexte) pour reproduire le pipeline hors Shiny.")),
+          i18n$t("Regroupe les résultats DEJA CALCULES (QC, clustering, deconvolution, niches, statistiques spatiales avancees, cartes) pour l'échantillon actif dans une archive .zip, ou genere un script R autonome (+ contexte) pour reproduire le pipeline hors Shiny.")),
 
       div(class = "d-flex gap-2 mb-1",
-          actionLink(ns("btn_select_all"), i18n$t("Tout selectionner"), style = "font-size:0.8rem;"),
+          actionLink(ns("btn_select_all"), i18n$t("Tout sélectionner"), style = "font-size:0.8rem;"),
           tags$span("\u00b7", class = "text-muted"),
           actionLink(ns("btn_select_none"), i18n$t("Tout deselectionner"), style = "font-size:0.8rem;")),
       checkboxGroupInput(ns("sections"), i18n$t("Sections a inclure dans le paquet complet"),
@@ -53,7 +53,7 @@ mod_spatial_export_controls_ui <- function(id) {
             .tr_plain("Hotspots (Getis-Ord Gi*)"),
             .tr_plain("Ripley's K"),
             .tr_plain("Cartes (PNG)"),
-            .tr_plain("Multi-echantillons (integration + composition diff.)"),
+            .tr_plain("Multi-échantillons (intégration + composition diff.)"),
             .tr_plain("Vues sauvegardees (onglet 4)"))),
         selected = .SPATIAL_EXPORT_ALL_SECTIONS),
       downloadButton(ns("dl_bundle"), i18n$t("\U0001F4E6 Paquet complet (.zip)"),
@@ -62,7 +62,7 @@ mod_spatial_export_controls_ui <- function(id) {
       hr(),
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("code-slash"),
-          i18n$t("Le script reproduit UNIQUEMENT les etapes DEJA LANCEES dans l'app (QC/clustering/deconvolution RCTD/niches) avec les MEMES parametres. Necessite que le dossier BPCells reste accessible au meme chemin (voir README/commentaires inclus dans le script). Les statistiques spatiales avancees (enrichissement/hotspots/Ripley's K) ne sont PAS re-executees par ce script -- leurs resultats DEJA calcules restent disponibles en CSV dans le paquet complet ci-dessus.")),
+          i18n$t("Le script reproduit UNIQUEMENT les étapes DEJA LANCEES dans l'app (QC/clustering/deconvolution RCTD/niches) avec les MEMES paramètres. Necessite que le dossier BPCells reste accessible au même chemin (voir README/commentaires inclus dans le script). Les statistiques spatiales avancees (enrichissement/hotspots/Ripley's K) ne sont PAS re-executees par ce script -- leurs résultats DEJA calculés restent disponibles en CSV dans le paquet complet ci-dessus.")),
       downloadButton(ns("dl_script"), i18n$t("\U0001F9FE Script R reproductible (.zip)"),
                      class = "btn-outline-secondary w-100")
   )
@@ -95,20 +95,20 @@ mod_spatial_export_server <- function(id, global_data, shared_rv) {
       obj <- global_data$spatial_obj
       if (is.null(obj)) {
         return(div(class = "alert alert-danger",
-                    .tr("Aucune donnee spatiale chargee. Allez dans l'onglet 'Import Donnees > Spatial'.")))
+                    .tr("Aucune donnée spatiale chargée. Allez dans l'onglet 'Import Données > Spatial'.")))
       }
       row <- function(label, value) tags$tr(tags$td(label), tags$td(value))
       tagList(
-        h6(.tr("Etat actuel de l'echantillon (ce qui sera exporte)"), style = "font-weight:bold;"),
+        h6(.tr("État actuel de l'échantillon (ce qui sera exporté)"), style = "font-weight:bold;"),
         tags$table(class = "table table-sm table-striped",
-          row(.tr("Echantillon actif"), obj$project %||% "-"),
+          row(.tr("Échantillon actif"), obj$project %||% "-"),
           row(.tr("QC applique"), if (!is.null(shared_rv$qc_pass_idx)) .t_fmt(.tr("{n} elements retenus"), n = length(shared_rv$qc_pass_idx)) else .tr("Non")),
           row(.tr("Clustering"), if (!is.null(shared_rv$cluster_labels)) .t_fmt(.tr("{n} clusters"), n = length(unique(shared_rv$cluster_labels))) else .tr("Non calcule")),
-          row(.tr("Deconvolution"), if (!is.null(shared_rv$deconv_props)) .t_fmt(.tr("{n} types cellulaires"), n = ncol(shared_rv$deconv_props) - 1) else .tr("Non calculee")),
-          row(.tr("Niches"), if (!is.null(shared_rv$niche_labels)) .t_fmt(.tr("{n} niches"), n = length(unique(shared_rv$niche_labels))) else .tr("Non calculees")),
-          row(.tr("Moran's I"), if (!is.null(shared_rv$moran_results)) .t_fmt(.tr("{n} genes testes"), n = nrow(shared_rv$moran_results)) else .tr("Non calcule")),
+          row(.tr("Deconvolution"), if (!is.null(shared_rv$deconv_props)) .t_fmt(.tr("{n} types cellulaires"), n = ncol(shared_rv$deconv_props) - 1) else .tr("Non calculée")),
+          row(.tr("Niches"), if (!is.null(shared_rv$niche_labels)) .t_fmt(.tr("{n} niches"), n = length(unique(shared_rv$niche_labels))) else .tr("Non calculées")),
+          row(.tr("Moran's I"), if (!is.null(shared_rv$moran_results)) .t_fmt(.tr("{n} gènes testes"), n = nrow(shared_rv$moran_results)) else .tr("Non calcule")),
           row(.tr("Enrichissement de voisinage"), if (!is.null(shared_rv$enrichment_result)) .t_fmt(.tr("{n} niveaux"), n = length(shared_rv$enrichment_result$levels)) else .tr("Non calcule")),
-          row(.tr("Hotspots (Getis-Ord)"), if (!is.null(shared_rv$hotspot_result)) .t_fmt(.tr("{n} elements testes"), n = nrow(shared_rv$hotspot_result)) else .tr("Non calcules")),
+          row(.tr("Hotspots (Getis-Ord)"), if (!is.null(shared_rv$hotspot_result)) .t_fmt(.tr("{n} elements testes"), n = nrow(shared_rv$hotspot_result)) else .tr("Non calculés")),
           row(.tr("Ripley's K"), if (!is.null(shared_rv$ripley_result)) .t_fmt(.tr("cible '{target}'"), target = shared_rv$ripley_result$target_level) else .tr("Non calcule"))
         )
       )

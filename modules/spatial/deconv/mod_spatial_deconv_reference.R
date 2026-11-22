@@ -53,13 +53,13 @@
     ref_path(NULL)
     ref_artifact_info(NULL)
 
-    withProgress(message = .tr("Preparation de la reference..."), value = 0, {
+    withProgress(message = .tr("Preparation de la référence..."), value = 0, {
       incProgress(0.15, detail = sprintf(.tr("Lecture (.%s)..."), if (nzchar(orig_ext)) orig_ext else "?"))
       raw_ref <- tryCatch(read_reference_scrna(staged_path), error = function(e) {
         msg <- conditionMessage(e)
         ref_state$status  <- "error"
         ref_state$message <- sprintf("Lecture (.%s) : %s%s", orig_ext, msg, .version_hint(msg))
-        showNotification(paste(.tr("Reference — erreur de lecture :"), msg), type = "error", duration = 15)
+        showNotification(paste(.tr("Référence — erreur de lecture :"), msg), type = "error", duration = 15)
         NULL
       })
       if (is.null(raw_ref)) return(invisible(FALSE))
@@ -69,7 +69,7 @@
         msg <- conditionMessage(e)
         ref_state$status  <- "error"
         ref_state$message <- sprintf("Conversion Seurat : %s%s", msg, .version_hint(msg))
-        showNotification(paste(.tr("Reference — erreur de conversion :"), msg), type = "error", duration = 15)
+        showNotification(paste(.tr("Référence — erreur de conversion :"), msg), type = "error", duration = 15)
         NULL
       })
       if (is.null(ref_obj)) return(invisible(FALSE))
@@ -81,11 +81,11 @@
         return(invisible(FALSE))
       }
 
-      incProgress(0.3, detail = .tr("Lecture des metadonnees..."))
+      incProgress(0.3, detail = .tr("Lecture des métadonnées..."))
       meta_cols <- tryCatch(colnames(ref_obj@meta.data), error = function(e) {
         ref_state$status  <- "error"
         ref_state$message <- paste("Lecture metadata :", conditionMessage(e))
-        showNotification(paste(.tr("Reference — erreur de lecture metadata :"), conditionMessage(e)),
+        showNotification(paste(.tr("Référence — erreur de lecture metadata :"), conditionMessage(e)),
                           type = "error", duration = 10)
         NULL
       })
@@ -98,7 +98,7 @@
       ref_state$message     <- NULL
       ref_meta_cols(meta_cols)
       incProgress(0.15, detail = .tr("Termine."))
-      showNotification(.t_fmt(.tr("Reference chargee : {cells} cellules x {genes} genes (.{ext})."),
+      showNotification(.t_fmt(.tr("Référence chargée : {cells} cellules x {gènes} gènes (.{ext})."),
                               cells = ncol(ref_obj), genes = nrow(ref_obj),
                               ext = if (nzchar(orig_ext)) orig_ext else "?"),
                         type = "message", duration = 5)
@@ -121,7 +121,7 @@
     }, error = function(e) {
       ref_state$status  <- "error"
       ref_state$message <- paste("Copie du fichier :", conditionMessage(e))
-      showNotification(paste(.tr("Reference — erreur de copie du fichier :"), conditionMessage(e)),
+      showNotification(paste(.tr("Référence — erreur de copie du fichier :"), conditionMessage(e)),
                         type = "error", duration = 10)
       NULL
     })
@@ -158,11 +158,11 @@
   output$ref_source_picker_ui <- renderUI({
     global_data$language  # i18n: re-render on language switch
     req(global_data$spatial_reference)
-    radioButtons(ns("ref_source"), .tr("Source de la reference"),
+    radioButtons(ns("ref_source"), .tr("Source de la référence"),
                  choices = stats::setNames(
                    c("shared", "upload"),
-                   c(.tr("Reference partagee (Import > Spatial)"),
-                     .tr("Uploader une nouvelle reference (cette session)"))),
+                   c(.tr("Référence partagée (Import > Spatial)"),
+                     .tr("Uploader une nouvelle référence (cette session)"))),
                  selected = "shared")
   })
 
@@ -186,9 +186,9 @@
     st <- ref_state$status
     badge <- switch(st,
       "empty" = div(class = "alert alert-light", style = "font-size:0.8rem; margin-bottom:4px;",
-                    bsicons::bs_icon("circle"), " ", .tr("Aucune reference chargee.")),
+                    bsicons::bs_icon("circle"), " ", .tr("Aucune référence chargée.")),
       "loading" = div(class = "alert alert-info", style = "font-size:0.8rem; margin-bottom:4px;",
-                      bsicons::bs_icon("hourglass-split"), " ", .tr("Chargement de la reference en cours...")),
+                      bsicons::bs_icon("hourglass-split"), " ", .tr("Chargement de la référence en cours...")),
       "error" = div(class = "alert alert-danger", style = "font-size:0.8rem; margin-bottom:4px;",
                     bsicons::bs_icon("x-circle"), " ",
                     .t_fmt(.tr("Erreur : {msg}"),
@@ -196,13 +196,14 @@
       "loaded" = if (reference_is_ready()) {
         div(class = "alert alert-success", style = "font-size:0.8rem; margin-bottom:4px;",
             bsicons::bs_icon("check-circle"), " ",
-            .t_fmt(.tr("Reference chargee : {cells} cellules x {genes} genes."),
+            .t_fmt(.tr("Référence chargée : {cells} cellules x {gènes} gènes."),
                    cells = ncol(ref_state$obj), genes = nrow(ref_state$obj)))
       } else {
         div(class = "alert alert-warning", style = "font-size:0.8rem; margin-bottom:4px;",
             bsicons::bs_icon("exclamation-triangle"), " ",
-            .tr(paste0("Reference chargee — choisissez la colonne 'type cellulaire' puis cliquez ",
-                       "'1) Preparer la reference (disque)' ci-dessous.")))
+            .tr(paste0(
+             "Référence chargée — choisissez la colonne 'type cellulaire' puis cliquez '1) Préparer la ",
+             "référence (disque)' ci-dessous.")))
       },
       div(class = "alert alert-light", style = "font-size:0.8rem;", .tr("Statut inconnu."))
     )
@@ -210,7 +211,7 @@
       badge,
       if (identical(st, "error") || identical(st, "loaded")) {
         actionLink(ns("btn_recheck_ref"),
-                   paste("\U1F504", .tr("Revérifier la reference (sans re-upload)")),
+                   paste("\U1F504", .tr("Revérifier la référence (sans re-upload)")),
                    style = "font-size:0.8rem;")
       }
     )
@@ -306,7 +307,7 @@
     n_warn   <- sum(verdict_levels == "warn")
     n_danger <- sum(verdict_levels == "danger")
 
-    btn <- actionButton(ns("btn_prepare_ref"), .tr("1) Preparer la reference (disque)"),
+    btn <- actionButton(ns("btn_prepare_ref"), .tr("1) Préparer la référence (disque)"),
                         icon = icon("database"), class = "btn-sm btn-outline-primary w-100 mt-2")
     if (block_prepare) {
       btn <- tagAppendAttributes(btn, disabled = NA, `aria-disabled` = "true")
@@ -360,8 +361,9 @@
         numericInput(ns("max_cells_per_type"), .tr("Max cellules par type"), 500, min = 25, max = 5000, step = 25)
       ),
       div(class = "text-muted", style = "font-size:0.8rem;",
-          .tr(paste0("Sous-echantillonnage stratifie (chaque type garde sa proportion relative) — ",
-                     "accelere nettement RCTD/Label Transfer sur une grosse reference (ex: >50k cellules)."))),
+          .tr(paste0(
+           "Sous-échantillonnage stratifié (chaque type garde sa proportion relative) — accélère nettement ",
+           "RCTD/Label Transfer sur une grosse référence (ex: >50k cellules)."))),
       btn,
       uiOutput(ns("ref_artifact_status_ui"))
     )
@@ -389,7 +391,7 @@
         incProgress(0.6, detail = .tr("Ecriture sur disque..."))
         artifact
       }, error = function(e) {
-        showNotification(paste(.tr("Erreur preparation reference:"), conditionMessage(e)), type = "error", duration = 10)
+        showNotification(paste(.tr("Erreur preparation référence:"), conditionMessage(e)), type = "error", duration = 10)
         NULL
       })
       if (!is.null(result)) {
@@ -397,7 +399,7 @@
         ref_artifact_info(result)
         incProgress(0.1, detail = .tr("Termine."))
         showNotification(.t_fmt(
-          .tr("Reference preparee : {cells} cellules x {genes} genes (backend: {backend}).{extra}"),
+          .tr("Référence preparee : {cells} cellules x {gènes} gènes (backend: {backend}).{extra}"),
           cells = result$n_cells, genes = result$n_genes, backend = result$backend,
           extra = if (result$n_dropped_rare > 0) sprintf(.tr(" %d cellule(s) trop rare(s) exclue(s)."),
                                                          result$n_dropped_rare) else ""
@@ -412,11 +414,11 @@
     if (is.null(info)) {
       return(div(class = "alert alert-light", style = "font-size:0.8rem; margin-top:4px;",
                  bsicons::bs_icon("info-circle"), " ",
-                 .tr("Reference pas encore preparee pour la deconvolution — cliquez ci-dessus.")))
+                 .tr("Référence pas encore preparee pour la deconvolution — cliquez ci-dessus.")))
     }
     div(class = "alert alert-success", style = "font-size:0.8rem; margin-top:4px;",
         bsicons::bs_icon("check-circle"), " ",
-        .t_fmt(.tr("Pret : {cells} cellules x {genes} genes (backend: {backend}).{extra}"),
+        .t_fmt(.tr("Prêt : {cells} cellules x {gènes} gènes (backend: {backend}).{extra}"),
                cells = info$n_cells, genes = info$n_genes, backend = info$backend,
                extra = if (info$n_dropped_rare > 0) sprintf(.tr(" %d cellule(s) exclue(s) (trop rares)."),
                                                             info$n_dropped_rare) else ""))
@@ -449,8 +451,9 @@
                    n_types = nrow(rare), min_cells = RCTD_CELL_MIN_INSTANCE,
                    types_list = paste(sprintf("%s (%d)", rare$`Type cellulaire`, rare$Effectif), collapse = ", ")),
             " ",
-            .tr(paste0("Avec 'Fusionner/exclure les types rares' coche, ces cellules seront regroupees ",
-                       "sous 'Autre' puis, si ce groupe reste trop petit, exclues de la reference.")))
+            .tr(paste0(
+             "Avec 'Fusionner/exclure les types rares' coché, ces cellules seront regroupées sous 'Autre' ",
+             "puis, si ce groupe reste trop petit, exclues de la référence.")))
       },
       div(style = "max-height:160px; overflow-y:auto;",
           DT::DTOutput(ns("ref_celltype_table")))

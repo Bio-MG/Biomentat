@@ -155,7 +155,7 @@ mod_spatial_pipeline_ui <- function(id) {
 
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("magic"),
-          i18n$t(" Enchaine automatiquement, avec des parametres par defaut identiques a ceux des onglets individuels. Chaque etape ecrit ses resultats au MEME endroit que si vous l'aviez lancee manuellement depuis son propre onglet numerote -- vous pouvez ensuite affiner n'importe quelle etape individuellement sans tout relancer.")),
+          i18n$t(" Enchaîne automatiquement, avec des paramètres par défaut identiques à ceux des onglets individuels. Chaque étape écrit ses résultats au MÊME endroit que si vous l'aviez lancée manuellement depuis son propre onglet numerote -- vous pouvez ensuite affiner n'importe quelle étape individuellement sans tout relancer.")),
 
       h6(i18n$t("1. QC"), style = "font-weight:bold;"),
       numericInput(ns("qc_min_count"), i18n$t("nCount minimum"), 100, min = 0, step = 10),
@@ -170,13 +170,13 @@ mod_spatial_pipeline_ui <- function(id) {
       hr(),
       h6(i18n$t("3. Deconvolution"), style = "font-weight:bold;"),
       uiOutput(ns("deconv_status_ui")),
-      radioButtons(ns("deconv_mode"), i18n$t("Methode"),
+      radioButtons(ns("deconv_mode"), i18n$t("Méthode"),
                    choices = stats::setNames(
                      c("rctd", "labeltransfer", "stdeconvolve", "none"),
-                     c(.tr_plain("RCTD (reference partagee)"),
-                       .tr_plain("Transfert d'ancres (Label Transfer, reference partagee)"),
-                       .tr_plain("Sans reference (LDA, type STdeconvolve)"),
-                       .tr_plain("Aucune (ignorer cette etape)"))),
+                     c(.tr_plain("RCTD (référence partagée)"),
+                       .tr_plain("Transfert d'ancres (Label Transfer, référence partagée)"),
+                       .tr_plain("Sans référence (LDA, type STdeconvolve)"),
+                       .tr_plain("Aucune (ignorer cette étape)"))),
                    selected = "rctd"),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'labeltransfer'", ns("deconv_mode")),
@@ -194,7 +194,7 @@ mod_spatial_pipeline_ui <- function(id) {
       conditionalPanel(
         condition = sprintf("input['%s'] == 'stdeconvolve'", ns("deconv_mode")),
         numericInput(ns("n_topics"), i18n$t("Nombre de types cellulaires (K)"), 6, min = 2, max = 30, step = 1),
-        numericInput(ns("n_top_od"), i18n$t("Genes surdisperses maximum"), 1000, min = 200, max = 3000, step = 100)
+        numericInput(ns("n_top_od"), i18n$t("Gènes surdisperses maximum"), 1000, min = 200, max = 3000, step = 100)
       ),
 
       hr(),
@@ -204,10 +204,10 @@ mod_spatial_pipeline_ui <- function(id) {
       hr(),
       h6(i18n$t("Analyses complementaires (optionnel)"), style = "font-weight:bold;"),
       checkboxInput(ns("compute_umap"), i18n$t("PCA + UMAP (sketch, onglet 4)"), value = TRUE),
-      checkboxInput(ns("compute_moran"), i18n$t("Indice de Moran / genes spatialement variables (onglet 1)"), value = FALSE),
+      checkboxInput(ns("compute_moran"), i18n$t("Indice de Moran / gènes spatialement variables (onglet 1)"), value = FALSE),
       conditionalPanel(
         condition = sprintf("input['%s']", ns("compute_moran")),
-        numericInput(ns("n_hvg_moran"), i18n$t("Nombre de genes (HVG)"), 1000, min = 100, max = 5000, step = 100)
+        numericInput(ns("n_hvg_moran"), i18n$t("Nombre de gènes (HVG)"), 1000, min = 100, max = 5000, step = 100)
       ),
 
       hr(),
@@ -233,7 +233,7 @@ mod_spatial_pipeline_ui <- function(id) {
         condition = sprintf("input['%s']", ns("compute_ripley")),
         numericInput(ns("n_perm_ripley"), i18n$t("Permutations"), 199, min = 49, max = 499, step = 10),
         div(class = "text-muted", style = "font-size:0.8rem;",
-            i18n$t("Cible choisie automatiquement = le cluster le plus peuple apres l'etape 2. Pour tester un autre cluster/niche/type cellulaire, utilisez l'onglet 6 directement."))
+            i18n$t("Cible choisie automatiquement = le cluster le plus peuple après l'étape 2. Pour tester un autre cluster/niche/type cellulaire, utilisez l'onglet 6 directement."))
       ),
 
       hr(),
@@ -255,11 +255,11 @@ mod_spatial_pipeline_summary_ui <- function(id) {
   ns <- NS(id)
   card(
     full_screen = TRUE,
-    card_header(i18n$t("Resultats du pipeline")),
+    card_header(i18n$t("Résultats du pipeline")),
     uiOutput(ns("pipeline_summary_ui")),
     div(class = "alert alert-light small mt-2",
         bsicons::bs_icon("compass"),
-        i18n$t(" Consultez les onglets numerotes (1 a 6) pour explorer/affiner chaque resultat en detail, ou les onglets \"7. Export\" / \"8. Rapport\" pour tout regrouper dans un paquet .zip / script R reproductible / rapport HTML-PDF."))
+        i18n$t(" Consultez les onglets numerotes (1 a 6) pour explorer/affiner chaque résultat en detail, ou les onglets \"7. Export\" / \"8. Rapport\" pour tout regrouper dans un paquet .zip / script R reproductible / rapport HTML-PDF."))
   )
 }
 
@@ -282,13 +282,13 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       updateSliderInput(session, "lambda", label = .tr("Lambda (poids spatial)"))
       updateNumericInput(session, "resolution", label = .tr("Resolution (Leiden)"))
       updateRadioButtons(session, "deconv_mode",
-        label = .tr("Methode"),
+        label = .tr("Méthode"),
         choices = stats::setNames(
           c("rctd", "labeltransfer", "stdeconvolve", "none"),
-          c(.tr("RCTD (reference partagee)"),
-            .tr("Transfert d'ancres (Label Transfer, reference partagee)"),
-            .tr("Sans reference (LDA, type STdeconvolve)"),
-            .tr("Aucune (ignorer cette etape)"))))
+          c(.tr("RCTD (référence partagée)"),
+            .tr("Transfert d'ancres (Label Transfer, référence partagée)"),
+            .tr("Sans référence (LDA, type STdeconvolve)"),
+            .tr("Aucune (ignorer cette étape)"))))
       updateRadioButtons(session, "lt_norm_method",
         label = .tr("Normalisation"),
         choices = stats::setNames(c("lognorm", "sct"),
@@ -296,12 +296,12 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       updateNumericInput(session, "lt_ncells", label = .tr("Cellules SCTransform (ncells)"))
       updateNumericInput(session, "lt_npcs", label = .tr("Composantes PCA"))
       updateNumericInput(session, "n_topics", label = .tr("Nombre de types cellulaires (K)"))
-      updateNumericInput(session, "n_top_od", label = .tr("Genes surdisperses maximum"))
+      updateNumericInput(session, "n_top_od", label = .tr("Gènes surdisperses maximum"))
       updateNumericInput(session, "n_niches", label = .tr("Nombre de niches"))
       updateCheckboxInput(session, "compute_umap", label = .tr("PCA + UMAP (sketch, onglet 4)"))
       updateCheckboxInput(session, "compute_moran",
-        label = .tr("Indice de Moran / genes spatialement variables (onglet 1)"))
-      updateNumericInput(session, "n_hvg_moran", label = .tr("Nombre de genes (HVG)"))
+        label = .tr("Indice de Moran / gènes spatialement variables (onglet 1)"))
+      updateNumericInput(session, "n_hvg_moran", label = .tr("Nombre de gènes (HVG)"))
       updateCheckboxInput(session, "compute_enrichment",
         label = .tr("Enrichissement de voisinage (co-occurrence, base = clusters)"))
       updateNumericInput(session, "k_neighbors_enrich", label = .tr("Voisins spatiaux (k)"))
@@ -435,12 +435,12 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       if (!is.null(global_data$spatial_reference)) {
         div(class = "alert alert-success", style = "font-size:0.8rem;",
             bsicons::bs_icon("check-circle"),
-            sprintf(.tr(" Reference partagee disponible (%s cellules) \u2014 utilisable par RCTD/Label Transfer."),
+            sprintf(.tr(" R\u00e9f\u00e9rence partag\u00e9e disponible (%s cellules) \u2014 utilisable par RCTD/Label Transfer."),
                     format(global_data$spatial_reference$n_cells %||% 0, big.mark = ",")))
       } else {
         div(class = "alert alert-warning", style = "font-size:0.8rem;",
             bsicons::bs_icon("exclamation-triangle"),
-            .tr(" Aucune reference partagee (onglet Import > Spatial) \u2014 RCTD/Label Transfer seront ignores meme si selectionnes ; choisissez \"Sans reference (LDA)\" ou \"Aucune\"."))
+            .tr(" Aucune r\u00e9f\u00e9rence partag\u00e9e (onglet Import > Spatial) \u2014 RCTD/Label Transfer seront ignores m\u00eame si selectionnes ; choisissez \"Sans r\u00e9f\u00e9rence (LDA)\" ou \"Aucune\"."))
       }
     })
 
@@ -898,7 +898,7 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
           n_topics = input$n_topics, n_top_od = input$n_top_od,
           lt_npcs = input$lt_npcs, lt_norm_method = input$lt_norm_method, lt_ncells = input$lt_ncells
         )
-        write_mirai_log(log_file, "Deconvolution terminee.", 3, TOTAL_STEPS)
+        write_mirai_log(log_file, "Deconvolution terminée.", 3, TOTAL_STEPS)
         .launch_niche()
       } else if (identical(st, "error")) {
         .fail_stage(3, "Erreur pendant la deconvolution -- pipeline interrompu.")
@@ -1006,13 +1006,13 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
         row(.tr("2. Clustering"),
             if (!is.null(shared_rv$cluster_labels)) .t_fmt(.tr("{n} clusters"), n = length(unique(shared_rv$cluster_labels))) else .tr("Non calcule")),
         row(.tr("3. Deconvolution"),
-            if (!is.null(shared_rv$deconv_props)) sprintf(.tr("%d types cellulaires (%s)"), ncol(shared_rv$deconv_props) - 1, shared_rv$deconv_params$mode %||% "?") else .tr("Non calculee / ignoree")),
+            if (!is.null(shared_rv$deconv_props)) sprintf(.tr("%d types cellulaires (%s)"), ncol(shared_rv$deconv_props) - 1, shared_rv$deconv_params$mode %||% "?") else .tr("Non calculée / ignorée")),
         row(.tr("4. Niches"),
-            if (!is.null(shared_rv$niche_labels)) .t_fmt(.tr("{n} niches"), n = length(unique(shared_rv$niche_labels))) else .tr("Non calculees")),
+            if (!is.null(shared_rv$niche_labels)) .t_fmt(.tr("{n} niches"), n = length(unique(shared_rv$niche_labels))) else .tr("Non calculées")),
         row(.tr("5. UMAP"),
             if (!is.null(shared_rv$umap_df)) sprintf(.tr("%d points (sketch)"), nrow(shared_rv$umap_df)) else .tr("Non calcule / ignore")),
         row(.tr("6. Moran's I"),
-            if (!is.null(shared_rv$moran_results)) .t_fmt(.tr("{n} genes testes"), n = nrow(shared_rv$moran_results)) else .tr("Non calcule / ignore")),
+            if (!is.null(shared_rv$moran_results)) .t_fmt(.tr("{n} gènes testes"), n = nrow(shared_rv$moran_results)) else .tr("Non calcule / ignore")),
         row(.tr("7. Enrichissement"),
             if (!is.null(shared_rv$enrichment_result)) sprintf(.tr("%d niveaux (%d permutations)"), length(shared_rv$enrichment_result$levels), shared_rv$enrichment_result$n_perm) else .tr("Non calcule / ignore")),
         row(.tr("8. Hotspots (Gi*)"),

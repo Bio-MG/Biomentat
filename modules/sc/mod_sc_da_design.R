@@ -92,9 +92,15 @@ mod_sc_da_design_server <- function(id, global_data, shared_rv = NULL) {
     }
 
     da_state <- reactiveValues(result = NULL, object_fingerprint = NULL)
-    da_status_rv <- reactiveVal(.tr("En attente de validation du design..."))
+    # i18n-safe STATE : rv NULL tant qu'aucun statut métier n'a été écrit — le
+    # placeholder est rendu à l'affichage dans la langue COURANTE.
+    da_status_rv <- reactiveVal(NULL)
 
-    output$da_status <- renderText({ da_status_rv() })
+    output$da_status <- renderText({
+      global_data$language                # i18n : re-rendu au changement de langue
+      v <- da_status_rv()
+      if (is.null(v)) .tr("En attente de validation du design...") else v
+    })
 
     .check_fingerprint <- function() {
       req(global_data$sc_obj)

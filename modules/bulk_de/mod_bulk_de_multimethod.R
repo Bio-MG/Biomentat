@@ -153,7 +153,7 @@
     st <- multimethod_status_rv()
     if (is.null(st)) {
       div(class = "alert alert-info", style = "font-size:0.85em;",
-          .trl("Cliquez \"🔬 Comparer DESeq2 / edgeR / limma-voom\" dans le panneau Step 2."))
+          .trl("Cliquez \"🔬 Comparer DESeq2 / edgeR / limma-voom\" dans le panneau Étape 2."))
     } else {
       # Rebuild the sentence in the CURRENT language from language-neutral data
       div(class = "alert alert-success", style = "font-size:0.85em;",

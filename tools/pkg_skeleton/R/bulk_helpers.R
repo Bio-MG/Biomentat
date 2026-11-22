@@ -156,7 +156,19 @@ build_dds <- function(counts_matrix, metadata, design_formula = "~ condition",
 
   )
 
-  if (run_deseq) dds <- DESeq2::DESeq(dds, quiet = TRUE)
+  if (run_deseq) {
+    # FIX (audit GUI 2026-11-22, vérification V4) : sur les matrices éparses la
+    # méthode ratio par défaut de estimateSizeFactors échoue DÈS DESeq()
+    # ("every gene contains at least one zero") — même famille que le repli
+    # poscounts déjà posé dans mod_bulk_filter.R. On pré-estime les facteurs de
+    # taille ICI (repli poscounts si besoin) : DESeq() les détecte et saute
+    # sa propre estimation (comportement documenté DESeq2).
+    dds <- tryCatch(
+      DESeq2::estimateSizeFactors(dds),
+      error = function(e) DESeq2::estimateSizeFactors(dds, type = "poscounts")
+    )
+    dds <- DESeq2::DESeq(dds, quiet = TRUE)
+  }
 
   dds
 

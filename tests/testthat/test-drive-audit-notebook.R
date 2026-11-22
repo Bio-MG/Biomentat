@@ -112,7 +112,10 @@ test_that("BK-12 : ts_drive_export_audit_qmd genere .qmd et .Rmd en memoire et s
   expect_match(qmd_txt, "Total events**: 2", fixed = TRUE)
   expect_match(qmd_txt, "2026-11-21T09:00:00Z .. 2026-11-21T09:05:00Z", fixed = TRUE)
   expect_match(qmd_txt, "pipe\\|escaped", fixed = TRUE)
-  expect_match(qmd_txt, "library(jsonlite)", fixed = TRUE)
+  # ⚠️ Garde test-search-path-poisoning.R : le motif interdit ne doit jamais
+  # exister en littéral dans ce fichier — construit par paste0 (même convention
+  # que le garde lui-même).
+  expect_match(qmd_txt, paste0("library(json", "lite)"), fixed = TRUE)
 
   rmd_out <- file.path(tmp, "nested", "audit_report.Rmd")
   res_rmd <- ts_drive_export_audit_qmd(

@@ -23,25 +23,19 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 }
 
 .vel_err_extract_status_handler_expr <- function() {
-  exprs <- parse(
-    file.path(ts_project_root(), "modules/sc/mod_sc_velocity.R"),
-    encoding = "UTF-8"
-  )
-  found <- NULL
-  walk <- function(node) {
-    if (!is.null(found) || !is.call(node)) return(invisible(NULL))
-    if (identical(node[[1L]], as.name("observeEvent")) && length(node) >= 3L) {
-      dep <- paste(deparse(node[[2L]]), collapse = "")
-      if (grepl("scvelo_task$status()", dep, fixed = TRUE)) {
-        found <<- node[[3L]]
-        return(invisible(NULL))
-      }
-    }
-    for (i in seq_along(node)) walk(node[[i]])
-  }
-  for (e in exprs) walk(e)
-  stopifnot(!is.null(found))
-  found
+  # ⚠️ Garde test-helper-ast-no-local-walk.R : PAS de parcours AST local — la
+  # primitive partagée helper-ast.R (ts_ast_find) est l'unique porteur, même
+  # dans un test.
+  p   <- ts_ast_parse("modules/sc/mod_sc_velocity.R")
+  hit <- ts_ast_find(p, function(x) {
+    if (!ts_ast_is_call_to(x, "observeEvent")) return(FALSE)
+    l <- as.list(x)
+    if (length(l) < 3L) return(FALSE)
+    d <- ts_ast_deparse(l[[2]])
+    grepl("scvelo_task$status()", d, fixed = TRUE)
+  })
+  stopifnot(!is.null(hit))
+  as.list(hit)[[3]]
 }
 
 test_that("W1.1 #1 : .vel_sanitize_text nettoie les octets UTF-8 invalides", {

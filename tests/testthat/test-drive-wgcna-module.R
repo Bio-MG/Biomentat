@@ -81,7 +81,11 @@ suppressPackageStartupMessages(library(DT))      # renderDT, enregistré au boot
 # =============================================================================
 test_that("the two WGCNA stage buttons join the frozen tables, and the checks stay green", {
   buttons <- get0("TS_DRIVE_BUTTONS", envir = globalenv())
-  expect_length(buttons, 17L)
+  # 17 -> 19 (2026-11-22) : W1.1 #2 a joint les DEUX boutons velocity drive
+  # (sc-velocity-velocity_validate, sc-velocity-velocity_scvelo_run) aux tables
+  # gelées — même le setequal du test-drive-allowlist.R a été mis à jour ; ce
+  # compteur dur n'avait pas suivi.
+  expect_length(buttons, 19L)
   expect_true(all(c("bulk-wgcna-run_wgcna_power", "bulk-wgcna-run_wgcna_modules")
                   %in% buttons))
 

@@ -39,6 +39,21 @@
 
 # Charge les librairies et définit les options globales
 
+# --- 0. GARDE LOCALE (audit GUI 2026-11-22) ---
+# Git Bash exporte LC_CTYPE=C.UTF-8, un nom de locale inconnu de Windows : R
+# démarre alors en locale "C" (ASCII pur, l10n_info()$UTF-8 == FALSE) et toute
+# chaîne franchissant une frontière d'encodage natif (push server->client,
+# renderText, lecture shiny.i18n) est détruite (« RC)sumC) », littéraux
+# <U+00E9>, émojis tronqués) — symptômes capturés dans QC/gui_evidence_2026-11-22.
+# Sys.setlocale("LC_CTYPE", "") réinterroge la locale SYSTÈME (French_France.utf8
+# sous R 4.4 UCRT) et répare la session sans toucher au code appelant. Mesuré :
+# probe FALSE -> TRUE, roundtrip « Résumé — ✅ » intact (_tmp_locale_probe.R).
+if (.Platform$OS.type == "windows" && !isTRUE(l10n_info()$`UTF-8`)) {
+  tryCatch(Sys.setlocale("LC_CTYPE", ""), error = function(e) {
+    message("Locale guard : restauration LC_CTYPE impossible (", conditionMessage(e), ")")
+  })
+}
+
 # --- 1. MEMOIRE & OPTIONS ---
 
 options(future.globals.maxSize = 10000 * 1024^2)
@@ -608,6 +623,28 @@ my_theme <- bslib::bs_add_rules(my_theme, '
   }
   .card-header.bslib-navs-card-title > .nav {
     flex: 1 1 100%;
+  }
+  /* FIX UX (2026-11-22, audit DOM sur « Annotation Automatique (SingleR) ») :
+     bslib-component-css (`.bslib-card .card-header > .nav { flex: 1 1 0% }`)
+     charge APRÈS bootstrap et égale la spécificité (0,3,0) de la règle
+     P0-17 ci-dessus — le UL des pills est alors écrasé à ~1.6 px (mesuré) et
+     les onglets débordent en pile verticale hors du card, collés au bord
+     droit (« onglet caché », rect a.nav x=1525 w=156 h=88). On remonte à
+     (0,4,0) pour battre la règle rivale quel que soit l’ordre des feuilles. */
+  .bslib-card .card-header.bslib-navs-card-title > span:first-child {
+    flex: 0 0 100%;
+  }
+  .bslib-card .card-header.bslib-navs-card-title > .nav {
+    flex: 1 1 100%;
+  }
+  /* FIX V3d (2026-11-22, vérification fillable Z03) : la poignée de resize du
+     pane Bulk peut rester SANS géométrie inline (bslib JS ne l’applique pas
+     pour ce pane — 0×0 mesuré, spatial/SC ok) → invisible et non draggable.
+     Fallback CSS : top 0 + height 100% ; les poignées déjà dimensionnées
+     inline (spatial/SC) ne sont pas affectées (l’inline gagne sur le CSS). */
+  .bslib-sidebar-layout > .bslib-sidebar-resize-handle {
+    top: 0;
+    height: 100%;
   }
 ')
 

@@ -428,7 +428,14 @@ ui_static <- page_navbar(
   # Garde-fou proposal : AUCUN id de contrôle renommé → allowlist drive
   # + pins intacts (l'option B, split V1.x, reste la cure structurelle
   # longue et TOUCHE les ids).
-  fillable = "tab_spatial",
+  #
+  # DEMANDE OPÉRATEUR (2026-11-22, « spread les 2 choses ») : étendre le
+  # fill aux 3 workflows — l'opérateur valide le comportement Spatial
+  # (sidebar scrollable indépendamment + side-head sticky + poignée de
+  # resize utile) et demande le même modèle sur Single-Cell et Bulk. Les
+  # trois modules retournent layout_sidebar en enfant UNIQUE de leur
+  # nav_panel (BULK-7 : jamais de tagList) → la chaîne fill est respectée.
+  fillable = c("tab_spatial", "tab_sc", "tab_bulk"),
 
   title = "Biomentat v1.0 - Multi-Omics Platform",
   
@@ -647,17 +654,18 @@ ui_static <- page_navbar(
     # Bulk/SC consomment la valeur — mécanique par sélecteurs CSS sur les
     # .accordion-item[data-value] (AUCUN id/value changé — garde drive).
     div(class = "small text-muted", style = "font-size:0.75rem;",
-        .tr_plain("Affichage du workflow latéral :")),
-    # .tr_plain (PATTERNS UI glob.R) et PAS i18n$t : avec use_js() actif,
-    # $t() rend un tag <span data-key> — c(tag, tag) ne peut PAS alimenter
-    # choiceNames (MEASURÉ boot33 : « choiceNames and choiceValues must have
-    # the same length »). Le pattern setNames(choices, .tr_plain()) est
-    # celui des radios de mod_spatial/mod_bulk.
+        i18n$t("Affichage du workflow latéral :")),
+    # FIX i18n (2026-11-22, relevé opérateur « i18n not trad ») : ces 3 chaînes
+    # passaient par .tr_plain (span STRIPPÉ) → invisibles au shim JS update_lang
+    # et jamais traduites en EN (spans sans data-key, mesuré DOM). En contexte
+    # HTML le pattern correct pour des radios est choiceNames=list(tag,...) —
+    # qui ACCEPTE des tags (la contrainte boot33 « c(tag,tag) » ne visait que
+    # le canal choices=setNames()). Les EN existent déjà dans translation.json.
     radioButtons("workflow_display_mode", NULL,
-                 choices = stats::setNames(
-                   c("specialise", "complet"),
-                   c(.tr_plain("Spécialisé — une seule étape à la fois"),
-                     .tr_plain("Complet — toutes les étapes empilées"))),
+                 choiceNames = list(
+                   i18n$t("Spécialisé — une seule étape à la fois"),
+                   i18n$t("Complet — toutes les étapes empilées")),
+                 choiceValues = c("specialise", "complet"),
                  selected = "specialise"),
 
     hr(),
@@ -726,9 +734,9 @@ ui_static <- page_navbar(
         " ",
         i18n$t("elle est déclenchée uniquement par ce bouton, jamais automatiquement. Pour le Spatial,"),
         " ",
-        i18n$t("seul le \"sketch\" (echantillon RAM) est garanti portable : les donnees BPCells sur"),
+        i18n$t("seul le \"sketch\" (échantillon RAM) est garanti portable : les données BPCells sur"),
         " ",
-        i18n$t("disque doivent rester disponibles au meme chemin pour relancer clustering/deconvolution.")),
+        i18n$t("disque doivent rester disponibles au même chemin pour relancer clustering/deconvolution.")),
 
     # P3-ÉTAPE 1 : « Purger » = l'INVERSE du « Charger » (arbitrage
     # opérateur 2026-11-15) — efface les jeux + résultats dérivés de la
@@ -1624,11 +1632,11 @@ server <- function(input, output, session) {
                          
                          if (!disk_ok) paste0(" ", .tr("— disque introuvable")) else "",
                          
-                         if (n_ds > 1) paste0(" ", .t_fmt(.tr("— {n} echantillons charges"), n = n_ds)) else "",
+                         if (n_ds > 1) paste0(" ", .t_fmt(.tr("— {n} échantillons charges"), n = n_ds)) else "",
                          
                          if (!is.null(global_data$spatial_reference)) {
                            
-                           paste0(" ", .t_fmt(.tr("— reference partagee : {c} cellules"), c = format(global_data$spatial_reference$n_cells %||% 0, big.mark = ",")))
+                           paste0(" ", .t_fmt(.tr("— référence partagée : {c} cellules"), c = format(global_data$spatial_reference$n_cells %||% 0, big.mark = ",")))
                            
                          } else "")
         
@@ -1882,7 +1890,7 @@ server <- function(input, output, session) {
       
       global_data$spatial_datasets <- snapshot$spatial_datasets %||%
         (if (!is.null(snapshot$spatial_obj)) {
-          stats::setNames(list(snapshot$spatial_obj), snapshot$spatial_obj$project %||% "Echantillon_1")
+          stats::setNames(list(snapshot$spatial_obj), snapshot$spatial_obj$project %||% "Échantillon_1")
         } else list())
       
       global_data$active_spatial_dataset <- snapshot$active_spatial_dataset %||%
@@ -2031,7 +2039,7 @@ server <- function(input, output, session) {
           
           showNotification(
             
-            paste0("⚠️ Reference scRNA-seq partagee : artefact introuvable sur ce disque — ",
+            paste0("⚠️ Référence scRNA-seq partagee : artefact introuvable sur ce disque — ",
                    
                    "re-uploadez-la depuis l'onglet Import > Spatial avant de relancer RCTD/",
                    
@@ -2093,7 +2101,7 @@ server <- function(input, output, session) {
           
           tags$li(.tr_h("RNA Bulk: Matrices de counts (CSV/TSV) + Métadonnées optionnelles")),
           
-          tags$li(.tr_h("Spatial: Visium / Xenium / CosMx — converti automatiquement en matrice BPCells sur disque + echantillon RAM (\"sketch\"). Importez plusieurs echantillons pour activer l'onglet \"5. Multi-echantillons\" (comparaison/ integration Harmony conjointe)."))
+          tags$li(.tr_h("Spatial: Visium / Xenium / CosMx — converti automatiquement en matrice BPCells sur disque + echantillon RAM (\"sketch\"). Importez plusieurs echantillons pour activer l'onglet \"5. Multi-échantillons\" (comparaison/ integration Harmony conjointe)."))
           
         ),
         
@@ -2103,7 +2111,7 @@ server <- function(input, output, session) {
                  
                  bsicons::bs_icon("lightbulb"), 
                  
-                 .tr_h("Astuce: Pour Harmony (correction de batch), importez 2 échantillons ou plus dans l'onglet Single-Cell (ou Spatial, voir \"Multi-echantillons\").")
+                 .tr_h("Astuce: Pour Harmony (correction de batch), importez 2 échantillons ou plus dans l'onglet Single-Cell (ou Spatial, voir \"Multi-échantillons\").")
                  
         ),
         
@@ -2165,7 +2173,7 @@ server <- function(input, output, session) {
           
           tags$li(.tr_h("Bulk RNA: Analyse différentielle avec DESeq2/edgeR")),
           
-          tags$li(.tr_h("Spatial: Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation spatiale → Multi-echantillons (integration Harmony conjointe, asynchrone) → Export (paquet .zip / script R reproductible)"))
+          tags$li(.tr_h("Spatial: Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation spatiale → Multi-échantillons (integration Harmony conjointe, asynchrone) → Export (paquet .zip / script R reproductible)"))
           
         ),
         

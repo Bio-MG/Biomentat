@@ -177,13 +177,13 @@ mod_sc_pseudobulk_ui <- function(id) {
   tagList(
     div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #8E44AD;",
         bsicons::bs_icon("exclamation-diamond"),
-        i18n$t(" Test au niveau ECHANTILLON (pseudobulk), pas au niveau cellule -- evite la pseudo-replication de FindAllMarkers/FindMarkers pour comparer des CONDITIONS (traite/controle, etc.). Necessite au moins 2 echantillons biologiques par condition.")),
+        i18n$t(" Test au niveau ECHANTILLON (pseudobulk), pas au niveau cellule -- evite la pseudo-replication de FindAllMarkers/FindMarkers pour comparer des CONDITIONS (traite/contrôle, etc.). Necessite au moins 2 échantillons biologiques par condition.")),
 
     h6(i18n$t("1. Agregation Pseudobulk"), style = "font-weight:bold;"),
-    selectInput(ns("sample_col"), i18n$t("Colonne 'echantillon' (replicat biologique)"), choices = NULL),
+    selectInput(ns("sample_col"), i18n$t("Colonne 'échantillon' (replicat biologique)"), choices = NULL),
     selectInput(ns("condition_col"), i18n$t("Colonne 'condition' a comparer"), choices = NULL),
     selectInput(ns("split_by"), i18n$t("Regrouper aussi par (optionnel, ex: type cellulaire)"),
-                choices = c("Aucun (pseudobulk par echantillon entier)" = "none")),
+                choices = c("Aucun (pseudobulk par échantillon entier)" = "none")),
     numericInput(ns("min_cells_per_group"), i18n$t("Min cellules par groupe"), value = 10, min = 1, step = 1),
     actionButton(ns("run_aggregate"), i18n$t("Agreger en pseudobulk"),
                  class = "btn-primary w-100", icon = icon("layer-group")),
@@ -235,7 +235,7 @@ mod_sc_pseudobulk_output_ui <- function(id) {
     navset_tab(
       nav_panel(i18n$t("QC Pseudobulk (PCA)"),
                 div(class = "small text-muted mt-2",
-                    i18n$t("Chaque point = un pseudo-echantillon (cellules sommees par echantillon). Verifiez qu'il n'y a pas d'outlier/mauvais etiquetage avant d'interpreter le contraste.")),
+                    i18n$t("Chaque point = un pseudo-échantillon (cellules sommees par échantillon). Vérifiez qu'il n'y a pas d'outlier/mauvais etiquetage avant d'interpreter le contraste.")),
                 verbatimTextOutput(ns("pb_design_recap")),
                 plotOutput(ns("pb_pca_plot"), height = "450px"),
                 DTOutput(ns("pb_summary_table"))),
@@ -260,7 +260,7 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
     }
 
     observeEvent(global_data$language, {
-      updateSelectInput(session, "sample_col", label = .tr("Colonne 'echantillon' (replicat biologique)"))
+      updateSelectInput(session, "sample_col", label = .tr("Colonne 'échantillon' (replicat biologique)"))
       updateSelectInput(session, "condition_col", label = .tr("Colonne 'condition' a comparer"))
       updateSelectInput(session, "split_by", label = .tr("Regrouper aussi par (optionnel, ex: type cellulaire)"))
       updateNumericInput(session, "min_cells_per_group", label = .tr("Min cellules par groupe"))
@@ -292,7 +292,7 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
       cond_default <- setdiff(cat_cols, "orig.ident")
       updateSelectInput(session, "condition_col", choices = cat_cols,
                         selected = if (length(cond_default)) cond_default[1] else cat_cols[1])
-      split_choices <- c(setNames("none", .tr("Aucun (pseudobulk par echantillon entier)")),
+      split_choices <- c(setNames("none", .tr("Aucun (pseudobulk par échantillon entier)")),
                         setNames(cat_cols, cat_cols))
       updateSelectInput(session, "split_by", choices = split_choices, selected = "none")
     }, ignoreInit = TRUE)
@@ -337,7 +337,7 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
 
         n_dropped <- if (!is.null(res$dropped)) nrow(res$dropped) else 0L
         agg_status_rv(sprintf(
-          "OK -- %d pseudo-echantillon(s) (%d gene(s)), %d groupe(s) trop petit(s) exclu(s) (< %s cellules).",
+          "OK -- %d pseudo-echantillon(s) (%d gène(s)), %d groupe(s) trop petit(s) exclu(s) (< %s cellules).",
           ncol(pb$counts), nrow(pb$counts), n_dropped, input$min_cells_per_group %||% 10L))
         showNotification(sprintf("Pseudobulk OK : %d pseudo-echantillons.", ncol(pb$counts)),
                          type = "message", duration = 5)

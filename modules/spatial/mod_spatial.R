@@ -77,7 +77,7 @@
 # (ready/degraded/inactive) + diagnostics.
 #
 # v6 (Phase 4 — "Working with multiple slices"): 5th top-level tab,
-# "Multi-echantillons" (mod_spatial_multi.R), active-dataset switcher.
+# "Multi-échantillons" (mod_spatial_multi.R), active-dataset switcher.
 #
 # v6.1 (audit step 3.9b — multi-sample bugfix): `ns <- session$ns` fix.
 #
@@ -280,7 +280,7 @@ mod_spatial_ui <- function(id) {
                 value = "results_viz",
                 mod_spatial_viz_ui(ns("viz"))),
 
-      nav_panel(i18n$t("5. Multi-echantillons"), icon = icon("layer-group"),
+      nav_panel(i18n$t("5. Multi-échantillons"), icon = icon("layer-group"),
                 value = "results_multi",
                 mod_spatial_multi_ui(ns("multi"))),
 
@@ -424,7 +424,7 @@ mod_spatial_server <- function(id, global_data) {
       input$btn_reset_daemons
       status <- tryCatch(spatial_daemon_status(), error = function(e) "inactive")
       label <- switch(status,
-                      "ready"    = .tr("\u2705 daemons actifs (verifies)"),
+                      "ready"    = .tr("\u2705 daemons actifs (v\u00e9rifi\u00e9s)"),
                       "degraded" = .tr("\u26a0\ufe0f daemons actifs -- preload degrade"),
                       .tr("\u26aa daemons inactifs")
       )
@@ -448,13 +448,13 @@ mod_spatial_server <- function(id, global_data) {
       if (isTRUE(ok)) {
         st <- tryCatch(spatial_daemon_status(), error = function(e) "inactive")
         msg <- if (identical(st, "ready")) {
-          .tr("\U0001F504 Daemons mirai reinitialises et verifies — relancez votre tache.")
+          .tr("\U0001f504 Daemons mirai r\u00e9initialis\u00e9s et v\u00e9rifi\u00e9s \u2014 relancez votre tache.")
         } else {
-          .tr("\U0001F504 Daemons mirai reinitialises, mais la verification reste en echec — voir le diagnostic.")
+          .tr("\U0001f504 Daemons mirai r\u00e9initialis\u00e9s, mais la verification reste en \u00e9chec \u2014 voir le diagnostic.")
         }
         showNotification(msg, type = if (identical(st, "ready")) "message" else "warning", duration = 6)
       } else {
-        showNotification(.tr("Echec de la reinitialisation des daemons — voir la console R."),
+        showNotification(.tr("Échec de la reinitialisation des daemons — voir la console R."),
                          type = "error", duration = 8)
       }
     })
@@ -516,14 +516,14 @@ mod_spatial_server <- function(id, global_data) {
           .restore_shared_rv(cached)
           if (!is.null(old_name)) {
             showNotification(
-              .t_fmt(.tr("Echantillon actif : {name} (resultats precedents restaures)."), name = new_name),
+              .t_fmt(.tr("Échantillon actif : {name} (résultats précédents restaurés)."), name = new_name),
               type = "message", duration = 4)
           }
         } else {
           .clear_shared_rv()
           if (!is.null(old_name)) {
             showNotification(
-              .t_fmt(.tr("Echantillon actif : {name}"), name = new_name),
+              .t_fmt(.tr("Échantillon actif : {name}"), name = new_name),
               type = "message", duration = 4)
           }
         }
@@ -541,7 +541,7 @@ mod_spatial_server <- function(id, global_data) {
       cache[[sig$name]] <- NULL
       .set_cache(cache)
       showNotification(
-        .t_fmt(.tr("Echantillon '{name}' re-importe (deja actif) : resultats precedents reinitialises."),
+        .t_fmt(.tr("Échantillon '{name}' ré-importé (déjà actif) : résultats précédents réinitialisés."),
                name = sig$name),
         type = "message", duration = 5)
     }, ignoreInit = TRUE)
@@ -575,7 +575,7 @@ mod_spatial_server <- function(id, global_data) {
       panel_cluster  = "2. Clustering (BANKSY-lite)",
       panel_deconv   = "3. Deconvolution",
       panel_viz      = "4. Visualisation",
-      panel_multi    = "5. Multi-echantillons",
+      panel_multi    = "5. Multi-échantillons",
       panel_niche    = "6. Niches spatiales — micro-environnements cellulaires",
       panel_export   = "7. Export & Rapport"
     )
@@ -589,7 +589,7 @@ mod_spatial_server <- function(id, global_data) {
         return("Importez d'abord un echantillon spatial.")
       }
       if (identical(panel, "panel_multi") && length(global_data$spatial_datasets) < 2L) {
-        return("Importez au moins 2 echantillons spatiaux (onglet Import > Spatial).")
+        return("Importez au moins 2 échantillons spatiaux (onglet Import > Spatial).")
       }
       NULL
     }

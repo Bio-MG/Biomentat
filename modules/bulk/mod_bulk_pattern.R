@@ -179,7 +179,7 @@ run_pattern_profile <- function(vst_mat, metadata, de_result, group_column,
   # clustered almost nothing.
   if (length(genes) < 10L) {
     .bulk_pattern_stop("no_gene_sets",
-                       sprintf("bulk pattern: only %d gene(s) pass the frozen thresholds; widen the source or the thresholds.",
+                       sprintf("bulk pattern: only %d gène(s) pass the frozen thresholds; widen the source or the thresholds.",
                                length(genes)))
   }
 

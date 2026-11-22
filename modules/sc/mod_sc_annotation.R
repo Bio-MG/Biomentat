@@ -197,12 +197,12 @@ mod_sc_annotation_ui <- function(id) {
         i18n$t("Utilise SingleR pour annoter automatiquement les clusters."),
         tags$br(),
         tags$small(i18n$t("IDs Ensembl (ENSG…) convertis automatiquement si org.Hs.eg.db disponible."))),
-    selectInput(ns("ref_singler"),i18n$t("Reference Cellulaire"),
+    selectInput(ns("ref_singler"),i18n$t("Référence Cellulaire"),
       choices=setNames(c("hpca","blueprint","immgen","dice"),
                        c(.tr_plain("Human Primary Cell Atlas"), .tr_plain("Blueprint Encode"), .tr_plain("ImmGen (Mouse)"), .tr_plain("DICE Immune")))),
     radioButtons(ns("label_level"),i18n$t("Niveau de Detail"),
       choices=setNames(c("main","fine"),
-                       c(.tr_plain("Main (General)"), .tr_plain("Fine (Specifique)"))), inline=TRUE),
+                       c(.tr_plain("Main (General)"), .tr_plain("Fine (Spécifique)"))), inline=TRUE),
     actionButton(ns("run_annot"),i18n$t("Annoter avec SingleR"),
                  class="btn-warning w-100",icon=icon("user-tag")),
     hr(),
@@ -210,7 +210,7 @@ mod_sc_annotation_ui <- function(id) {
     # Référence = objet SC annoté DÉJÀ PRÉSENT dans la session (registre
     # sc_datasets) — pas d'Azimuth, pas de téléchargement (non-goals fiche).
     div(class="small text-muted", style="border-left:3px solid #3498db;padding-left:6px;",
-        tags$b(i18n$t("Reference mapping (MapQuery)")), tags$br(),
+        tags$b(i18n$t("Référence mapping (MapQuery)")), tags$br(),
         i18n$t("Transfère les étiquettes d'un objet annoté de la session vers l'objet actif (FindTransferAnchors + MapQuery, voie native Seurat 5).")),
     selectInput(ns("mq_ref"), i18n$t("Objet de référence (session)"), choices = character(0)),
     selectInput(ns("mq_label"), i18n$t("Colonne d'étiquettes"), choices = character(0)),
@@ -248,7 +248,7 @@ mod_sc_annotation_output_ui <- function(id) {
       )
     ),
     nav_panel(
-      title = i18n$t("Reference mapping (MapQuery)"),
+      title = i18n$t("Référence mapping (MapQuery)"),
       value = "tab_mapquery",
       layout_columns(
         col_widths = c(6, 6),
@@ -274,7 +274,7 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
 
     observeEvent(global_data$language, {
       updateSelectInput(session, "ref_singler",
-        label = .tr("Reference Cellulaire"),
+        label = .tr("Référence Cellulaire"),
         choices = setNames(
           c("hpca", "blueprint", "immgen", "dice"),
           c(.tr("Human Primary Cell Atlas"), .tr("Blueprint Encode"), .tr("ImmGen (Mouse)"), .tr("DICE Immune"))
@@ -283,7 +283,7 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
       )
       updateRadioButtons(session, "label_level",
         label = .tr("Niveau de Detail"),
-        choices = setNames(c("main", "fine"), c(.tr("Main (General)"), .tr("Fine (Specifique)"))),
+        choices = setNames(c("main", "fine"), c(.tr("Main (General)"), .tr("Fine (Spécifique)"))),
         selected = isolate(input$label_level) %||% "main"
       )
       updateActionButton(session, "run_annot", label = .tr("Annoter avec SingleR"))
@@ -388,7 +388,7 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
         return()
       }
       p <- shiny::Progress$new(); on.exit(p$close())
-      p$set(message = .tr("Reference mapping (MapQuery)..."), value = 0.1)
+      p$set(message = .tr("Référence mapping (MapQuery)..."), value = 0.1)
       tryCatch({
         p$set(0.4, .tr("Ancres + transfert..."))
         res <- withCallingHandlers(

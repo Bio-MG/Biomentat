@@ -28,9 +28,12 @@ mod_sc_communication_perturbation_ui <- function(id) {
       column(4, selectizeInput(ns("pert_value"), i18n$t("Valeur(s) exacte(s) (issues de la table)"),
                                choices = character(0), multiple = TRUE, width = "100%")),
       column(4,
+             # choiceNames spans : bascule live par le shim JS ; le sélecteur
+             # pert_target (choices setNames) est re-poussé côté serveur à
+             # chaque changement de langue (observer plus bas).
              radioButtons(ns("pert_mode"), i18n$t("Mode"),
-                          choices = setNames(c("remove", "attenuate"),
-                                             c(.tr_plain("Suppression"), .tr_plain("Atténuation"))),
+                          choiceNames = list(i18n$t("Suppression"), i18n$t("Atténuation")),
+                          choiceValues = c("remove", "attenuate"),
                           selected = "remove", inline = TRUE, width = "100%"))),
     fluidRow(
       column(4, conditionalPanel(
@@ -76,6 +79,20 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
                           label = conditionMessage(e), size = 5, colour = "red") +
         ggplot2::theme_void()
     }
+
+    # i18n : re-push des LIBELLÉS du sélecteur de cible à chaque changement de
+    # langue (valeurs stables, sélection courante conservée — un selected NULL
+    # déclencherait le choix 1er-option du wrapper global updateSelectInput).
+    # Le radio pert_mode, lui, bascule via le shim JS (choiceNames = spans).
+    observeEvent(global_data$language, {
+      updateSelectInput(session, "pert_target", selected = input$pert_target,
+                        choices = setNames(c(communication_perturbation_targets(), "pathway", "population"),
+                                           c(.tr("Ligand"), .tr("Récepteur"),
+                                             .tr("Interaction (ligand -> récepteur)"),
+                                             .tr("Population sender"), .tr("Population receiver"),
+                                             .tr("Voie de signalisation"),
+                                             .tr("Population cellulaire (sender + receiver)"))))
+    }, ignoreInit = TRUE)
     pert_ctx <- reactiveVal(NULL)
     observeEvent(pert_ctx(), {
       cur <- comm_state$ctx_results %||% list()

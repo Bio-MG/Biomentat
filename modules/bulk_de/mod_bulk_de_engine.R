@@ -122,7 +122,16 @@
     eng <- available_engines()
     .trl <- function(key) { tr <- global_data$i18n; if (is.null(tr)) return(key)
                             tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key) }
-    validate(need(length(eng) > 0, .trl("Aucun moteur DE disponible (installez DESeq2, edgeR ou limma).")))
+    # FIX (audit GUI 2026-11-22, captures B08-B15) : validate(need(...)) TUAIT
+    # l'observer au premier passage quand l'init différée [F2] n'avait pas
+    # encore attaché edgeR/limma (les modules sont créés avant l'attachement
+    # des paquets d'analyse) — le sélecteur restait bloqué sur DESeq2 pour
+    # toute la session, car seule la variable de langue peut re-déclencher cet
+    # observer. On re-sonde au cycle suivant au lieu d'abandonner.
+    if (length(eng) == 0) {
+      invalidateLater(1000, session)
+      return()
+    }
     updateSelectInput(session, "de_engine", choices = eng, selected = eng[1])
   })
 
@@ -186,8 +195,34 @@
     }
 
     updateSelectInput(session, "condition_col", choices = cat_cols)
-    updateSelectizeInput(session, "covariates",  choices = cat_cols, server = TRUE)
+    # FIX (audit GUI 2026-11-22, captures B08-B09) : la variable de condition
+    # ne peut jamais être sa propre covariable — exclure des choix + purger la
+    # sélection au chargement d'un dataset. Le purge AU CHANGEMENT de condition
+    # est géré par l'observer séparé ci-dessous (V3c) : le re-push des choix de
+    # condition_col DANS cet observer réinitialisait la sélection UI à chaque
+    # switch (snap-back < 400 ms mesuré par le driver, W01) — d'où la scission.
+    covar_cols <- setdiff(cat_cols, input$condition_col)
+    covar_selected <- setdiff(input$covariates %||% character(0), input$condition_col)
+    updateSelectizeInput(session, "covariates",  choices = covar_cols,
+                         selected = covar_selected, server = TRUE)
     updateSelectizeInput(session, "heatmap_annot", choices = cat_cols, server = FALSE)
+  }, ignoreNULL = TRUE)
+
+  # FIX V3c (vérification driver, W01) : purge des covariables AU CHANGEMENT de
+  # condition_col — sans re-pusher les choix de condition_col (sinon cascade
+  # snap-back). Corrige aussi le piège initial : au premier push bulk_obj,
+  # input$condition_col n'est pas encore résolu (websocket) et setdiff(…, NULL)
+  # laissait passer 'condition' ; dès sa résolution, cet observer re-purge.
+  observeEvent(input$condition_col, {
+    meta <- global_data$bulk_obj$metadata
+    cat_cols <- if (is.null(meta) || !ncol(meta)) character(0) else {
+      cc <- names(meta)[vapply(meta, function(x) is.character(x) || is.factor(x), logical(1))]
+      if (length(cc) == 0) names(meta) else cc
+    }
+    covar_cols <- setdiff(cat_cols, input$condition_col)
+    covar_selected <- setdiff(input$covariates %||% character(0), input$condition_col)
+    updateSelectizeInput(session, "covariates",  choices = covar_cols,
+                         selected = covar_selected, server = TRUE)
   }, ignoreNULL = TRUE)
 
   # ── Update group_ref/group_target when condition_col changes ────────────

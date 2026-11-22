@@ -87,15 +87,15 @@ mod_sc_velocity_ui <- function(id) {
       h6(i18n$t("Matrice spliced (MTX)"), style = "font-weight:bold;"),
       fileInput(ns("velocity_mtx_spliced"), i18n$t("Fichier .mtx (spliced)"), accept = c(".mtx", ".gz"), width = "100%"),
       fileInput(ns("velocity_mtx_spliced_barcodes"), i18n$t("Barcodes spliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
-      fileInput(ns("velocity_mtx_spliced_features"), i18n$t("Features/genes spliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
+      fileInput(ns("velocity_mtx_spliced_features"), i18n$t("Features/gènes spliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
       h6(i18n$t("Matrice unspliced (MTX)"), style = "font-weight:bold;"),
       fileInput(ns("velocity_mtx_unspliced"), i18n$t("Fichier .mtx (unspliced)"), accept = c(".mtx", ".gz"), width = "100%"),
       fileInput(ns("velocity_mtx_unspliced_barcodes"), i18n$t("Barcodes unspliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
-      fileInput(ns("velocity_mtx_unspliced_features"), i18n$t("Features/genes unspliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
+      fileInput(ns("velocity_mtx_unspliced_features"), i18n$t("Features/gènes unspliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
       h6(i18n$t("Matrice ambiguous (optionnel)"), style = "font-weight:bold;"),
       fileInput(ns("velocity_mtx_ambiguous"), i18n$t("Fichier .mtx (ambiguous)"), accept = c(".mtx", ".gz"), width = "100%"),
       fileInput(ns("velocity_mtx_ambiguous_barcodes"), i18n$t("Barcodes ambiguous"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
-      fileInput(ns("velocity_mtx_ambiguous_features"), i18n$t("Features/genes ambiguous"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
+      fileInput(ns("velocity_mtx_ambiguous_features"), i18n$t("Features/gènes ambiguous"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
       numericInput(ns("velocity_feature_column"),
                     i18n$t("Colonne d'identifiants dans features.tsv"),
                     value = 1, min = 1, step = 1, width = "100%"),
@@ -111,8 +111,8 @@ mod_sc_velocity_ui <- function(id) {
       i18n$t("Orientation des matrices"),
       choices = setNames(c("auto_strict", "genes_x_cells", "cells_x_genes"),
         c(.tr_plain("Détection automatique stricte"),
-          .tr_plain("Genes x cellules"),
-          .tr_plain("Cellules x genes"))),
+          .tr_plain("Gènes x cellules"),
+          .tr_plain("Cellules x gènes"))),
       selected = "auto_strict"
     ),
     checkboxInput(
@@ -132,7 +132,7 @@ mod_sc_velocity_ui <- function(id) {
     ),
     div(
       class = "small text-muted",
-      i18n$t("Les corrections d'identifiants sont desactivees par defaut. "),
+      i18n$t("Les corrections d'identifiants sont desactivees par défaut. "),
       " ",
       i18n$t("Une collision bloque la validation.")
     ),
@@ -185,9 +185,9 @@ mod_sc_velocity_ui <- function(id) {
       div(class = "d-grid gap-2",
           downloadButton(ns("dl_velocity_provenance"), i18n$t("Exporter provenance (CSV)"), class = "btn-sm btn-info w-100"),
           downloadButton(ns("dl_velocity_summary"), i18n$t("Exporter resume validation (CSV)"), class = "btn-sm btn-info w-100"),
-          downloadButton(ns("dl_velocity_mapping"), i18n$t("Exporter alignement cellules/genes (CSV)"), class = "btn-sm btn-info w-100"),
+          downloadButton(ns("dl_velocity_mapping"), i18n$t("Exporter alignement cellules/gènes (CSV)"), class = "btn-sm btn-info w-100"),
           downloadButton(ns("dl_velocity_cell_vectors"), i18n$t("Exporter vecteurs par cellule (CSV)"), class = "btn-sm btn-info w-100"),
-          downloadButton(ns("dl_velocity_result_rds"), i18n$t("Exporter resultat valide (RDS)"), class = "btn-sm btn-info w-100")))
+          downloadButton(ns("dl_velocity_result_rds"), i18n$t("Exporter résultat valide (RDS)"), class = "btn-sm btn-info w-100")))
   )
 }
 
@@ -212,7 +212,7 @@ mod_sc_velocity_output_ui <- function(id) {
     # Pastille ouvrant le tiroir (motif 2L CCC : dans l'en-tête de carte) :
     card_header(
       div(class = "d-flex justify-content-between align-items-center gap-2",
-          tags$span(i18n$t("RNA Velocity — Phase portrait & vecteurs pre-calcules")),
+          tags$span(i18n$t("RNA Velocity — Phase portrait & vecteurs pre-calculés")),
           tags$button(type = "button",
                       class = "btn btn-sm btn-outline-secondary flex-shrink-0",
                       `data-bs-toggle` = "offcanvas",
@@ -433,7 +433,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         label = .tr("Orientation des matrices"),
         choices = setNames(
           c("auto_strict", "genes_x_cells", "cells_x_genes"),
-          c(.tr("Détection automatique stricte"), .tr("Genes x cellules"), .tr("Cellules x genes"))
+          c(.tr("Détection automatique stricte"), .tr("Gènes x cellules"), .tr("Cellules x gènes"))
         ),
         selected = isolate(input$velocity_orientation) %||% "auto_strict"
       )
@@ -444,13 +444,22 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       updateSelectizeInput(session, "velocity_gene", label = .tr("Gene pour phase portrait"), server = TRUE)
       updateSelectInput(session, "velocity_reduction", label = .tr("Reduction pour vecteurs"))
     }, ignoreInit = TRUE)
-    velocity_status_rv <- reactiveVal(.tr("En attente d'import velocity..."))
+    # i18n-safe STATE : rv NULL tant qu'aucun statut métier n'a été écrit — le
+    # placeholder est rendu à l'affichage dans la langue COURANTE (le statut
+    # est consommé par 3 sorties : status, miroir log, résumé du tiroir).
+    velocity_status_rv <- reactiveVal(NULL)
 
-    output$velocity_status <- renderText({ velocity_status_rv() })
+    output$velocity_status <- renderText({
+      global_data$language                # i18n : re-rendu au changement de langue
+      v <- velocity_status_rv()
+      if (is.null(v)) .tr("En attente d'import velocity...") else v
+    })
 
     # Journal borne (2026-11-17) : 50 lignes max, horodatage local. Un seul
     # observeEvent sur le statut capture TOUTES les transitions de validation
-    # et d'opt-in sans toucher aux 8 sites d'ecriture existants.
+    # et d'opt-in sans toucher aux 8 sites d'ecriture existants. Le
+    # placeholder de démarrage est journalisé UNE FOIS à l'init (langue de
+    # boot) ; ignoreNULL évite une ligne vide au premier flush (rv NULL).
     velocity_log_rv <- reactiveVal(character(0))
     .velocity_log <- function(...) {
       ligne <- sprintf("[%s] %s", format(Sys.time(), "%H:%M:%S"),
@@ -458,9 +467,15 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       velocity_log_rv(utils::tail(c(velocity_log_rv(), ligne), 50L))
       invisible(NULL)
     }
+    # Ligne de démarrage du journal : l'observeEvent d'origine
+    # (ignoreInit=FALSE, rv pré-remplie) la journalisait à l'init ; la rv est
+    # NULL dans le motif i18n-safe, donc journalisation EXPLICITE une fois à
+    # l'init — isolate obligatoire : .velocity_log lit velocity_log_rv(),
+    # interdit hors consommateur réactif (crash mod_sc_server mesuré).
+    isolate(.velocity_log(.tr("En attente d'import velocity...")))
     observeEvent(velocity_status_rv(), {
       .velocity_log(velocity_status_rv())
-    }, ignoreInit = FALSE)
+    }, ignoreNULL = TRUE)
     output$velocity_log <- renderText({ .vel_sanitize_text(paste(velocity_log_rv(), collapse = "\n")) })
 
     # ── CCC_NAV_DRAWER vague B jalon J3 (2026-11-12) : tiroir « Navigation » ──
@@ -483,7 +498,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       li <- function(n, lab) tags$li(tags$strong(n), " ", lab)
       vec_ok <- !is.null(velocity_state$umap_vectors)
       tags$ul(class = "list-unstyled mb-0",
-              tags$li(velocity_status_rv()),
+              tags$li(velocity_status_rv() %||% .tr("En attente d'import velocity...")),
               li(if (vec_ok) "\u2713" else "\u2014", .tr("Vecteurs UMAP")))
     })
 
@@ -611,7 +626,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       # Lane 3b : l'état publié pour le snapshot est périmé avec l'objet.
       shared_rv$velocity_panel_state <- NULL
 
-      reset_msg <- .tr("Objet Seurat modifie : reimportez et validez les donnees velocity.")
+      reset_msg <- .tr("Objet Seurat modifie : réimportez et validez les données velocity.")
       velocity_state$status_msg <- reset_msg
       velocity_status_rv(reset_msg)
 
@@ -766,7 +781,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       default_gene <- .velocity_phase_default_gene(
         gene_choices,
         markers_df   = shared_rv$markers_data,
-        var_features = tryCatch(VariableFeatures(global_data$sc_obj),
+        var_features = tryCatch(Seurat::VariableFeatures(global_data$sc_obj),
                                 error = function(e) character(0)),
         unspliced    = validated$unspliced
       )

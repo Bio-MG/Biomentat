@@ -256,38 +256,20 @@ mod_import_sc_ui <- function(id) {
             # l'Option A (dossiers), jamais pour l'Option B (fichiers).
             div(class = "alert alert-light", style = "font-size:0.8rem;",
                 bsicons::bs_icon("lightbulb"),
-                " ", i18n$t("Option A (dossiers) — formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou genes.tsv(.gz), matrix.mtx(.gz). L'Option B (fichiers) accepte .rds, .h5, .h5ad, .loom, .rda/.RData.")),
-            # P0-2 (fix 2026-11-08) : boutons STATIQUES — le renderUI
-            # dépendant de la langue re-créait l'élément APRÈS le binding
-            # shinyFiles -> bouton mort au premier chargement (BUG #2).
-            # FIX 2026-11-08 (feedback opérateur « I18N BROKEN ») : le label
-            # ne doit PAS porter le span i18n — shinyDirButton rend son label
-            # via as.character(label) (shinyFiles:::shinyDirButton), et
-            # as.character() re-transforme le shiny.tag du span en chaîne
-            # PLaine que tags$button échappe ensuite : l'opérateur voyait le
-            # markup littéral « <span class="i18n" data-key="📁 …"> » dans le
-            # bouton (mesuré sur le rendu du package). Le motif P0-2 « le span
-            # survit » était donc faux pour shinyFiles. i18n_plain() (même
-            # motif que title= ci-dessous) rend une chaîne brute : label
-            # propre, clé de traduction résolue au build (fr), libellés FR
-            # statiques pour ces 2 boutons (pas de bascule live — prix du
-            # bouton statique exigé par le binding shinyFiles).
-            shinyDirButton(
-              ns("dir_select"),
-              label = i18n_plain("Ajouter un Dossier"),
-              title = i18n_plain("Sélectionner dossier contenant matrix.mtx"),
-              class = "btn-secondary w-100",
-              icon  = icon("folder-open")
-            ),
-            # Feature 6×10X (audit 2026-09-27, roadmap 3.1) : auto-découverte
-            # des triplets 10X — 1 sélection remplace 6×(dossier + nom).
-            shinyDirButton(
-              ns("dir_scan"),
-              label = i18n_plain("Scanner un dossier parent (auto-découverte des échantillons)"),
-              title = i18n_plain("Sélectionner le dossier parent contenant UN sous-dossier par échantillon (chaque sous-dossier = triplets 10X)"),
-              class = "btn-outline-info w-100",
-              icon  = icon("folder-tree")
-            ),
+                " ", i18n$t("Option A (dossiers) — formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou gènes.tsv(.gz), matrix.mtx(.gz). L'Option B (fichiers) accepte .rds, .h5, .h5ad, .loom, .rda/.RData.")),
+            # 2026-11-22 (revue i18n opérateur) : les 2 boutons shinyFiles sont
+            # reconstruits à chaque changement de langue — motif déjà éprouvé
+            # du module spatial (mod_import_spatial.R dir_select_ui). Le
+            # fix P0-2 du 2026-11-08 les avait figés en statique car le span
+            # i18n passait par as.character(label) et se retrouvait échappé
+            # (« <span class="i18n" …> » visible) ; ce point reste vrai
+            # (d'où .tr() côté serveur, chaîne brute, jamais i18n$t), mais le
+            # binding shinyFiles actuel est délégué ($(document).on('click',
+            # '.shinyDirectories'), lu dans shinyFiles.js) et la sélection est
+            # livrée par id (Shiny.onInputChange($(button).attr('id'))) : le
+            # re-render ne rend plus le bouton mort. renderUI = seule voie
+            # (pas d'update*Input pour shinyDirButton).
+            uiOutput(ns("dir_buttons")),
             textInput(ns("sample_name"), i18n$t("Nom de l'échantillon"), placeholder = "Ex: Patient1"),
             actionButton(ns("btn_add_sample"), i18n$t("➕ Ajouter à la liste"), class = "btn-info w-100 mt-2"),
             hr(),
@@ -368,7 +350,7 @@ mod_import_sc_ui <- function(id) {
             i18n$t("Datasets découverts"),
             value = "panel_datasets",
             icon = icon("folder-open"),
-            helpText(i18n$t("Déposez des dossiers 10X (matrix.mtx + barcodes.tsv + features/genes.tsv) ou des fichiers SC (.rds, .h5, .h5ad, .loom) dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.")),
+            helpText(i18n$t("Déposez des dossiers 10X (matrix.mtx + barcodes.tsv + features/gènes.tsv) ou des fichiers SC (.rds, .h5, .h5ad, .loom) dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.")),
             div(class = "d-flex align-items-center gap-2 mb-2",
                 actionButton(ns("btn_scan_datasets"), i18n$t("Scanner le répertoire"),
                              class = "btn-outline-secondary btn-sm"),
@@ -569,6 +551,32 @@ mod_import_sc_server <- function(id, global_data) {
     observeEvent(global_data$language, {
       updateTextInput(session, "sample_name", label = .tr("Nom de l'échantillon"))
     }, ignoreInit = TRUE)
+
+    # 2026-11-22 : boutons shinyFiles (Option A) reconstruits à chaque
+    # changement de langue — motif mod_import_spatial.R dir_select_ui.
+    # En-session .tr() renvoie une chaîne brute : pas de span échappé
+    # (historique P0-2 2026-11-08, commenté côté UI). Feature 6×10X
+    # (audit 2026-09-27, roadmap 3.1) : dir_scan scanne un dossier parent
+    # (1 sélection = N échantillons auto-découverts).
+    output$dir_buttons <- renderUI({
+      global_data$language
+      tagList(
+        shinyFiles::shinyDirButton(
+          ns("dir_select"),
+          label = .tr("Ajouter un Dossier"),
+          title = .tr("Sélectionner dossier contenant matrix.mtx"),
+          class = "btn-secondary w-100",
+          icon  = icon("folder-open")
+        ),
+        shinyFiles::shinyDirButton(
+          ns("dir_scan"),
+          label = .tr("Scanner un dossier parent (auto-découverte des échantillons)"),
+          title = .tr("Sélectionner le dossier parent contenant UN sous-dossier par échantillon (chaque sous-dossier = triplets 10X)"),
+          class = "btn-outline-info w-100",
+          icon  = icon("folder-tree")
+        )
+      )
+    })
 
     sample_list <- reactiveVal(list())
     # Roadmap 3.4 : annulation coopérative des boucles d'import (A et B).
@@ -1029,7 +1037,8 @@ mod_import_sc_server <- function(id, global_data) {
     }
 
     if (exists("dataset_dirs_options_server", mode = "function")) {
-      dataset_dirs_options_server(input, output, session, modality = "sc")
+      dataset_dirs_options_server(input, output, session, modality = "sc",
+                                  language = reactive(global_data$language))
     }
 
     observeEvent(input$btn_scan_datasets, {

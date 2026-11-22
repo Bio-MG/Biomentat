@@ -35,7 +35,7 @@
       ts_theme("minimal") +
       ggplot2::theme(axis.text.x = ggplot2::element_blank(),
                      legend.text = ggplot2::element_text(size = 8)) +
-      ggplot2::labs(x = .tr("Spots/cellules (echantillon)"), y = .tr("Proportion"), fill = .tr("Type"))
+      ggplot2::labs(x = .tr("Spots/cellules (échantillon)"), y = .tr("Proportion"), fill = .tr("Type"))
   })
 
   # ── DT table ────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@
       ts_theme("minimal", 11) +
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
       ggplot2::labs(x = NULL, y = NULL,
-                    fill = .tr("Correlation\n(Pearson)"),
+                    fill = .tr("Corrélation\n(Pearson)"),
                     title = .tr("Colocalisation des types cellulaires (proportions par spot)"))
   })
 }

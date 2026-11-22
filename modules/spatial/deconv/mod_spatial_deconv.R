@@ -37,14 +37,14 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
     # client-side JS-shim translation from i18n$t() at build time.
     observeEvent(global_data$language, {
       updateRadioButtons(session, "mode",
-        label = .tr("Methode"),
+        label = .tr("Méthode"),
         choices = stats::setNames(
           c("rctd", "labeltransfer", "stdeconvolve"),
-          c(.tr("Avec reference scRNA-seq (RCTD)"),
+          c(.tr("Avec référence scRNA-seq (RCTD)"),
             .tr("Transfert d'ancres (Label Transfer, Seurat)"),
-            .tr("Sans reference (LDA, type STdeconvolve)"))))
+            .tr("Sans référence (LDA, type STdeconvolve)"))))
       updateNumericInput(session, "rctd_n_hvg",
-                         label = .tr("Max genes (HVG) avant RCTD (RAM/vitesse)"))
+                         label = .tr("Max gènes (HVG) avant RCTD (RAM/vitesse)"))
       updateRadioButtons(session, "lt_norm_method",
         label = .tr("Normalisation"),
         choices = stats::setNames(
@@ -58,7 +58,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
       updateNumericInput(session, "n_topics",
                          label = .tr("Nombre de types cellulaires (K)"))
       updateNumericInput(session, "n_top_od",
-                         label = .tr("Genes surdisperses maximum (vitesse)"))
+                         label = .tr("Gènes surdisperses maximum (vitesse)"))
       updateSelectInput(session, "ref_viz_reduction", label = .tr("Reduction"))
       updateCheckboxInput(session, "ref_viz_interactive",
                           label = .tr("Vue interactive (Plotly)"))
@@ -130,22 +130,22 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
       if (input$mode %in% c("rctd", "labeltransfer")) {
         if (!ref$reference_is_ready()) {
           reason <- if (ref$using_shared_ref()) {
-            .tr("reference partagee introuvable ou invalide -- reimportez-la depuis l'onglet Import > Spatial")
+            .tr("référence partagée introuvable ou invalide -- réimportez-la depuis l'onglet Import > Spatial")
           } else {
             switch(ref$ref_state$status,
-              "empty"   = .tr("Aucune reference chargee (section 'Reference scRNA-seq')"),
-              "loading" = .tr("chargement de la reference encore en cours -- patientez puis reessayez"),
-              "error"   = sprintf(.tr("la reference a echoue au chargement (%s)"),
+              "empty"   = .tr("Aucune référence chargée (section 'Référence scRNA-seq')"),
+              "loading" = .tr("chargement de la référence encore en cours -- patientez puis reessayez"),
+              "error"   = sprintf(.tr("la référence a echoue au chargement (%s)"),
                                   ref$ref_state$message %||% .tr("cause inconnue")),
               "loaded"  = if (is.null(input$ref_celltype_col) || !nzchar(input$ref_celltype_col)) {
-                .tr("aucune colonne 'type cellulaire' selectionnee")
+                .tr("aucune colonne 'type cellulaire' sélectionnée")
               } else {
                 .tr("reference pas encore preparee -- cliquez '1) Preparer la reference (disque)' puis reessayez")
               },
               .tr("cause inconnue")
             )
           }
-          showNotification(paste(.tr("Chargez d'abord une reference scRNA-seq complete :"), reason),
+          showNotification(paste(.tr("Chargez d'abord une référence scRNA-seq complete :"), reason),
                             type = "warning", duration = 14)
           return()
         }
@@ -154,7 +154,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
       if (identical(input$mode, "rctd")) {
         ref_check <- tryCatch(readRDS(ref$effective_ref_path()), error = function(e) NULL)
         if (is.null(ref_check)) {
-          showNotification(.tr("Reference introuvable ou illisible — reimportez le fichier de reference."),
+          showNotification(.tr("Référence introuvable ou illisible — réimportez le fichier de référence."),
                             type = "error", duration = 8)
           return()
         }
@@ -162,17 +162,19 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
         too_small <- names(tab)[tab < RCTD_CELL_MIN_INSTANCE]
         if (length(too_small) > 0) {
           showNotification(.t_fmt(
-            .tr("RCTD necessite au moins {min_cells} cellules par type dans la reference. Type(s) insuffisant(s) : {bad_types}. "),
+            .tr("RCTD nécessite au moins {min_cells} cellules par type dans la référence. Type(s) insuffisant(s) : {bad_types}. "),
             min_cells = RCTD_CELL_MIN_INSTANCE,
             bad_types = paste(sprintf("%s (%d)", too_small, as.integer(tab[too_small])), collapse = ", ")
           ), type = "error", duration = 14)
           showNotification(
             if (ref$using_shared_ref()) {
-              .tr(paste0("Repreparez la reference partagee depuis l'onglet Import > Spatial ",
-                         "(case 'Fusionner/exclure les types rares') avant de relancer."))
+              .tr(paste0(
+               "Repréparez la référence partagée depuis l'onglet Import > Spatial (case 'Fusionner/exclure les ",
+               "types rares') avant de relancer."))
             } else {
-              .tr(paste0("Cochez 'Fusionner/exclure les types rares' (sidebar) puis cliquez a nouveau ",
-                         "'1) Preparer la reference' avant de relancer."))
+              .tr(paste0(
+               "Cochez 'Fusionner/exclure les types rares' (sidebar) puis cliquez à nouveau '1) Préparer la ",
+               "référence' avant de relancer."))
             },
             type = "warning", duration = 14)
           return()
@@ -221,7 +223,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
       if (deconv_task$status() == "success") {
         shared_rv$deconv_props <- deconv_task$result()
         if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("deconv_complete", layer2_extras = list(deconv_props = shared_rv$deconv_props))  # ASR-WIRING : point de pose (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §3.1)
-        showNotification(.tr("Deconvolution terminee."), type = "message", duration = 5)
+        showNotification(.tr("Deconvolution terminée."), type = "message", duration = 5)
       } else if (deconv_task$status() == "error") {
         # Journal honnête (cf. mod_spatial_deconv_refviz.R — diagnostic
         # 2026-11-12 : « voir le log » pointait sur un fichier vide) : un
@@ -235,7 +237,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
                               "rctd"          = "40 min",
                               "20 min")
         showNotification(.t_fmt(
-          .tr("Erreur (ou depassement du delai de {ceiling}) pendant la deconvolution — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez."),
+          .tr("Erreur (ou depassement du délai de {ceiling}) pendant la deconvolution — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez."),
           ceiling = ceiling_txt
         ), type = "error", duration = 12)
       }

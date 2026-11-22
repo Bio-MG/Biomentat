@@ -183,9 +183,9 @@ mod_sc_markers_ui <- function(id) {
 
     div(
       class = "border-top pt-2 mt-2",
-      actionButton(ns("add_to_viz"), i18n$t("-> Ajouter selection a Viz"),
+      actionButton(ns("add_to_viz"), i18n$t("→ Ajouter sélection à Viz"),
                    class = "btn-success btn-sm w-100"),
-      actionButton(ns("clear_all"), i18n$t("Effacer selection"),
+      actionButton(ns("clear_all"), i18n$t("Effacer sélection"),
                    class = "btn-outline-secondary btn-sm w-100 mt-1")
     ),
 
@@ -200,7 +200,7 @@ mod_sc_markers_ui <- function(id) {
           h6(i18n$t("Hybrid Gene Selector"), class = "mb-2 fw-bold"),
            textAreaInput(
               ns("bulk_gene_input"),
-              label       = i18n$t("Paste genes (comma, space or newline separated):"),
+              label       = i18n$t("Paste gènes (comma, space or newline separated):"),
               rows        = 3,
               placeholder = "Example: CD3D, MS4A1, CD8A, NKG7"
             ),
@@ -210,7 +210,7 @@ mod_sc_markers_ui <- function(id) {
             class = "small text-muted",
             textOutput(ns("viz_gene_count")),
             hr(class = "my-2"),
-            span(i18n$t("Current selection in selectize box above"), class = "text-info")
+            span(i18n$t("Current sélection in selectize box above"), class = "text-info")
           )
         )
       )
@@ -231,9 +231,9 @@ mod_sc_markers_output_ui <- function(id) {
       class = "card-header bg-light",
       div(
         style = "display:flex;justify-content:space-between;",
-        h5(i18n$t("Marqueurs Differentiels"), class = "card-title mb-0"),
+        h5(i18n$t("Marqueurs Différentiels"), class = "card-title mb-0"),
         div(
-          actionButton(ns("quick_add_markers"), i18n$t("Ajouter selection"),
+          actionButton(ns("quick_add_markers"), i18n$t("Ajouter sélection"),
                        class = "btn-sm btn-primary me-1", icon = icon("shopping-basket")),
           downloadButton(ns("dl_markers_excel"), i18n$t("Excel"), class = "btn-sm btn-success me-1"),
           downloadButton(ns("dl_markers_csv"),   i18n$t("Export CSV"),   class = "btn-sm btn-primary")
@@ -262,7 +262,10 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
     # ── Module-local reactive values ──────────────────────────────────────────
     markers_rv       <- reactiveVal(NULL)   # data.frame of markers
     selected_genes_rv <- reactiveVal(character(0))
-    marker_log_rv    <- reactiveVal("En attente du calcul...")
+    # i18n-safe STATE : rv NULL tant qu'aucun statut métier n'a été écrit — le
+    # placeholder d'attente est rendu à l'affichage dans la langue COURANTE
+    # (l'init à l'aveugle figeait la langue de boot ;cf. comm/da/traj/velocity).
+    marker_log_rv    <- reactiveVal(NULL)
 
     observeEvent(global_data$language, {
       # Re-translate dynamic labels on language switch
@@ -381,7 +384,11 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
       })
     })
 
-    output$marker_log_output <- renderText({ marker_log_rv() })
+    output$marker_log_output <- renderText({
+      global_data$language                    # i18n : re-rendu au changement de langue
+      v <- marker_log_rv()
+      if (is.null(v)) .tr("En attente du calcul...") else v
+    })
 
     # ── 2. DataTable ──────────────────────────────────────────────────────────
     output$table_markers <- renderDT({
@@ -474,7 +481,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
       }
     })
 
-    # ── 5. Sidebar .tr("Ajouter selection a Viz") ─────────────────────────────────
+    # ── 5. Sidebar .tr("Ajouter sélection a Viz") ─────────────────────────────────
     observeEvent(input$add_to_viz, {
       req(selected_genes_rv())
       genes <- selected_genes_rv()

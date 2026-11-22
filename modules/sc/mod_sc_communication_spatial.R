@@ -18,9 +18,11 @@ mod_sc_communication_spatial_ui <- function(id) {
         i18n$t("La distance est une contrainte spatiale — une compatibilité spatiale n'établit aucune communication biologique. ")),
     fluidRow(
       column(6, radioButtons(ns("spc_source"), i18n$t("Source de coordonnées"),
-                             choices = setNames(c("reduction", "spatial_object"),
-                                                c(.tr_plain("Projection 2D (réduction — distances NON physiques)"),
-                                                  .tr_plain("Coordonnées spatiales (bundle spatial courant)"))),
+                             # choiceNames spans : bascule live par le shim JS
+                             # (clés ajoutées au dictionnaire 2026-11-22).
+                             choiceNames = list(i18n$t("Projection 2D (réduction — distances NON physiques)"),
+                                                i18n$t("Coordonnées spatiales (bundle spatial courant)")),
+                             choiceValues = c("reduction", "spatial_object"),
                              selected = "reduction", width = "100%")),
       column(6,
              conditionalPanel(

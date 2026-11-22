@@ -107,7 +107,7 @@
     } else {
       # "local" mode: use the ref_state$obj uploaded in this session
       if (is.null(ref_state$obj) || is.null(input_ref_celltype_col())) {
-        showNotification(.tr("Chargez d'abord une reference et choisissez la colonne 'type cellulaire'."),
+        showNotification(.tr("Chargez d'abord une référence et choisissez la colonne 'type cellulaire'."),
                          type = "warning", duration = 8)
         return()
       }
@@ -131,7 +131,7 @@
       err_txt <- tryCatch(conditionMessage(ref_viz_task$result()),
                           error = function(e) conditionMessage(e))
       write_mirai_log(ref_viz_log_file, paste0("ECHEC : ", err_txt))
-      showNotification(.tr("Erreur pendant le calcul UMAP/PCA de la reference -- voir le journal."),
+      showNotification(.tr("Erreur pendant le calcul UMAP/PCA de la référence -- voir le journal."),
                        type = "error", duration = 10)
     }
   })
@@ -158,7 +158,7 @@
       ts_theme("minimal") +
       ggplot2::labs(x = paste0(toupper(input$ref_viz_reduction), "_1"),
                     y = paste0(toupper(input$ref_viz_reduction), "_2"),
-                    title = .tr("Reference scRNA-seq")) +
+                    title = .tr("Référence scRNA-seq")) +
       ggplot2::theme(legend.position = "none")
   })
 

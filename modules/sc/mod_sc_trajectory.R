@@ -303,7 +303,7 @@ mod_sc_trajectory_output_ui <- function(id) {
         hr(),
         h6(i18n$t("Analyses complémentaires"), style = "font-weight:bold; color:#3498DB"),
         div(class = "small text-muted mb-2",
-            i18n$t("La sélection des gènes (Gènes vs Pseudotemps) se fait uniquement dans l'onglet Genes vs Pseudotemps ci-dessous — sélecteur unique.")),
+            i18n$t("La sélection des gènes (Gènes vs Pseudotemps) se fait uniquement dans l'onglet Gènes vs Pseudotemps ci-dessous — sélecteur unique.")),
         plotOutput(ns("plot_pseudotime_dist"), height = "280px"),
         fluidRow(
           column(4, downloadButton(ns("dl_pseudotime_dist"),
@@ -320,10 +320,10 @@ mod_sc_trajectory_output_ui <- function(id) {
         downloadButton(ns("dl_dist_png"), i18n$t("Export Distribution"), class = "btn-sm btn-secondary w-100 mt-2")
       ),
       nav_panel(
-        i18n$t("Genes vs Pseudotemps"),
+        i18n$t("Gènes vs Pseudotemps"),
         fluidRow(
           column(6,
-            selectizeInput(ns("traj_genes"), i18n$t("Genes a tracer"),
+            selectizeInput(ns("traj_genes"), i18n$t("Gènes à tracer"),
                            choices = NULL, multiple = TRUE,
                            options = list(maxItems = 8,
                                          placeholder = "Ex: CD3D, MS4A1"))
@@ -359,7 +359,9 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
 
 
     ns <- session$ns
-    traj_status_rv <- reactiveVal(.tr("En attente du calcul..."))
+    # i18n-safe STATE : rv NULL tant qu'aucun statut métier n'a été écrit — le
+    # placeholder est rendu à l'affichage dans la langue COURANTE.
+    traj_status_rv <- reactiveVal(NULL)
     # Raw result of the LAST trajectory run — either method:
     #   - exploratory : calculate_pseudotime() list (graph, root_cell,
     #     in_root_component, computation_reduction)
@@ -452,7 +454,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       }
       updateSelectInput(session, "traj_color", choices = unique(traj_choices))
 
-      var_genes <- VariableFeatures(obj)
+      var_genes <- Seurat::VariableFeatures(obj)
       all_genes <- c(var_genes, setdiff(rownames(obj), var_genes))
       updateSelectizeInput(session, "traj_genes", choices = all_genes, server = TRUE)
 
@@ -753,7 +755,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
         traj_status_rv(status_msg)
         showNotification(
           if (identical(method_key, "slingshot")) .tr("Trajectoire Slingshot calculée")
-          else .tr("Trajectoire calculee"),
+          else .tr("Trajectoire calculée"),
           type = "message", duration = 4)
 
         meta <- obj@meta.data
@@ -857,7 +859,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
                error = function(e) { validate(need(FALSE, e$message)) })
     })
 
-    # ── 4. Genes vs pseudotime — Step-3.7: NO MORE "Tracer" button, updates
+    # ── 4. Gènes vs pseudotime — Step-3.7: NO MORE "Tracer" button, updates
     #    dynamically as soon as genes/lissage change (shared helper). ──────
     output$gene_pseudotime_plot <- renderPlot({
       req(global_data$sc_obj, input$traj_genes)
@@ -872,7 +874,11 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
     # is gone; Tab 3 (input$traj_genes) is the single source for gene plots.
 
     # ── 5. Status ──────────────────────────────────────────────────────────
-    output$trajectory_status <- renderText({ traj_status_rv() })
+    output$trajectory_status <- renderText({
+      global_data$language                # i18n : re-rendu au changement de langue
+      v <- traj_status_rv()
+      if (is.null(v)) .tr("En attente du calcul...") else v
+    })
 
     # ── 6. CSV Exports (rows are NEVER filtered — NA/out-of-component/
     #    outside-lineage cells always stay visible) ─────────────────────────

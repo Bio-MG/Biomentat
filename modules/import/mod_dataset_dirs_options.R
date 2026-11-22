@@ -19,9 +19,11 @@ dataset_dirs_options_ui <- function(ns, i18n) {
           placeholder = .tr_plain("Chemin d'un dossier de datasets...")
         )
       ),
+      # span i18n$t (pas .tr_plain) : le shim JS bascule le libellé du
+      # bouton en live au changement de langue.
       actionButton(
         ns("btn_save_dataset_dir"),
-        .tr_plain("Enregistrer ce dossier"),
+        i18n$t("Enregistrer ce dossier"),
         class = "btn-outline-secondary btn-sm",
         icon = icon("bookmark")
       )
@@ -32,7 +34,8 @@ dataset_dirs_options_ui <- function(ns, i18n) {
 
 dataset_dirs_options_server <- function(input, output, session,
                                         modality = c("sc", "bulk", "spatial"),
-                                        on_changed = NULL) {
+                                        on_changed = NULL,
+                                        language = NULL) {
   modality <- match.arg(modality)
   ns <- session$ns
 
@@ -79,6 +82,9 @@ dataset_dirs_options_server <- function(input, output, session,
   })
 
   output$saved_dataset_dirs_ui <- renderUI({
+    # i18n : re-render au changement de langue (les textes ci-dessous passent
+    # par .tr_plain, en-session = langue courante).
+    if (!is.null(language)) language()
     dirs <- rv_saved_dirs()
     if (length(dirs) == 0L) {
       return(tags$small(class = "text-muted", .tr_plain("Aucun dossier personnalisé enregistré.")))
@@ -104,4 +110,14 @@ dataset_dirs_options_server <- function(input, output, session,
   })
 
   rv_saved_dirs
+
+  # i18n : le placeholder de textInput est un attribut HTML — invisible au
+  # shim JS. Re-poussé côté serveur au changement de langue (motif app.R
+  # 1458) ; le libellé du bouton save, lui, bascule via le span i18n$t.
+  if (!is.null(language)) {
+    observeEvent(language(), {
+      updateTextInput(session, "custom_dataset_dir",
+                      placeholder = .tr_plain("Chemin d'un dossier de datasets..."))
+    }, ignoreInit = TRUE)
+  }
 }

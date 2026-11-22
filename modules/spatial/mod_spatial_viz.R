@@ -41,11 +41,11 @@ mod_spatial_viz_controls_ui <- function(id) {
           ns("gene"), NULL, choices = NULL,
           options = list(
             maxOptions = 3000,
-            placeholder = .tr_plain("Rechercher un gene...")
+            placeholder = .tr_plain("Rechercher un gène...")
           )
         ),
         # NEW: quick-pick from the Moran's I results (onglet "1. QC &
-        # Autocorrelation" > "Genes spatialement variables") -- the small
+        # Autocorrelation" > "Gènes spatialement variables") -- the small
         # facet grid there is useful to scan many genes at once, but picking
         # ONE gene to inspect full-size/interactively belongs here. Purely
         # a convenience selectInput that feeds the same `gene` field above;
@@ -93,18 +93,18 @@ mod_spatial_viz_controls_ui <- function(id) {
             selectInput(ns("color_palette"), i18n$t("Jeu de couleurs"),
                         choices = stats::setNames(
                           c("default", "okabeito", "viridis", "set2", "manual"),
-                          c(.tr_plain("Defaut"), .tr_plain("Okabe-Ito (daltonien)"),
+                          c(.tr_plain("Défaut"), .tr_plain("Okabe-Ito (daltonien)"),
                             "Viridis", "Set2", .tr_plain("Manuel"))
                         ),
                         selected = "default"),
             conditionalPanel(
               condition = sprintf("input['%s'] == 'manual'", ns("color_palette")),
-              div(class = "text-muted", style = "font-size:0.8rem;", i18n$t("Degrade (metriques continues : QC, gene, Z-score...)")),
+              div(class = "text-muted", style = "font-size:0.8rem;", i18n$t("Degrade (metriques continues : QC, gène, Z-score...)")),
               manual_color_picker_ui(ns, c("grad_low", "grad_high"), c(i18n$t("Bas"), i18n$t("Haut")), c("#2166AC", "#B2182B")),
               div(class = "text-muted mt-2", style = "font-size:0.8rem;", i18n$t("Couleurs discretes (categorie affichee actuellement) :")),
               uiOutput(ns("manual_discrete_picker_ui"))
             ),
-            checkboxInput(ns("fixed_scale"), i18n$t("Echelle de couleur fixe (point fixe min/max)"), value = FALSE),
+            checkboxInput(ns("fixed_scale"), i18n$t("Échelle de couleur fixe (point fixe min/max)"), value = FALSE),
             conditionalPanel(
               condition = sprintf("input['%s']", ns("fixed_scale")),
               div(style = "display:flex; gap:8px;",
@@ -139,16 +139,16 @@ mod_spatial_viz_controls_ui <- function(id) {
         class = "border-top pt-2 mt-2",
         checkboxInput(
           ns("show_static_export_preview"),
-          i18n$t("Afficher l'apercu PNG (a cote de la carte interactive)"),
+          i18n$t("Afficher l'aperçu PNG (a cote de la carte interactive)"),
           value = TRUE
         ),
         div(
           class = "text-muted mb-2",
           style = "font-size: 0.8rem;",
-          i18n$t("Meme moteur que le bouton Export PNG ci-dessous. Decochez pour donner toute la largeur a la carte interactive Plotly.")
+          i18n$t("Même moteur que le bouton Export PNG ci-dessous. Decochez pour donner toute la largeur a la carte interactive Plotly.")
         ),
         downloadButton(ns("dl_png"), i18n$t("Export PNG"), class = "btn-sm btn-outline-secondary w-100 mb-1"),
-        downloadButton(ns("dl_csv"), i18n$t("Export CSV (donnees affichees)"), class = "btn-sm btn-outline-secondary w-100")
+        downloadButton(ns("dl_csv"), i18n$t("Export CSV (données affichées)"), class = "btn-sm btn-outline-secondary w-100")
       ),
 
       # Feedback biologiste ("ajouter la fonction d'ajout au rapport") :
@@ -257,7 +257,7 @@ mod_spatial_viz_ui <- function(id) {
             style = "min-width: 220px;",
             actionButton(
               ns("btn_clear_selection"),
-              i18n$t("Effacer la selection lasso"),
+              i18n$t("Effacer la sélection lasso"),
               class = "btn btn-outline-secondary"
             )
           ),
@@ -265,7 +265,7 @@ mod_spatial_viz_ui <- function(id) {
             style = "min-width: 220px;",
             actionButton(
               ns("btn_isolate_roi"),
-              i18n$t("\U0001F50D Isoler cette selection (ROI)"),
+              i18n$t("\U0001f50d Isoler cette s\u00e9lection (ROI)"),
               class = "btn btn-primary"
             )
           )
@@ -349,13 +349,13 @@ mod_spatial_viz_ui <- function(id) {
             div(
               class = "col-12",
               card(
-                card_header(i18n$t("Marqueurs differentiels (ROI vs Reste)")),
+                card_header(i18n$t("Marqueurs différentiels (ROI vs Reste)")),
                 card_body(
                   div(
                     class = "alert alert-light small mb-3",
                     bsicons::bs_icon("info-circle"),
                     " ",
-                    i18n$t("Selectionnez une ROI depuis la Vue combinee, puis lancez le test Wilcoxon asynchrone contre le reste des spots.")
+                    i18n$t("Sélectionnez une ROI depuis la Vue combinee, puis lancez le test Wilcoxon asynchrone contre le reste des spots.")
                   ),
                   
                   div(
@@ -367,7 +367,7 @@ mod_spatial_viz_ui <- function(id) {
                     ),
                     downloadButton(
                       ns("dl_roi_object"),
-                      i18n$t("\U0001F4E5 Telecharger le sous-objet (.rds)"),
+                      i18n$t("\U0001f4e5 T\u00e9l\u00e9charger le sous-objet (.rds)"),
                       class = "btn-outline-secondary"
                     ),
                     actionButton(
@@ -422,7 +422,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         choices = c(
           stats::setNames(
             c("default", "okabeito", "viridis", "set2", "manual"),
-            c(.tr("Defaut"), .tr("Okabe-Ito (daltonien)"),
+            c(.tr("Défaut"), .tr("Okabe-Ito (daltonien)"),
               "Viridis", "Set2", .tr("Manuel"))),
           packs_palette_choices(global_data$packs %||% list())))
     })
@@ -518,11 +518,11 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         choices = c(
           stats::setNames(
             c("default", "okabeito", "viridis", "set2", "manual"),
-            c(.tr("Defaut"), .tr("Okabe-Ito (daltonien)"),
+            c(.tr("Défaut"), .tr("Okabe-Ito (daltonien)"),
               "Viridis", "Set2", .tr("Manuel"))),
           packs_palette_choices(shiny::isolate(global_data$packs %||% list()))))
       updateCheckboxInput(session, "fixed_scale",
-        label = .tr("Echelle de couleur fixe (point fixe min/max)"))
+        label = .tr("Échelle de couleur fixe (point fixe min/max)"))
       updateCheckboxInput(session, "show_histology",
         label = .tr("Afficher l'image histologique (fond de coupe)"))
       updateSelectInput(session, "histology_resolution",
@@ -530,7 +530,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       updateSliderInput(session, "histology_opacity",
         label = .tr("Opacité de l'image"))
       updateCheckboxInput(session, "show_static_export_preview",
-        label = .tr("Afficher l'apercu PNG (a cote de la carte interactive)"))
+        label = .tr("Afficher l'aperçu PNG (a cote de la carte interactive)"))
       updateTextInput(session, "viz_save_label",
         placeholder = .tr("Nom de cette vue (ex: Cluster 3 vs stroma)"))
       updateCheckboxInput(session, "plotly_orient_fix",
@@ -541,9 +541,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         label = .tr("Isoler cluster(s)"),
         options = list(placeholder = .tr("Tous les clusters")))
       updateActionButton(session, "btn_clear_selection",
-        label = .tr("Effacer la selection lasso"))
+        label = .tr("Effacer la sélection lasso"))
       updateActionButton(session, "btn_isolate_roi",
-        label = .tr("\U0001F50D Isoler cette selection (ROI)"))
+        label = .tr("\U0001f50d Isoler cette s\u00e9lection (ROI)"))
       updateActionButton(session, "btn_clear_roi", label = .tr("Vider la ROI"))
     }, ignoreInit = TRUE)
     
@@ -754,7 +754,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           div(
             class = "alert alert-warning",
             style = "font-size:0.8rem;padding:2px 6px;",
-            .tr("Le fond histologique n'a pas pu etre prepare pour cette resolution.")
+            .tr("Le fond histologique n'a pas pu etre prepare pour cette résolution.")
           )
         )
       }
@@ -764,7 +764,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           div(
             class = "alert alert-warning",
             style = "font-size:0.8rem;padding:2px 6px;",
-            .tr("Fond disponible pour l'export PNG, mais echec de l'encodage Plotly.")
+            .tr("Fond disponible pour l'export PNG, mais échec de l'encodage Plotly.")
           )
         )
       }
@@ -907,7 +907,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       tagList(
         selectInput(
           ns("moran_gene_pick"),
-          .tr("Raccourci : gene spatialement variable (indice de Moran)"),
+          .tr("Raccourci : gène spatialement variable (indice de Moran)"),
           choices = c(stats::setNames("", .tr("\u2014 choisir parmi le top Moran's I \u2014")),
                      utils::head(choices, 100))
         ),
@@ -968,7 +968,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       lst <- shared_rv$saved_viz_list %||% list()
       if (length(lst) == 0) {
         return(div(class = "text-muted", style = "font-size:0.8rem; margin-top:4px;",
-                   .tr("Aucune vue sauvegardee pour cet echantillon.")))
+                   .tr("Aucune vue sauvegardee pour cet échantillon.")))
       }
       tagList(
         tags$ul(
@@ -1160,7 +1160,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         } else range(df$value[valid])
 
         # Rampe 256 stops factorisee dans R/palettes.R::spatial_color_ramp_hex()
-        # (meme logique, meme repli "viridis" pour la palette Defaut).
+        # (meme logique, meme repli "viridis" pour la palette Défaut).
         pal <- leaflet::colorNumeric(palette = spatial_color_ramp_hex(shared_rv), domain = domain, na.color = "#CCCCCC")
         cols <- as.character(pal(df$value))
         cols[!valid | is.na(cols) | !nzchar(cols)] <- "#CCCCCC"
@@ -1540,7 +1540,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       filename = function() paste0("carte_spatiale_", input$color_by, "_", Sys.Date(), ".csv"),
       content = function(file) {
         df <- plot_df()
-        validate(need(nrow(df) > 0, .tr("Aucune donnee a exporter.")))
+        validate(need(nrow(df) > 0, .tr("Aucune donnée a exporter.")))
         write.csv(df, file, row.names = FALSE)
       }
     )
@@ -1782,7 +1782,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         class = "text-info style-sm mt-1",
         style = "font-size:0.8rem;",
         sprintf(
-          .tr("\u2139\ufe0f %d cellule(s) selectionnee(s) / isolee(s) (Spatial: %s, UMAP: %s)"),
+          .tr("\u2139\ufe0f %d cellule(s) s\u00e9lectionn\u00e9e(s) / isolee(s) (Spatial: %s, UMAP: %s)"),
           length(hl),
           paste0(n_spatial, " pts"),
           if (is.na(n_umap)) .tr("non calcule") else paste0(n_umap, " pts")
@@ -1995,7 +1995,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     observeEvent(input$btn_isolate_roi, {
       hl <- highlighted_ids()
       if (length(hl) == 0) {
-        showNotification(.tr("Aucune selection a isoler. Utilisez le lasso."), type = "warning")
+        showNotification(.tr("Aucune sélection a isoler. Utilisez le lasso."), type = "warning")
         return()
       }
       roi_ids(hl)
@@ -2230,13 +2230,13 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         
         if (is.null(result) || nrow(result) == 0L) {
           showNotification(
-            .tr("Calcul termine, mais aucun gene ne passe les seuils definis."),
+            .tr("Calcul terminé, mais aucun gène ne passe les seuils définis."),
             type = "warning",
             duration = 8
           )
         } else {
           showNotification(
-            .t_fmt(.tr("{n} marqueurs ROI calcules."), n = nrow(result)),
+            .t_fmt(.tr("{n} marqueurs ROI calculés."), n = nrow(result)),
             type = "message",
             duration = 4
           )
@@ -2304,7 +2304,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       filename = function() paste0("spatial_roi_subset_", Sys.Date(), ".rds"),
       content = function(file) {
         ids <- roi_ids()
-        validate(need(!is.null(ids) && length(ids) > 0, .tr("Aucune ROI selectionnee.")))
+        validate(need(!is.null(ids) && length(ids) > 0, .tr("Aucune ROI sélectionnée.")))
         sub_obj <- materialize_seurat_subset(global_data$spatial_obj, cell_ids = ids)
         saveRDS(sub_obj, file)
       }

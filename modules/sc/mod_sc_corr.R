@@ -15,19 +15,19 @@ mod_sc_corr_ui <- function(id) {
   ns <- NS(id)
   tagList(
     div(class="alert alert-light",style="font-size:0.9em;border-left:3px solid #E74C3C;",
-        i18n$t("Trouve les genes correles avec un gene cible.")),
+        i18n$t("Trouve les gènes corrélés avec un gène cible.")),
     div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
         h6(i18n$t("Gene Cible"),style="font-weight:bold;color:#E74C3C;"),
         selectizeInput(ns("target_gene"),NULL,choices=NULL,multiple=FALSE,
                        options=list(placeholder="Ex: CD3D, CD8A")),
-        helpText(i18n$t("Gene de reference pour calculer les correlations"))),
-    h6(i18n$t("Parametres de Recherche"),style="font-weight:bold;"),
+        helpText(i18n$t("Gène de référence pour calculer les corrélations"))),
+    h6(i18n$t("Paramètres de Recherche"),style="font-weight:bold;"),
     fluidRow(
-       column(6,radioButtons(ns("cor_method"),i18n$t("Methode"),
+       column(6,radioButtons(ns("cor_method"),i18n$t("Méthode"),
                              choices=c("Pearson"="pearson","Spearman"="spearman"),selected="pearson")),
       column(6,numericInput(ns("cor_threshold"),i18n$t("Seuil |r|"),value=0.3,min=0,max=1,step=0.05))),
-    numericInput(ns("cor_top_n"),i18n$t("Nombre max de genes"),value=50,min=10,max=200,step=10),
-    actionButton(ns("find_correlated"),i18n$t("Rechercher Genes Correles"),
+    numericInput(ns("cor_top_n"),i18n$t("Nombre max de gènes"),value=50,min=10,max=200,step=10),
+    actionButton(ns("find_correlated"),i18n$t("Rechercher Gènes Correles"),
                  class="btn-primary w-100 mb-2",icon=icon("search")),
     hr(),
     h6(i18n$t("Actions Rapides"),style="font-weight:bold;"),
@@ -48,8 +48,8 @@ mod_sc_corr_output_ui <- function(id) {
     full_screen=TRUE,
     div(class="card-header bg-light",
         div(style="display:flex;justify-content:space-between;align-items:center;",
-            h5(i18n$t("Analyse de Correlation"),class="card-title mb-0"),
-            actionButton(ns("quick_add_corr"),i18n$t("Ajouter selection a Viz"),
+            h5(i18n$t("Analyse de Corrélation"),class="card-title mb-0"),
+            actionButton(ns("quick_add_corr"),i18n$t("Ajouter sélection a Viz"),
                          class="btn-sm btn-primary",icon=icon("chart-line")))),
     # 2B (O28) : graphe + table CÔTE À CÔTE (spéc §2.7 — l'empilement
     # col_widths=c(12) créait deux ascenseurs étriqués à max_height=400px).
@@ -70,7 +70,7 @@ mod_sc_corr_output_ui <- function(id) {
 # les corrélations ont RÉELLEMENT été calculées — le seed porté par le résultat
 # (attr "seed_gene") ou reflété par l'auto-pipeline (shared_rv$corr_target_gene)
 # — jamais la valeur vivante du sélecteur, que l'utilisateur peut modifier sans
-# relancer « Rechercher Genes Correles » (constat 1D, packet round-7 ; spéc §2.4
+# relancer « Rechercher Gènes Correles » (constat 1D, packet round-7 ; spéc §2.4
 # de la proposition). Fonction pure, testable headless (test-mod-sc-corr.R).
 .corr_seed_gene <- function(result, shared_target, picker) {
   seed <- attr(result, "seed_gene")
@@ -178,7 +178,7 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
         shared_rv$corr_target_gene <- as.character(input$target_gene)[1]  # ← FIX: was missing
         shared_rv$active_tab       <- "tab_correlation"
 
-        msg <- .t_fmt(.tr("✓ {n} gènes corrélés avec {gene}"), n = nrow(cor_df), gene = as.character(input$target_gene)[1])
+        msg <- .t_fmt(.tr("✓ {n} gènes corrélés avec {gène}"), n = nrow(cor_df), gene = as.character(input$target_gene)[1])
         showNotification(msg, type="message", duration=4)
 
       }, error = function(e) {
@@ -307,7 +307,7 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
 
     output$correlation_status <- renderText({
       if (is.null(corr_rv())) .tr("Aucune analyse en cours")
-      else .t_fmt(.tr("✓ {n} gènes corrélés avec {gene}"), n = nrow(corr_rv()), gene = input$target_gene)
+      else .t_fmt(.tr("✓ {n} gènes corrélés avec {gène}"), n = nrow(corr_rv()), gene = input$target_gene)
     })
 
     output$dl_correlated <- downloadHandler(

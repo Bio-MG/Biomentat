@@ -14,12 +14,12 @@
 mod_spatial_deconv_controls_ui <- function(id) {
   ns <- NS(id)
   tagList(
-      radioButtons(ns("mode"), i18n$t("Methode"),
+      radioButtons(ns("mode"), i18n$t("Méthode"),
                    choices = stats::setNames(
                      c("rctd", "labeltransfer", "stdeconvolve"),
-                     c(.tr_plain("Avec reference scRNA-seq (RCTD)"),
+                     c(.tr_plain("Avec référence scRNA-seq (RCTD)"),
                        .tr_plain("Transfert d'ancres (Label Transfer, Seurat)"),
-                       .tr_plain("Sans reference (LDA, type STdeconvolve)"))),
+                       .tr_plain("Sans référence (LDA, type STdeconvolve)"))),
                    selected = "rctd"),
 
       conditionalPanel(
@@ -27,7 +27,7 @@ mod_spatial_deconv_controls_ui <- function(id) {
         uiOutput(ns("ref_source_picker_ui")),
         conditionalPanel(
           condition = sprintf("!(input['%s'] && input['%s'] == 'shared')", ns("ref_source"), ns("ref_source")),
-          fileInput(ns("ref_file"), i18n$t("Reference scRNA-seq (.rds Seurat, .h5ad, .h5, .loom)"),
+          fileInput(ns("ref_file"), i18n$t("Référence scRNA-seq (.rds Seurat, .h5ad, .h5, .loom)"),
                     accept = c(".rds", ".h5ad", ".h5", ".loom", ".rda", ".RData"),
                     buttonLabel = i18n$t("Parcourir...")),
           uiOutput(ns("ref_status_badge_ui")),
@@ -45,16 +45,16 @@ mod_spatial_deconv_controls_ui <- function(id) {
         div(class = "alert alert-light", style = "font-size:0.8rem;",
             bsicons::bs_icon("info-circle"),
             " ",
-            i18n$t(paste0("RCTD modelise l'expression par une loi de Poisson resolue par ",
-                          "programmation quadratique — pic RAM attendu sous ~2 Go. Execute ",
-                          "en mono-coeur (max_cores=1). Necessite au moins 25 cellules par ",
-                          "type dans la reference."))),
-        numericInput(ns("rctd_n_hvg"), i18n$t("Max genes (HVG) avant RCTD (RAM/vitesse)"),
+            i18n$t(paste0(
+             "RCTD modélise l'expression par une loi de Poisson résolue par programmation quadratique — pic ",
+             "RAM attendu sous ~2 Go. Exécuté en mono-cœur (max_cores=1). Nécessite au moins 25 cellules par ",
+             "type dans la référence."))),
+        numericInput(ns("rctd_n_hvg"), i18n$t("Max gènes (HVG) avant RCTD (RAM/vitesse)"),
                      DECONV_DEFAULT_N_HVG, min = 200, max = 8000, step = 100),
         div(class = "text-muted", style = "font-size:0.8rem;",
-            i18n$t(paste0("Reduit le panel aux genes les plus variables avant de construire ",
-                          "la reference/le puck spatial — borne la RAM sur un gros Visium HD/",
-                          "Slide-seq sans perdre les types cellulaires (Backlog #6).")))
+            i18n$t(paste0(
+             "Réduit le panel aux gènes les plus variables avant de construire la référence/le puck spatial — ",
+             "borne la RAM sur un gros Visium HD/Slide-seq sans perdre les types cellulaires (Backlog #6).")))
       ),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'labeltransfer'", ns("mode")),
@@ -71,22 +71,24 @@ mod_spatial_deconv_controls_ui <- function(id) {
           div(class = "alert alert-warning", style = "font-size:0.8rem;",
               bsicons::bs_icon("exclamation-triangle"),
               " ",
-              i18n$t(paste0("Installez 'glmGamPoi' (BiocManager::install('glmGamPoi')) pour accelerer, ",
-                            "sinon reduisez plutot le nombre de cellules par type (section reference).")))
+              i18n$t(paste0(
+               "Installez 'glmGamPoi' (BiocManager::install('glmGamPoi')) pour accélérer, sinon réduisez plutôt ",
+               "le nombre de cellules par type (section référence).")))
         ),
         numericInput(ns("lt_npcs"), i18n$t("Composantes PCA (requete spatiale)"), 30, min = 5, max = 50, step = 5)
       ),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'stdeconvolve'", ns("mode")),
         numericInput(ns("n_topics"), i18n$t("Nombre de types cellulaires (K)"), 6, min = 2, max = 30, step = 1),
-        numericInput(ns("n_top_od"), i18n$t("Genes surdisperses maximum (vitesse)"), 1000, min = 200, max = 3000, step = 100)
+        numericInput(ns("n_top_od"), i18n$t("Gènes surdisperses maximum (vitesse)"), 1000, min = 200, max = 3000, step = 100)
       ),
 
       hr(),
-      h6(i18n$t("Aperçu de la reference (UMAP/PCA)"), style = "font-weight:bold;"),
+      h6(i18n$t("Aperçu de la référence (UMAP/PCA)"), style = "font-weight:bold;"),
       div(class = "alert alert-light", style = "font-size:0.8rem;",
-          i18n$t(paste0("Verifiez visuellement que les types cellulaires sont bien separes avant de lancer ",
-                        "RCTD/Label Transfer ci-dessous."))),
+          i18n$t(paste0(
+           "Vérifiez visuellement que les types cellulaires sont bien séparés avant de lancer RCTD/Label ",
+           "Transfer ci-dessous."))),
       selectInput(ns("ref_viz_reduction"), i18n$t("Reduction"), choices = c("UMAP" = "umap", "PCA" = "pca"), selected = "umap"),
       checkboxInput(ns("ref_viz_interactive"), i18n$t("Vue interactive (Plotly)"), value = TRUE),
       bslib::input_task_button(ns("btn_ref_viz"), i18n$t("Calculer / afficher"),
@@ -107,7 +109,7 @@ mod_spatial_deconv_ui <- function(id) {
                 plotOutput(ns("deconv_bar_plot"), height = "550px"),
                 DT::DTOutput(ns("deconv_table"))),
 
-      nav_panel(i18n$t("Reference (UMAP/PCA)"),
+      nav_panel(i18n$t("Référence (UMAP/PCA)"),
                 div(class = "alert alert-light small mb-2",
                     bsicons::bs_icon("info-circle"),
                     " ",
@@ -119,8 +121,9 @@ mod_spatial_deconv_ui <- function(id) {
 
       nav_panel(i18n$t("Colocalisation (types cellulaires)"),
                 div(class = "alert alert-light small mb-2",
-                    i18n$t(paste0("Correlation entre proportions de types cellulaires par spot/cellule -- deux types ",
-                                  "fortement correles positivement tendent a co-localiser ; negativement, a s'exclure."))),
+                    i18n$t(paste0(
+                     "Corrélation entre proportions de types cellulaires par spot/cellule -- deux types fortement ",
+                     "corrélés positivement tendent à co-localiser ; négativement, a s'exclure."))),
                 plotOutput(ns("deconv_coloc_plot"), height = "520px"))
     )
 }

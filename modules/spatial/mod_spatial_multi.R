@@ -1,14 +1,14 @@
 # =============================================================================
-# modules/spatial/mod_spatial_multi.R — Phase 4: Multi-echantillons
+# modules/spatial/mod_spatial_multi.R — Phase 4: Multi-échantillons
 # ("Working with multiple slices in Seurat", vignette parity)
 # =============================================================================
-# v3 (vague 5 — Phase 6 stats, B3) : nouvel onglet "Composition differentielle"
+# v3 (vague 5 — Phase 6 stats, B3) : nouvel onglet "Composition différentielle"
 #    -- test du Chi2 d'independance (dataset x cluster) sur l'integration
 #    conjointe (ci-dessus), via
 #    R/utils_spatial_stats.R::compute_composition_differential() (deja pure,
 #    synchrone, meme convention que mod_spatial_deconv.R's "Colocalisation").
 #    FIX layout (retour terrain -- "les graphiques Residus standardises et
-#    Proportions par echantillon restent dans un petit cadre malgre le bouton
+#    Proportions par échantillon restent dans un petit cadre malgre le bouton
 #    plein ecran") : les deux plots sont maintenant dans des card(height=)
 #    EXPLICITES (520px) + card_body(class="p-0") + plotOutput(height="100%"),
 #    copie a l'identique du pattern DEJA UTILISE (et DEJA CONFIRME correct
@@ -65,19 +65,19 @@ mod_spatial_multi_controls_ui <- function(id) {
 
       numericInput(ns("npcs"), i18n$t("Composantes PCA"), 30, min = 5, max = 50, step = 5),
       numericInput(ns("resolution"), i18n$t("Resolution (Leiden)"), 0.8, min = 0.1, max = 3, step = 0.1),
-      checkboxInput(ns("use_harmony"), i18n$t("Correction de batch (Harmony, groupe = echantillon)"), value = TRUE),
+      checkboxInput(ns("use_harmony"), i18n$t("Correction de batch (Harmony, groupe = échantillon)"), value = TRUE),
       div(class = "alert alert-light", style = "font-size:0.8rem;",
-          i18n$t("Recommande pour comparer des echantillons/conditions differents. Desactivez si vos coupes proviennent du meme tissu/bloc (ex: 2 moities d'un meme cerveau) — comportement de la vignette Seurat par defaut, sans correction.")),
+          i18n$t("Recommande pour comparer des échantillons/conditions differents. Desactivez si vos coupes proviennent du même tissu/bloc (ex: 2 moities d'un même cerveau) — comportement de la vignette Seurat par défaut, sans correction.")),
 
-      bslib::input_task_button(ns("btn_integrate"), i18n$t("Lancer l'integration"),
+      bslib::input_task_button(ns("btn_integrate"), i18n$t("Lancer l'intégration"),
                                 icon = icon("layer-group")),
       verbatimTextOutput(ns("integrate_progress_text"), placeholder = TRUE),
 
       hr(),
       radioButtons(ns("section_color_by"), i18n$t("Colorer les cartes par section"),
                    choices = stats::setNames(c("ncount", "cluster"),
-                                             c(.tr_plain("nCount (avant integration)"),
-                                               .tr_plain("Cluster integre (apres integration)"))),
+                                             c(.tr_plain("nCount (avant intégration)"),
+                                               .tr_plain("Cluster integre (après intégration)"))),
                    selected = "ncount"),
 
       hr(),
@@ -93,7 +93,7 @@ mod_spatial_multi_ui <- function(id) {
       nav_panel(
         i18n$t("Cartes par section"),
         div(class = "alert alert-light small mt-2 mb-2",
-            i18n$t("Equivalent de SpatialDimPlot(brain.merge) : une carte par echantillon selectionne, cote a cote, meme metrique/coloration pour comparaison directe.")),
+            i18n$t("Équivalent de SpatialDimPlot(brain.merge) : une carte par échantillon sélectionne, cote a cote, même metrique/coloration pour comparaison directe.")),
         uiOutput(ns("section_maps_ui"))
       ),
       nav_panel(
@@ -104,7 +104,7 @@ mod_spatial_multi_ui <- function(id) {
           col_widths = c(6, 6),
           row_heights = "460px",
           card(full_screen = TRUE, height = "460px",
-               card_header(i18n$t("Colore par echantillon (effet de lot)")),
+               card_header(i18n$t("Colore par échantillon (effet de lot)")),
                card_body(class = "p-0", plotly::plotlyOutput(ns("umap_by_dataset"), height = "100%"))),
           card(full_screen = TRUE, height = "460px",
                card_header(i18n$t("Colore par cluster integre")),
@@ -112,9 +112,9 @@ mod_spatial_multi_ui <- function(id) {
         )
       ),
       nav_panel(
-        i18n$t("Composition differentielle"),
+        i18n$t("Composition différentielle"),
         div(class = "alert alert-light small mt-2 mb-2",
-            i18n$t("Test du Chi2 d'independance (table de contingence dataset x cluster) sur l'integration conjointe -- repli automatique sur un p simule (2000 replicats) si des effectifs attendus sont trop faibles (< 5). Les residus standardises indiquent QUELS clusters/echantillons s'ecartent le plus de l'independance (|residu| > ~2 = ecart notable).")),
+            i18n$t("Test du Chi2 d'independance (table de contingence dataset x cluster) sur l'intégration conjointe -- repli automatique sur un p simule (2000 replicats) si des effectifs attendus sont trop faibles (< 5). Les residus standardises indiquent QUELS clusters/échantillons s'ecartent le plus de l'independance (|résidu| > ~2 = ecart notable).")),
         uiOutput(ns("diffcomp_summary_ui")),
         layout_columns(
           col_widths = c(6, 6),
@@ -123,7 +123,7 @@ mod_spatial_multi_ui <- function(id) {
                card_header(i18n$t("Residus standardises (dataset x cluster)")),
                card_body(class = "p-0", plotOutput(ns("diffcomp_resid_plot"), height = "100%"))),
           card(full_screen = TRUE, height = "520px",
-               card_header(i18n$t("Proportions par echantillon")),
+               card_header(i18n$t("Proportions par échantillon")),
                card_body(class = "p-0", plotOutput(ns("diffcomp_prop_plot"), height = "100%")))
         ),
         DT::DTOutput(ns("diffcomp_contingency_table"))
@@ -153,12 +153,12 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       updateNumericInput(session, "npcs", label = .tr("Composantes PCA"))
       updateNumericInput(session, "resolution", label = .tr("Resolution (Leiden)"))
       updateCheckboxInput(session, "use_harmony",
-        label = .tr("Correction de batch (Harmony, groupe = echantillon)"))
+        label = .tr("Correction de batch (Harmony, groupe = échantillon)"))
       updateRadioButtons(session, "section_color_by",
         label = .tr("Colorer les cartes par section"),
         choices = stats::setNames(c("ncount", "cluster"),
-                                  c(.tr("nCount (avant integration)"),
-                                    .tr("Cluster integre (apres integration)"))))
+                                  c(.tr("nCount (avant intégration)"),
+                                    .tr("Cluster integre (après intégration)"))))
     }, ignoreInit = TRUE)
 
     # ── Dataset picker (dynamic: reflects whatever has been imported) ────
@@ -167,10 +167,10 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       ds_names <- names(global_data$spatial_datasets)
       if (length(ds_names) < 2) {
         return(div(class = "alert alert-warning", style = "font-size:0.8rem;",
-                    sprintf(.tr("%d echantillon(s) importe(s) — importez-en au moins 2 (onglet Import > Spatial) pour utiliser cette page."),
+                    sprintf(.tr("%d échantillon(s) importé(s) — importez-en au moins 2 (onglet Import > Spatial) pour utiliser cette page."),
                             length(ds_names))))
       }
-      checkboxGroupInput(ns("selected_datasets"), .tr("Echantillons a comparer"),
+      checkboxGroupInput(ns("selected_datasets"), .tr("Échantillons a comparer"),
                          choices = ds_names, selected = ds_names)
     })
 
@@ -202,7 +202,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
     observeEvent(input$btn_integrate, {
       ds <- selected_ds()
       if (length(ds) < 2) {
-        showNotification(.tr("Selectionnez au moins 2 echantillons."), type = "warning", duration = 6)
+        showNotification(.tr("Sélectionnez au moins 2 échantillons."), type = "warning", duration = 6)
         return()
       }
       reset_log(log_file)
@@ -231,10 +231,10 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
           computed_at = Sys.time()
         )
         updateRadioButtons(session, "section_color_by", selected = "cluster")
-        showNotification(.tr("Integration terminee."), type = "message", duration = 5)
+        showNotification(.tr("Integration terminée."), type = "message", duration = 5)
       } else if (integrate_task$status() == "error") {
         showNotification(
-          .tr("Erreur (ou depassement du delai) pendant l'integration multi-echantillons — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez."),
+          .tr("Erreur (ou depassement du délai) pendant l'intégration multi-échantillons — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez."),
           type = "error", duration = 12)
       }
     })
@@ -249,7 +249,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
     # ── Per-section spatial maps (cheap, synchronous — sketch + coords) ──
     # Palette partagee (R/palettes.R::spatial_discrete_colors) : suit le
     # selecteur global de l'onglet Visualisation ; repli Dark 3 inchange
-    # pour la palette "Defaut".
+    # pour la palette "Défaut".
     cluster_palette <- function(v, kind = "cluster") spatial_discrete_colors(v, shared_rv, kind = kind)
 
     section_df <- function(dataset_name) {
@@ -340,7 +340,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
     })
 
     # =========================================================================
-    # B3 (vague 5) — Composition differentielle inter-echantillons
+    # B3 (vague 5) — Composition différentielle inter-echantillons
     # compute_composition_differential(embeddings) -> list(contingency=table,
     # chisq=list(statistic,p_value,method), residuals=data.frame(dataset,
     # cluster,std_resid), proportions=data.frame(dataset,cluster,proportion,n))
@@ -352,7 +352,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       tryCatch(
         compute_composition_differential(integration_result()$embeddings),
         error = function(e) {
-          showNotification(paste(.tr("Erreur test de composition differentielle :"), conditionMessage(e)),
+          showNotification(paste(.tr("Erreur test de composition différentielle :"), conditionMessage(e)),
                            type = "error", duration = 8)
           NULL
         }
@@ -368,7 +368,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       }
       sig <- if (res$chisq$p_value < 0.05) .tr("SIGNIFICATIVE") else .tr("non significative")
       div(class = if (res$chisq$p_value < 0.05) "alert alert-success" else "alert alert-light",
-          sprintf(.tr("Chi2 = %.1f, p = %.4g (%s) — composition %s entre echantillons (seuil 0.05)."),
+          sprintf(.tr("Chi2 = %.1f, p = %.4g (%s) — composition %s entre échantillons (seuil 0.05)."),
                   res$chisq$statistic, res$chisq$p_value, res$chisq$method, sig))
     })
 
@@ -381,7 +381,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
         spatial_diverging_scale(shared_rv, aesthetic = "fill") +
         ts_theme("minimal", 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
-        ggplot2::labs(x = .tr("Cluster"), y = .tr("Echantillon"), fill = .tr("Residu\nstandardise"),
+        ggplot2::labs(x = .tr("Cluster"), y = .tr("Échantillon"), fill = .tr("Résidu\nstandardisé"),
                       title = .tr("Ecarts a l'independance (dataset x cluster)"))
     })
 
@@ -395,15 +395,15 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
         ts_theme("minimal", 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1)) +
         ggplot2::labs(x = NULL, y = .tr("Proportion"), fill = .tr("Cluster"),
-                      title = .tr("Composition en clusters par echantillon"))
+                      title = .tr("Composition en clusters par échantillon"))
     })
 
     output$diffcomp_contingency_table <- DT::renderDT({
       global_data$language  # re-render on language switch
       res <- req(composition_diff_result())
       tab <- as.data.frame.matrix(res$contingency)
-      tab <- cbind(Echantillon = rownames(tab), tab)
-      colnames(tab)[1] <- .tr("Echantillon")
+      tab <- cbind(Échantillon = rownames(tab), tab)
+      colnames(tab)[1] <- .tr("Échantillon")
       ts_datatable(tab, page_length = 15L, filename_base = "spatial_multi_contingency",
                    filter = "none")
     })
@@ -417,7 +417,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
                     .tr("Aucune integration calculee pour le moment. Selectionnez des echantillons et cliquez \"Lancer l'integration\".")))
       }
       div(class = "alert alert-success",
-          .t_fmt(.tr("Integration terminee — reduction utilisee : {red} ; {n} elements au total sur {ds} echantillon(s)."),
+          .t_fmt(.tr("Integration terminée — reduction utilisee : {red} ; {n} elements au total sur {ds} échantillon(s)."),
                  red = res$reduction_used, n = nrow(res$embeddings),
                  ds = length(unique(res$embeddings$dataset))))
     })
@@ -427,7 +427,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       res <- integration_result()
       req(res)
       tab <- as.data.frame(res$n_per_dataset)
-      colnames(tab) <- c(.tr("Echantillon"), .tr("Elements (sketch)"))
+      colnames(tab) <- c(.tr("Échantillon"), .tr("Elements (sketch)"))
       ts_datatable(tab, page_length = 15L, filename_base = "spatial_multi_n_per_dataset",
                    filter = "none", scroll_x = FALSE)
     })

@@ -374,7 +374,17 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
         )
         p$set(0.5, .tr("Construction DESeqDataSet (design ~1)..."))
         dds_blind <- build_dds(filtered, meta, design_formula = "~1", run_deseq = FALSE)
-        dds_blind <- DESeq2::estimateSizeFactors(dds_blind)
+        # FIX (audit GUI 2026-11-22, capture B04) : sur les matrices éparses —
+        # aucun gène tout-positif, cas du jeu de démo bulk_exchange_demo — la
+        # méthode ratio par défaut échoue ("every gene contains at least one
+        # zero, cannot compute log geometric means") et la voie de repli VST
+        # < 1000 gènes de get_vst_matrix() devient inatteignable. Repli
+        # poscounts (DESeq2::vignette, "Deseq2 paper" — valide les facteurs de
+        # taille sur des comptes à zéros) avant d'abandonner.
+        dds_blind <- tryCatch(
+          DESeq2::estimateSizeFactors(dds_blind),
+          error = function(e) DESeq2::estimateSizeFactors(dds_blind, type = "poscounts")
+        )
 
         p$set(0.8, .tr("Transformation VST..."))
         vst_mat <- get_vst_matrix(dds_blind)
@@ -789,7 +799,12 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
 
         p$set(0.6, .tr("Reconstruction DESeqDataSet (design ~1)..."))
         dds <- build_dds(corrected, meta, design_formula = "~1", run_deseq = FALSE)
-        dds <- DESeq2::estimateSizeFactors(dds)
+        # Même repli poscounts que ligne ~377 (audit GUI 2026-11-22) : la voie
+        # batch-corrige repasse par les mêmes comptes épars sinon bloquants.
+        dds <- tryCatch(
+          DESeq2::estimateSizeFactors(dds),
+          error = function(e) DESeq2::estimateSizeFactors(dds, type = "poscounts")
+        )
 
         p$set(0.8, .tr("Transformation VST..."))
         vst_corrected <- get_vst_matrix(dds)

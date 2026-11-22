@@ -2,13 +2,13 @@
 # modules/import/mod_import_spatial.R — Spatial Import (Visium / Xenium / CosMx)
 # =============================================================================
 # v9 (backlog court-terme #1 — voir handoff_spatial_bio-mg.md) : nouveau
-#    panneau "Reference scRNA-seq partagee" (carte dediee, sous le resume de
+#    panneau "Référence scRNA-seq partagee" (carte dediee, sous le resume de
 #    l'objet spatial) : upload + preparation UNE FOIS, reutilisable par RCTD
 #    ET Label Transfer (mod_spatial_deconv.R) sans re-upload/re-parse, tant
 #    que ce module reste ouvert dans l'onglet Import (l'artefact prepare vit
 #    dans global_data$spatial_reference, capture par save_session_btn). Le
 #    module de deconvolution garde son propre uploader LOCAL inchange comme
-#    repli/override (radio "Source de la reference", visible uniquement
+#    repli/override (radio "Source de la référence", visible uniquement
 #    quand une reference partagee existe).
 #
 # v10 (feedback biologiste — fix cache multi-echantillons, voir
@@ -61,7 +61,7 @@
 # automatic (one less decision for a non-expert biologist), and HD still
 # produces the exact same spatial_obj CONTRACT (sketch + bpcells_dir +
 # coords + histology) as classic Visium — QC/Clustering/Deconvolution/
-# Visualisation/Multi-echantillons needed ZERO changes.
+# Visualisation/Multi-échantillons needed ZERO changes.
 #
 # v8 (Slide-seq boost — feedback reel dataset hippocampe souris, voir
 #    handoff_spatial_bio-mg.md) : le loader Slide-seq lui-meme (formats,
@@ -165,7 +165,7 @@ mod_import_spatial_ui <- function(id) {
             bsicons::bs_icon("lightbulb"),
             " ", i18n$t("Selectionnez le dossier racine contenant les fichiers bruts (ex: dossier 'outs' pour Visium/Xenium 10X, ou dossier CosMx AtoMx). Visium HD (dossier contenant 'binned_outputs/') est detecte automatiquement. Chaque import s'ajoute a la liste des echantillons (onglet Spatial > \"5. Multi-echantillons\") plutot que de remplacer le precedent.")),
         
-        textInput(ns("sample_name"), i18n$t("Nom de l'echantillon"), placeholder = "Ex: Tumor_slice1"),
+        textInput(ns("sample_name"), i18n$t("Nom de l'échantillon"), placeholder = "Ex: Tumor_slice1"),
         
         # renderUI + global_data$language : shinyDirButton n'a pas d'update*
         # equivalent -> le bouton est reconstruit a chaque changement de langue.
@@ -205,7 +205,7 @@ mod_import_spatial_ui <- function(id) {
           hr(),
           div(class = "alert alert-warning", style = "font-size:0.8rem;",
               bsicons::bs_icon("lightbulb"),
-              " ", i18n$t("Slide-seq (BETA) : counts (MTX ou DGE) + coordonnees des beads (CSV/TSV), sans image histologique (technologie sans imagerie associee).")),
+              " ", i18n$t("Slide-seq (BETA) : counts (MTX ou DGE) + coordonnées des beads (CSV/TSV), sans image histologique (technologie sans imagerie associee).")),
           tags$details(
             tags$summary(style = "cursor:pointer; font-size:0.8rem; color:#666;",
                          i18n$t("Formats de fichiers reconnus")),
@@ -245,14 +245,14 @@ mod_import_spatial_ui <- function(id) {
         
         radioButtons(ns("norm_method"), i18n$t("Normalisation du sketch"),
                      choices = stats::setNames(c("lognorm", "sct"),
-                                               c(.tr_plain("LogNormalize (rapide, defaut)"),
+                                               c(.tr_plain("LogNormalize (rapide, défaut)"),
                                                  .tr_plain("SCTransform (vignette Seurat, plus lourd)"))),
                      selected = "lognorm"),
         conditionalPanel(
           condition = sprintf("input['%s'] == 'sct'", ns("norm_method")),
           div(class = "alert alert-warning", style = "font-size:0.8rem;",
               bsicons::bs_icon("exclamation-triangle"),
-              " ", i18n$t("SCTransform est significativement plus lourd que LogNormalize et s'execute de maniere SYNCHRONE pendant l'import (pas de mirai a cette etape) — reduisez la taille du sketch ci-dessus (ex: 10 000-20 000) si l'import devient trop long. N'affecte que le sketch (visualisation gene/UMAP) : le clustering spatial (BANKSY-lite) et l'indice de Moran restent en LogNormalize rapide sur les donnees completes, inchanges."))
+              " ", i18n$t("SCTransform est significativement plus lourd que LogNormalize et s'exécute de manière SYNCHRONE pendant l'import (pas de mirai a cette étape) — reduisez la taille du sketch ci-dessus (ex: 10 000-20 000) si l'import devient trop long. N'affecte que le sketch (visualisation gène/UMAP) : le clustering spatial (BANKSY-lite) et l'indice de Moran restent en LogNormalize rapide sur les données completes, inchanges."))
         ),
         
         actionButton(ns("btn_import"), i18n$t("\U0001F680 Importer + convertir (BPCells)"),
@@ -266,13 +266,13 @@ mod_import_spatial_ui <- function(id) {
                     showcase = bsicons::bs_icon("grid-3x3"), theme = "primary"),
           value_box(title = i18n$t("Sketch (RAM)"), value = textOutput(ns("nb_sketch")),
                     showcase = bsicons::bs_icon("cpu"), theme = "secondary"),
-          value_box(title = i18n$t("Genes"), value = textOutput(ns("nb_genes")),
+          value_box(title = i18n$t("Gènes"), value = textOutput(ns("nb_genes")),
                     showcase = bsicons::bs_icon("diagram-3"), theme = "info"),
           value_box(title = i18n$t("Statut"), value = textOutput(ns("status_obj")),
                     showcase = bsicons::bs_icon("check-circle"), theme = "light")
         ),
         # FIX 2026-11-08 (feedback opérateur « Console de Log trop serrée ») :
-        # la carte Résumé et la carte « Reference scRNA-seq partagee (RCTD /
+        # la carte Résumé et la carte « Référence scRNA-seq partagee (RCTD /
         # Label Transfer) » sont deux fill-items du même layout_sidebar — la
         # seconde (header long + alerte + fileInput) écrasait le pre de la
         # console à quelques dizaines de px. Hauteur utile garantie + scroll :
@@ -301,13 +301,13 @@ mod_import_spatial_ui <- function(id) {
       # chaque nouvel echantillon spatial importe. mod_spatial_deconv.R
       # garde son propre uploader LOCAL (session-only) inchange -- ceci est
       # une option SUPPLEMENTAIRE, proposee automatiquement des qu'une
-      # reference partagee existe (voir son radio "Source de la reference").
+      # reference partagee existe (voir son radio "Source de la référence").
       card(
-        card_header(i18n$t("Reference scRNA-seq partagee (RCTD / Label Transfer)")),
+        card_header(i18n$t("Référence scRNA-seq partagée (RCTD / Label Transfer)")),
         div(class = "alert alert-light", style = "font-size:0.8rem;",
             bsicons::bs_icon("info-circle"),
             " ", i18n$t("Chargez et preparez UNE FOIS une reference scRNA-seq annotee ici pour la reutiliser directement dans l'onglet \"Spatial > 3. Deconvolution\" (RCTD ET Label Transfer), sans avoir a la re-uploader/re-preparer a chaque echantillon ou a chaque session (tant que l'artefact reste sur ce disque — voir sauvegarde de session dans le panneau lateral).")),
-        fileInput(ns("shared_ref_file"), i18n$t("Fichier reference (.rds Seurat, .h5ad, .h5, .loom)"),
+        fileInput(ns("shared_ref_file"), i18n$t("Fichier référence (.rds Seurat, .h5ad, .h5, .loom)"),
                   accept = c(".rds", ".h5ad", ".h5", ".loom", ".rda", ".RData"),
                   buttonLabel = i18n$t("Parcourir...")),
         uiOutput(ns("shared_ref_status_badge_ui")),
@@ -336,7 +336,7 @@ mod_import_spatial_server <- function(id, global_data) {
       global_data$language
       shinyFiles::shinyDirButton(ns("dir_select"),
                                  .tr("\U0001F4C1 Choisir le dossier"),
-                                 .tr("Selectionner le dossier de donnees spatiales"),
+                                 .tr("Sélectionner le dossier de données spatiales"),
                                  class = "btn-secondary w-100", icon = icon("folder-open"))
     })
 
@@ -349,7 +349,7 @@ mod_import_spatial_server <- function(id, global_data) {
         choices = stats::setNames(c("visium", "xenium", "cosmx", "slideseq"),
                                   c(.tr("Visium (spots)"), .tr("Xenium (subcellulaire)"),
                                     .tr("CosMx (subcellulaire)"), .tr("Slide-seq (beads, beta)"))))
-      updateTextInput(session, "sample_name", label = .tr("Nom de l'echantillon"))
+      updateTextInput(session, "sample_name", label = .tr("Nom de l'échantillon"))
       updateNumericInput(session, "min_counts", label = .tr("nCount_Spatial minimum"))
       updateNumericInput(session, "min_features", label = .tr("nFeature_Spatial minimum"))
       updateCheckboxInput(session, "load_raw_also",
@@ -366,7 +366,7 @@ mod_import_spatial_server <- function(id, global_data) {
       updateRadioButtons(session, "norm_method",
         label = .tr("Normalisation du sketch"),
         choices = stats::setNames(c("lognorm", "sct"),
-                                  c(.tr("LogNormalize (rapide, defaut)"),
+                                  c(.tr("LogNormalize (rapide, défaut)"),
                                     .tr("SCTransform (vignette Seurat, plus lourd)"))))
       updateActionButton(session, "btn_import",
         label = .tr("\U0001F680 Importer + convertir (BPCells)"))
@@ -504,7 +504,7 @@ mod_import_spatial_server <- function(id, global_data) {
         if (!has_arrow && !has_nanoparquet) {
           div(class = "alert alert-danger", style = "font-size:0.8rem;",
               bsicons::bs_icon("exclamation-octagon"),
-              " ", .tr("Ni 'arrow' ni 'nanoparquet' installes — necessaires pour lire les positions de bins (tissue_positions.parquet). L'import utilisera un chargeur degrade (coordonnees + comptages uniquement, PAS de fond histologique) si un fichier .csv de positions est aussi present ; sinon il echouera avec un message clair. Pour un import complet, installez l'un des deux : "),
+              " ", .tr("Ni 'arrow' ni 'nanoparquet' installes — necessaires pour lire les positions de bins (tissue_positions.parquet). L'import utilisera un chargeur degrade (coordonnées + comptages uniquement, PAS de fond histologique) si un fichier .csv de positions est aussi present ; sinon il echouera avec un message clair. Pour un import complet, installez l'un des deux : "),
               tags$code("install.packages('nanoparquet')"),
               " ", .tr("(leger, recommande sous Windows) ou "),
               tags$code("install.packages('arrow', repos = c('https://apache.r-universe.dev', getOption('repos')))"),
@@ -598,7 +598,7 @@ mod_import_spatial_server <- function(id, global_data) {
             stop(.hd_flat_unsupported_message(), call. = FALSE)
           }
           if (is_hd && (is.null(hd_bin_size) || !nzchar(hd_bin_size))) {
-            stop(.tr("Aucune resolution de binning selectionnee (voir le panneau Visium HD ci-dessus)."),
+            stop(.tr("Aucune résolution de binning sélectionnée (voir le panneau Visium HD ci-dessus)."),
                  call. = FALSE)
           }
 
@@ -850,7 +850,7 @@ mod_import_spatial_server <- function(id, global_data) {
       if (identical(txt, "En attente d'import...")) .tr("En attente d'import...") else txt
     })
 
-    # ── Reference scRNA-seq PARTAGEE (backlog court-terme #1) ──────────────
+    # ── Référence scRNA-seq PARTAGEE (backlog court-terme #1) ──────────────
     # Reuses the SAME underlying functions as mod_spatial_deconv.R's local
     # uploader (R/utils_spatial_reference.R -- read_reference_scrna(),
     # prepare_reference_seurat(), prepare_reference_artifact()), but writes
@@ -870,7 +870,7 @@ mod_import_spatial_server <- function(id, global_data) {
       shared_ref_state$message <- NULL
       shared_ref_meta_cols(character(0))
 
-      withProgress(message = .tr("Lecture de la reference partagee..."), value = 0, {
+      withProgress(message = .tr("Lecture de la référence partagée..."), value = 0, {
         incProgress(0.15, detail = sprintf("Lecture (.%s)...", if (nzchar(orig_ext)) orig_ext else "?"))
         staged_path <- tryCatch({
           if (nzchar(orig_ext)) {
@@ -888,7 +888,7 @@ mod_import_spatial_server <- function(id, global_data) {
         raw_ref <- tryCatch(read_reference_scrna(staged_path), error = function(e) {
           shared_ref_state$status  <- "error"
           shared_ref_state$message <- paste("Lecture :", conditionMessage(e))
-          showNotification(paste(.tr("Reference partagee — erreur de lecture :"), conditionMessage(e)),
+          showNotification(paste(.tr("Référence partagée — erreur de lecture :"), conditionMessage(e)),
                            type = "error", duration = 12)
           NULL
         })
@@ -899,7 +899,7 @@ mod_import_spatial_server <- function(id, global_data) {
                             error = function(e) {
           shared_ref_state$status  <- "error"
           shared_ref_state$message <- paste("Conversion :", conditionMessage(e))
-          showNotification(paste(.tr("Reference partagee — erreur de conversion :"), conditionMessage(e)),
+          showNotification(paste(.tr("Référence partagée — erreur de conversion :"), conditionMessage(e)),
                            type = "error", duration = 12)
           NULL
         })
@@ -910,7 +910,7 @@ mod_import_spatial_server <- function(id, global_data) {
         shared_ref_state$message <- NULL
         shared_ref_meta_cols(colnames(ref_obj@meta.data))
         incProgress(0.35, detail = .tr("Termine."))
-        showNotification(.t_fmt(.tr("Reference partagee lue : {cells} cellules x {genes} genes."),
+        showNotification(.t_fmt(.tr("Référence partagée lue : {cells} cellules x {gènes} gènes."),
                                 cells = ncol(ref_obj), genes = nrow(ref_obj)),
                          type = "message", duration = 5)
       })
@@ -921,7 +921,7 @@ mod_import_spatial_server <- function(id, global_data) {
       st <- shared_ref_state$status
       switch(st,
         "empty" = div(class = "alert alert-light", style = "font-size:0.8rem;",
-                     bsicons::bs_icon("circle"), " ", .tr("Aucune reference partagee chargee.")),
+                     bsicons::bs_icon("circle"), " ", .tr("Aucune référence partagée chargée.")),
         "loading" = div(class = "alert alert-info", style = "font-size:0.8rem;",
                         bsicons::bs_icon("hourglass-split"), " ", .tr("Chargement en cours...")),
         "error" = div(class = "alert alert-danger", style = "font-size:0.8rem;",
@@ -930,7 +930,7 @@ mod_import_spatial_server <- function(id, global_data) {
                              msg = shared_ref_state$message %||% .tr("cause inconnue"))),
         "loaded" = div(class = "alert alert-success", style = "font-size:0.8rem;",
                        bsicons::bs_icon("check-circle"), " ",
-                       .t_fmt(.tr("Reference lue : {cells} cellules x {genes} genes — choisissez la colonne 'type cellulaire' puis preparez-la ci-dessous."),
+                       .t_fmt(.tr("Référence lue : {cells} cellules x {gènes} gènes — choisissez la colonne 'type cellulaire' puis préparez-la ci-dessous."),
                               cells = ncol(shared_ref_state$obj), genes = nrow(shared_ref_state$obj))),
         NULL
       )
@@ -1015,7 +1015,7 @@ mod_import_spatial_server <- function(id, global_data) {
           condition = sprintf("input['%s']", ns("shared_cap_ref_cells")),
           numericInput(ns("shared_max_cells_per_type"), .tr("Max cellules par type"), 500, min = 25, max = 5000, step = 25)
         ),
-        actionButton(ns("btn_prepare_shared_ref"), .tr("Preparer + partager cette reference"),
+        actionButton(ns("btn_prepare_shared_ref"), .tr("Préparer + partager cette référence"),
                      icon = icon("share-fill"), class = "btn-sm btn-outline-success w-100 mt-2")
       )
     })
@@ -1033,7 +1033,7 @@ mod_import_spatial_server <- function(id, global_data) {
             max_cells_per_type = if (isTRUE(input$shared_cap_ref_cells)) input$shared_max_cells_per_type else NA_integer_
           )
         }, error = function(e) {
-          showNotification(paste(.tr("Erreur preparation reference partagee :"), conditionMessage(e)),
+          showNotification(paste(.tr("Erreur preparation référence partagée :"), conditionMessage(e)),
                            type = "error", duration = 10)
           NULL
         })
@@ -1045,7 +1045,7 @@ mod_import_spatial_server <- function(id, global_data) {
             source_label = input$shared_ref_file$name %||% "reference",
             n_dropped_rare = result$n_dropped_rare, created_at = Sys.time()
           )
-          showNotification(.t_fmt(.tr("Reference partagee prete : {cells} cellules x {genes} genes — disponible dans Spatial > 3. Deconvolution (RCTD/Label Transfer)."),
+          showNotification(.t_fmt(.tr("Référence partagée prete : {cells} cellules x {gènes} gènes — disponible dans Spatial > 3. Deconvolution (RCTD/Label Transfer)."),
                                    cells = result$n_cells, genes = result$n_genes
           ), type = "message", duration = 8)
         }
@@ -1057,11 +1057,11 @@ mod_import_spatial_server <- function(id, global_data) {
       info <- global_data$spatial_reference
       if (is.null(info)) {
         return(div(class = "text-muted", style = "font-size:0.8rem;",
-                   .tr("Pas encore de reference partagee active.")))
+                   .tr("Pas encore de référence partagée active.")))
       }
       div(class = "alert alert-success", style = "font-size:0.8rem;",
           bsicons::bs_icon("share-fill"),
-          " ", .t_fmt(.tr("Reference partagee ACTIVE : {cells} cellules x {genes} genes (colonne '{col}') — "),
+          " ", .t_fmt(.tr("Référence partagée ACTIVE : {cells} cellules x {gènes} gènes (colonne '{col}') — "),
                       cells = format(info$n_cells, big.mark = ","), genes = format(info$n_genes, big.mark = ","),
                       col = info$celltype_col),
           .tr("utilisable directement dans Spatial > 3. Deconvolution."),
@@ -1071,7 +1071,7 @@ mod_import_spatial_server <- function(id, global_data) {
 
     observeEvent(input$btn_clear_shared_ref, {
       global_data$spatial_reference <- NULL
-      showNotification(.tr("Reference partagee retiree."), type = "message", duration = 4)
+      showNotification(.tr("Référence partagée retiree."), type = "message", duration = 4)
     })
 
     # ── Datasets découverts (Spatial, data_spatial/datasets) ──────────────────
@@ -1081,7 +1081,8 @@ mod_import_spatial_server <- function(id, global_data) {
     ds_seen_btns <- reactiveVal(character(0))
 
     if (exists("dataset_dirs_options_server", mode = "function")) {
-      dataset_dirs_options_server(input, output, session, modality = "spatial")
+      dataset_dirs_options_server(input, output, session, modality = "spatial",
+                                  language = reactive(global_data$language))
     }
 
     observeEvent(input$btn_scan_datasets, {

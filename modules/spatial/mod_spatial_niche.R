@@ -65,7 +65,7 @@ mod_spatial_niche_controls_ui <- function(id) {
                      bsicons::bs_icon("info-circle"), " ",
                      i18n$t("Qu'est-ce qu'une niche spatiale ?")),
         div(class = "alert alert-light mt-1", style = "font-size:0.8rem;",
-            i18n$t("Regroupe les spots/cellules selon la COMPOSITION de leur voisinage spatial (quels clusters ou types cellulaires sont a proximite), pas selon leur propre expression — revele des regions definies par la coexistence de plusieurs populations (ex: interface tumeur/stroma, bordure d'un centre germinatif). Equivalent de Seurat::BuildNicheAssay()."))),
+            i18n$t("Regroupe les spots/cellules selon la COMPOSITION de leur voisinage spatial (quels clusters ou types cellulaires sont a proximite), pas selon leur propre expression — revele des regions definies par la coexistence de plusieurs populations (ex: interface tumeur/stroma, bordure d'un centre germinatif). Équivalent de Seurat::BuildNicheAssay()."))),
 
       uiOutput(ns("group_by_ui")),
 
@@ -104,18 +104,18 @@ mod_spatial_niche_controls_ui <- function(id) {
                      bsicons::bs_icon("bullseye"), " ",
                      i18n$t("Qu'est-ce que l'etiquetage aleatoire (Ripley's K) ?")),
         div(class = "alert alert-light mt-1", style = "font-size:0.8rem;",
-            i18n$t("Pour UN label cible, compare son agregation spatiale observee a une enveloppe nulle obtenue en reshufflant QUI porte ce label parmi les memes positions (etiquetage aleatoire) -- adaptation usuelle en transcriptomique spatiale (le tissu entier est la fenetre, pas un processus de Poisson) plutot qu'un vrai test CSR/spatstat."))),
+            i18n$t("Pour UN label cible, compare son agregation spatiale observee a une enveloppe nulle obtenue en reshufflant QUI porte ce label parmi les mêmes positions (etiquetage aleatoire) -- adaptation usuelle en transcriptomique spatiale (le tissu entier est la fenetre, pas un processus de Poisson) plutot qu'un vrai test CSR/spatstat."))),
       uiOutput(ns("group_by_ripley_ui")),
       uiOutput(ns("ripley_target_ui")),
       tags$details(
         tags$summary(style = "cursor:pointer; font-size:0.8rem; color:#666;",
-                     i18n$t("Options avancees (permutations / sous-echantillonnage RAM)")),
+                     i18n$t("Options avancees (permutations / sous-échantillonnage RAM)")),
         div(class = "mt-2",
             numericInput(ns("n_perm_ripley"), i18n$t("Permutations (enveloppe nulle)"), 199, min = 49, max = 499, step = 10),
             numericInput(ns("max_total_ripley"), i18n$t("Max elements consideres (RAM)"), 6000, min = 1000, max = 20000, step = 500),
             numericInput(ns("max_target_ripley"), i18n$t("Max points cible testes"), 2000, min = 500, max = 10000, step = 500),
             div(class = "text-muted", style = "font-size:0.8rem;",
-                i18n$t("Le calcul des distances par paires est en O(n^2) -- ces plafonds evitent une explosion RAM/temps sur un cluster tres majoritaire ou un gros jeu de donnees. Le titre du graphe indique si un sous-echantillonnage a ete applique."))
+                i18n$t("Le calcul des distances par paires est en O(n^2) -- ces plafonds evitent une explosion RAM/temps sur un cluster très majoritaire ou un gros jeu de données. Le titre du graphe indique si un sous-échantillonnage a ete applique."))
         )
       ),
       bslib::input_task_button(ns("btn_ripley"), i18n$t("Calculer Ripley's K"),
@@ -240,7 +240,7 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
         res <- niche_task$result()
         shared_rv$niche_labels      <- stats::setNames(res$assignments$niche, res$assignments$id)
         shared_rv$niche_composition <- res$niche_composition
-        showNotification(.t_fmt(.tr("Niches calculees : {n} niches sur {total} elements."),
+        showNotification(.t_fmt(.tr("Niches calculées : {n} niches sur {total} elements."),
                                   n = length(unique(shared_rv$niche_labels)),
                                   total = length(shared_rv$niche_labels)),
                           type = "message", duration = 5)

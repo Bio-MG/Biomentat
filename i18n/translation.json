@@ -486,7 +486,7 @@
       "en": "Sorted by mean rank — the genes most consistent across methods appear first."
     },
     {
-      "fr": "Cliquez \"🔬 Comparer DESeq2 / edgeR / limma-voom\" dans le panneau Step 2.",
+      "fr": "Cliquez \"🔬 Comparer DESeq2 / edgeR / limma-voom\" dans le panneau Étape 2.",
       "en": "Click \"🔬 Compare DESeq2 / edgeR / limma-voom\" in the Step 2 panel."
     },
     {
@@ -1018,7 +1018,7 @@
       "en": "Gene"
     },
     {
-      "fr": "Corrélation",
+      "fr": "Corrélation entre proportions de types cellulaires par spot/cellule -- deux types fortement corrélés positivement tendent à co-localiser ; négativement, a s'exclure.",
       "en": "Correlation"
     },
     {
@@ -1418,11 +1418,11 @@
       "en": "Number of Up / Down genes per computed contrast, based on current |Log2FC| / p-adj thresholds (Step 2) — updates live when you change thresholds, no DE recalculation."
     },
     {
-      "fr": "Compare les gènes significatifs ENTRE plusieurs contrastes (utile après un run Pairwise auto). Seuils utilisés : ceux du panneau Step 2 (|Log2FC| / p-adj) — se mettent à jour en direct si vous les changez, sans recalcul DE.",
+      "fr": "Compare les gènes significatifs ENTRE plusieurs contrastes (utile après un run Pairwise auto). Seuils utilisés : ceux du panneau Étape 2 (|Log2FC| / p-adj) — se mettent à jour en direct si vous les changez, sans recalcul DE.",
       "en": "Compares significant genes BETWEEN multiple contrasts (useful after a Pairwise auto run). Thresholds used: those from the Step 2 panel (|Log2FC| / p-adj) — update live when changed, no DE recalculation."
     },
     {
-      "fr": "Compare le MÊME contraste (Cible/Référence du panneau Step 2) avec les 3 moteurs statistiques disponibles. Le consensus de rang moyenne le classement p-value de chaque méthode — un gène cohérent entre méthodes (rang faible, même sens du Log2FC) est un candidat plus robuste qu'un gène significatif sur une seule méthode.",
+      "fr": "Compare le MÊME contraste (Cible/Référence du panneau Étape 2) avec les 3 moteurs statistiques disponibles. Le consensus de rang moyenne le classement p-value de chaque méthode — un gène cohérent entre méthodes (rang faible, même sens du Log2FC) est un candidat plus robuste qu'un gène significatif sur une seule méthode.",
       "en": "Compares the SAME contrast (Target/Reference from Step 2 panel) with all 3 available statistical engines. The rank consensus averages each method's p-value ranking — a gene consistent across methods (low rank, same Log2FC direction) is a more robust candidate than a gene significant in only one method."
     },
     {
@@ -1474,7 +1474,7 @@
       "en": "4. Visualization"
     },
     {
-      "fr": "5. Multi-echantillons",
+      "fr": "5. Multi-échantillons",
       "en": "5. Multi-sample"
     },
     {
@@ -1506,7 +1506,7 @@
       "en": "Active:"
     },
     {
-      "fr": "✅ daemons actifs (verifies)",
+      "fr": "✅ daemons actifs (vérifiés)",
       "en": "✅ daemons active (verified)"
     },
     {
@@ -1518,27 +1518,27 @@
       "en": "⚪ daemons inactive"
     },
     {
-      "fr": "🔄 Daemons mirai reinitialises et verifies — relancez votre tache.",
+      "fr": "🔄 Daemons mirai réinitialisés et vérifiés — relancez votre tache.",
       "en": "🔄 Mirai daemons reset and verified — relaunch your task."
     },
     {
-      "fr": "🔄 Daemons mirai reinitialises, mais la verification reste en echec — voir le diagnostic.",
+      "fr": "🔄 Daemons mirai réinitialisés, mais la verification reste en échec — voir le diagnostic.",
       "en": "🔄 Mirai daemons reset, but verification still failing — see diagnostics."
     },
     {
-      "fr": "Echec de la reinitialisation des daemons — voir la console R.",
+      "fr": "Échec de la reinitialisation des daemons — voir la console R.",
       "en": "Daemon reset failed — see the R console."
     },
     {
-      "fr": "Echantillon actif : {name} (resultats precedents restaures).",
+      "fr": "Échantillon actif : {name} (résultats précédents restaurés).",
       "en": "Active sample: {name} (previous results restored)."
     },
     {
-      "fr": "Echantillon actif : {name}",
+      "fr": "Échantillon actif : {name}",
       "en": "Active sample: {name}"
     },
     {
-      "fr": "Echantillon '{name}' re-importe (deja actif) : resultats precedents reinitialises.",
+      "fr": "Échantillon '{name}' ré-importé (déjà actif) : résultats précédents réinitialisés.",
       "en": "Sample '{name}' re-imported (already active): previous results reset."
     },
     {
@@ -1566,7 +1566,7 @@
       "en": "Slide-seq (beads, beta)"
     },
     {
-      "fr": "Nom de l'echantillon",
+      "fr": "Nom de l'échantillon",
       "en": "Sample name"
     },
     {
@@ -1574,11 +1574,11 @@
       "en": "📁 Choose folder"
     },
     {
-      "fr": "Selectionner le dossier de donnees spatiales",
+      "fr": "Sélectionner le dossier de données spatiales",
       "en": "Select the spatial data folder"
     },
     {
-      "fr": "Aucun dossier selectionne",
+      "fr": "Aucun dossier sélectionne",
       "en": "No folder selected"
     },
     {
@@ -1618,7 +1618,7 @@
       "en": "Sketch normalization"
     },
     {
-      "fr": "LogNormalize (rapide, defaut)",
+      "fr": "LogNormalize (rapide, défaut)",
       "en": "LogNormalize (fast, default)"
     },
     {
@@ -1640,10 +1640,6 @@
     {
       "fr": "Sketch (RAM)",
       "en": "Sketch (RAM)"
-    },
-    {
-      "fr": "Genes",
-      "en": "Genes"
     },
     {
       "fr": "Console de Log",
@@ -1674,7 +1670,7 @@
       "en": "Finalizing..."
     },
     {
-      "fr": "✅ Import termine : {name} ({tech}{hd}) — {n} echantillon(s) au total",
+      "fr": "✅ Import terminé : {name} ({tech}{hd}) — {n} échantillon(s) au total",
       "en": "✅ Import complete: {name} ({tech}{hd}) — {n} sample(s) total"
     },
     {
@@ -1686,15 +1682,15 @@
       "en": "❌ Spatial import error:"
     },
     {
-      "fr": "Reference scRNA-seq partagee (RCTD / Label Transfer)",
+      "fr": "Référence scRNA-seq partagée (RCTD / Label Transfer)",
       "en": "Shared scRNA-seq Reference (RCTD / Label Transfer)"
     },
     {
-      "fr": "Fichier reference (.rds Seurat, .h5ad, .h5, .loom)",
+      "fr": "Fichier référence (.rds Seurat, .h5ad, .h5, .loom)",
       "en": "Reference file (.rds Seurat, .h5ad, .h5, .loom)"
     },
     {
-      "fr": "Aucune reference partagee chargee.",
+      "fr": "Aucune référence partagée chargée.",
       "en": "No shared reference loaded."
     },
     {
@@ -1706,7 +1702,7 @@
       "en": "Error: {msg}"
     },
     {
-      "fr": "Reference lue : {cells} cellules x {genes} genes — choisissez la colonne 'type cellulaire' puis preparez-la ci-dessous.",
+      "fr": "Référence lue : {cells} cellules x {gènes} gènes — choisissez la colonne 'type cellulaire' puis préparez-la ci-dessous.",
       "en": "Reference loaded: {cells} cells x {genes} genes — choose the 'cell type' column then prepare it below."
     },
     {
@@ -1726,11 +1722,11 @@
       "en": "Max cells per type"
     },
     {
-      "fr": "Preparer + partager cette reference",
+      "fr": "Préparer + partager cette référence",
       "en": "Prepare + share this reference"
     },
     {
-      "fr": "Pas encore de reference partagee active.",
+      "fr": "Pas encore de référence partagée active.",
       "en": "No active shared reference yet."
     },
     {
@@ -1738,11 +1734,11 @@
       "en": "Remove"
     },
     {
-      "fr": "Reference partagee retiree.",
+      "fr": "Référence partagée retiree.",
       "en": "Shared reference removed."
     },
     {
-      "fr": "Lecture de la reference partagee...",
+      "fr": "Lecture de la référence partagée...",
       "en": "Reading shared reference..."
     },
     {
@@ -1750,19 +1746,19 @@
       "en": "Preparing shared artifact..."
     },
     {
-      "fr": "Reference partagee prete : {cells} cellules x {genes} genes — disponible dans Spatial > 3. Deconvolution (RCTD/Label Transfer).",
+      "fr": "Référence partagée prete : {cells} cellules x {gènes} gènes — disponible dans Spatial > 3. Deconvolution (RCTD/Label Transfer).",
       "en": "Shared reference ready: {cells} cells x {genes} genes — available in Spatial > 3. Deconvolution (RCTD/Label Transfer)."
     },
     {
-      "fr": "Erreur preparation reference partagee :",
+      "fr": "Erreur preparation référence partagée :",
       "en": "Shared reference preparation error:"
     },
     {
-      "fr": "Reference partagee — erreur de lecture :",
+      "fr": "Référence partagée — erreur de lecture :",
       "en": "Shared reference — read error:"
     },
     {
-      "fr": "Reference partagee — erreur de conversion :",
+      "fr": "Référence partagée — erreur de conversion :",
       "en": "Shared reference — conversion error:"
     },
     {
@@ -1790,11 +1786,11 @@
       "en": "Spatial Autocorrelation (Moran's I)"
     },
     {
-      "fr": "Nombre de genes (HVG)",
+      "fr": "Nombre de gènes (HVG)",
       "en": "Number of genes (HVG)"
     },
     {
-      "fr": "Methode de detection",
+      "fr": "Méthode de detection",
       "en": "Detection method"
     },
     {
@@ -1806,7 +1802,7 @@
       "en": "Mark variogram (alternative, slower)"
     },
     {
-      "fr": "Options avancees (gros jeux de donnees : Visium HD, Slide-seq)",
+      "fr": "Options avancees (gros jeux de données : Visium HD, Slide-seq)",
       "en": "Advanced options (large datasets: Visium HD, Slide-seq)"
     },
     {
@@ -1846,7 +1842,7 @@
       "en": "Detect hotspots"
     },
     {
-      "fr": "Apercu du jeu de donnees",
+      "fr": "Aperçu du jeu de données",
       "en": "Dataset Overview"
     },
     {
@@ -1854,11 +1850,11 @@
       "en": "QC Distributions"
     },
     {
-      "fr": "Genes spatialement variables (Moran's I)",
+      "fr": "Gènes spatialement variables (Moran's I)",
       "en": "Spatially Variable Genes (Moran's I)"
     },
     {
-      "fr": "Nombre de genes (grille)",
+      "fr": "Nombre de gènes (grille)",
       "en": "Number of genes (grid)"
     },
     {
@@ -1886,7 +1882,7 @@
       "en": "Thresholds applied: {kept}/{total} elements kept."
     },
     {
-      "fr": "Autocorrelation spatiale terminee.",
+      "fr": "Autocorrelation spatiale terminée.",
       "en": "Spatial autocorrelation complete."
     },
     {
@@ -1898,11 +1894,11 @@
       "en": "Waiting..."
     },
     {
-      "fr": "Aucune donnee spatiale chargee. Allez dans l'onglet 'Import Donnees > Spatial'.",
+      "fr": "Aucune donnée spatiale chargée. Allez dans l'onglet 'Import Données > Spatial'.",
       "en": "No spatial data loaded. Go to the 'Data Import > Spatial' tab."
     },
     {
-      "fr": "Echantillon",
+      "fr": "Échantillon",
       "en": "Sample"
     },
     {
@@ -1914,7 +1910,7 @@
       "en": "Metadata (sketch)"
     },
     {
-      "fr": "Aucune metadata disponible pour ce jeu de donnees.",
+      "fr": "Aucune metadata disponible pour ce jeu de données.",
       "en": "No metadata available for this dataset."
     },
     {
@@ -1922,11 +1918,11 @@
       "en": "nCount vs nFeature (color = %MT)"
     },
     {
-      "fr": "Grille des genes les plus spatialement structures (rang Moran's I) — necessite l'autocorrelation ci-contre (calculee au moins une fois).",
+      "fr": "Grille des gènes les plus spatialement structures (rang Moran's I) — nécessite l'autocorrelation ci-contre (calculée au moins une fois).",
       "en": "Grid of the most spatially structured genes (Moran's I rank) — requires autocorrelation computed at least once."
     },
     {
-      "fr": "Rouge = hotspot (voisinage significativement eleve, p < 0.05) ; bleu = coldspot ; gris = non significatif.",
+      "fr": "Rouge = hotspot (voisinage significativement élevé, p < 0.05) ; bleu = coldspot ; gris = non significatif.",
       "en": "Red = hotspot (significantly high neighborhood, p < 0.05); blue = coldspot; grey = not significant."
     },
     {
@@ -1962,7 +1958,7 @@
       "en": "Run Spatial Clustering"
     },
     {
-      "fr": "Marqueurs differentiels par cluster",
+      "fr": "Marqueurs différentiels par cluster",
       "en": "Differential markers per cluster"
     },
     {
@@ -1970,7 +1966,7 @@
       "en": "Minimum log2FC threshold"
     },
     {
-      "fr": "% cellules exprimant le gene (min)",
+      "fr": "% cellules exprimant le gène (min)",
       "en": "% cells expressing the gene (min)"
     },
     {
@@ -1994,11 +1990,11 @@
       "en": "{n} clusters across {total} elements."
     },
     {
-      "fr": "Marqueurs trouves : {n} genes (tous clusters confondus).",
+      "fr": "Marqueurs trouves : {n} gènes (tous clusters confondus).",
       "en": "Markers found: {n} genes (all clusters combined)."
     },
     {
-      "fr": "Seuils QC obsoletes pour cet echantillon -- clustering lance sans filtre QC.",
+      "fr": "Seuils QC obsoletes pour cet échantillon -- clustering lance sans filtre QC.",
       "en": "QC thresholds obsolete for this sample — clustering launched without QC filter."
     },
     {
@@ -2006,11 +2002,7 @@
       "en": "Cell Deconvolution"
     },
     {
-      "fr": "Methode",
-      "en": "Method"
-    },
-    {
-      "fr": "Avec reference scRNA-seq (RCTD)",
+      "fr": "Avec référence scRNA-seq (RCTD)",
       "en": "With scRNA-seq reference (RCTD)"
     },
     {
@@ -2018,27 +2010,27 @@
       "en": "Anchor transfer (Label Transfer, Seurat)"
     },
     {
-      "fr": "Sans reference (LDA, type STdeconvolve)",
+      "fr": "Sans référence (LDA, type STdeconvolve)",
       "en": "Reference-free (LDA, STdeconvolve-type)"
     },
     {
-      "fr": "Source de la reference",
+      "fr": "Source de la référence",
       "en": "Reference source"
     },
     {
-      "fr": "Reference partagee (Import > Spatial)",
+      "fr": "Référence partagée (Import > Spatial)",
       "en": "Shared reference (Import > Spatial)"
     },
     {
-      "fr": "Uploader une nouvelle reference (cette session)",
+      "fr": "Uploader une nouvelle référence (cette session)",
       "en": "Upload a new reference (this session)"
     },
     {
-      "fr": "Reference scRNA-seq (.rds Seurat, .h5ad, .h5, .loom)",
+      "fr": "Référence scRNA-seq (.rds Seurat, .h5ad, .h5, .loom)",
       "en": "scRNA-seq reference (.rds Seurat, .h5ad, .h5, .loom)"
     },
     {
-      "fr": "Max genes (HVG) avant RCTD (RAM/vitesse)",
+      "fr": "Max gènes (HVG) avant RCTD (RAM/vitesse)",
       "en": "Max genes (HVG) before RCTD (RAM/speed)"
     },
     {
@@ -2066,11 +2058,11 @@
       "en": "Number of cell types (K)"
     },
     {
-      "fr": "Genes surdisperses maximum (vitesse)",
+      "fr": "Gènes surdisperses maximum (vitesse)",
       "en": "Maximum overdispersed genes (speed)"
     },
     {
-      "fr": "Aperçu de la reference (UMAP/PCA)",
+      "fr": "Aperçu de la référence (UMAP/PCA)",
       "en": "Reference preview (UMAP/PCA)"
     },
     {
@@ -2094,7 +2086,7 @@
       "en": "Proportions per spot/cell"
     },
     {
-      "fr": "Reference (UMAP/PCA)",
+      "fr": "Référence (UMAP/PCA)",
       "en": "Reference (UMAP/PCA)"
     },
     {
@@ -2102,39 +2094,39 @@
       "en": "Colocalization (cell types)"
     },
     {
-      "fr": "Deconvolution terminee.",
+      "fr": "Deconvolution terminée.",
       "en": "Deconvolution complete."
     },
     {
-      "fr": "Preparation de la reference...",
+      "fr": "Preparation de la référence...",
       "en": "Preparing reference..."
     },
     {
-      "fr": "Reference chargee : {cells} cellules x {genes} genes (.{ext}).",
+      "fr": "Référence chargée : {cells} cellules x {gènes} gènes (.{ext}).",
       "en": "Reference loaded: {cells} cells x {genes} genes (.{ext})."
     },
     {
-      "fr": "1) Preparer la reference (disque)",
+      "fr": "1) Préparer la référence (disque)",
       "en": "1) Prepare the reference (disk)"
     },
     {
-      "fr": "Reference preparee : {cells} cellules x {genes} genes (backend: {backend}).{extra}",
+      "fr": "Référence preparee : {cells} cellules x {gènes} gènes (backend: {backend}).{extra}",
       "en": "Reference prepared: {cells} cells x {genes} genes (backend: {backend}).{extra}"
     },
     {
-      "fr": "Erreur preparation reference:",
+      "fr": "Erreur preparation référence:",
       "en": "Reference preparation error:"
     },
     {
-      "fr": "Aucune reference chargee (section 'Reference scRNA-seq')",
+      "fr": "Aucune référence chargée (section 'Référence scRNA-seq')",
       "en": "No reference loaded (section 'scRNA-seq Reference')"
     },
     {
-      "fr": "Chargez d'abord une reference scRNA-seq complete :",
+      "fr": "Chargez d'abord une référence scRNA-seq complete :",
       "en": "First load a complete scRNA-seq reference:"
     },
     {
-      "fr": "Erreur pendant le calcul UMAP/PCA de la reference -- voir le journal.",
+      "fr": "Erreur pendant le calcul UMAP/PCA de la référence -- voir le journal.",
       "en": "Error during reference UMAP/PCA computation — see the log."
     },
     {
@@ -2154,7 +2146,7 @@
       "en": "Spatial niche"
     },
     {
-      "fr": "Rechercher un gene...",
+      "fr": "Rechercher un gène...",
       "en": "Search for a gene..."
     },
     {
@@ -2186,7 +2178,7 @@
       "en": "Color set"
     },
     {
-      "fr": "Defaut",
+      "fr": "Défaut",
       "en": "Default"
     },
     {
@@ -2194,7 +2186,7 @@
       "en": "Manual"
     },
     {
-      "fr": "Echelle de couleur fixe (point fixe min/max)",
+      "fr": "Échelle de couleur fixe (point fixe min/max)",
       "en": "Fixed color scale (fixed min/max)"
     },
     {
@@ -2210,11 +2202,11 @@
       "en": "Image opacity"
     },
     {
-      "fr": "Afficher l'apercu PNG (a cote de la carte interactive)",
+      "fr": "Afficher l'aperçu PNG (a cote de la carte interactive)",
       "en": "Show PNG preview (next to the interactive map)"
     },
     {
-      "fr": "Export CSV (donnees affichees)",
+      "fr": "Export CSV (données affichées)",
       "en": "CSV Export (displayed data)"
     },
     {
@@ -2234,7 +2226,7 @@
       "en": "View '{label}' added to the report."
     },
     {
-      "fr": "Aucune vue sauvegardee pour cet echantillon.",
+      "fr": "Aucune vue sauvegardee pour cet échantillon.",
       "en": "No saved views for this sample."
     },
     {
@@ -2266,11 +2258,11 @@
       "en": "All clusters"
     },
     {
-      "fr": "Effacer la selection lasso",
+      "fr": "Effacer la sélection lasso",
       "en": "Clear lasso selection"
     },
     {
-      "fr": "🔍 Isoler cette selection (ROI)",
+      "fr": "🔍 Isoler cette sélection (ROI)",
       "en": "🔍 Isolate this selection (ROI)"
     },
     {
@@ -2290,7 +2282,7 @@
       "en": "Context (full map)"
     },
     {
-      "fr": "Marqueurs differentiels (ROI vs Reste)",
+      "fr": "Marqueurs différentiels (ROI vs Reste)",
       "en": "Differential markers (ROI vs Rest)"
     },
     {
@@ -2298,7 +2290,7 @@
       "en": "Find markers"
     },
     {
-      "fr": "📥 Telecharger le sous-objet (.rds)",
+      "fr": "📥 Télécharger le sous-objet (.rds)",
       "en": "📥 Download sub-object (.rds)"
     },
     {
@@ -2318,7 +2310,7 @@
       "en": "ROI isolated ({n} cells)."
     },
     {
-      "fr": "Aucune selection a isoler. Utilisez le lasso.",
+      "fr": "Aucune sélection a isoler. Utilisez le lasso.",
       "en": "No selection to isolate. Use the lasso."
     },
     {
@@ -2358,19 +2350,19 @@
       "en": "Dynamic preview — PNG export"
     },
     {
-      "fr": "Multi-echantillons",
+      "fr": "Multi-échantillons",
       "en": "Multi-sample"
     },
     {
-      "fr": "Echantillons a comparer",
+      "fr": "Échantillons a comparer",
       "en": "Samples to compare"
     },
     {
-      "fr": "Correction de batch (Harmony, groupe = echantillon)",
+      "fr": "Correction de batch (Harmony, groupe = échantillon)",
       "en": "Batch correction (Harmony, group = sample)"
     },
     {
-      "fr": "Lancer l'integration",
+      "fr": "Lancer l'intégration",
       "en": "Run integration"
     },
     {
@@ -2378,11 +2370,11 @@
       "en": "Color section maps by"
     },
     {
-      "fr": "nCount (avant integration)",
+      "fr": "nCount (avant intégration)",
       "en": "nCount (before integration)"
     },
     {
-      "fr": "Cluster integre (apres integration)",
+      "fr": "Cluster integre (après intégration)",
       "en": "Integrated cluster (after integration)"
     },
     {
@@ -2394,7 +2386,7 @@
       "en": "Joint UMAP"
     },
     {
-      "fr": "Composition differentielle",
+      "fr": "Composition différentielle",
       "en": "Differential composition"
     },
     {
@@ -2402,15 +2394,15 @@
       "en": "Summary"
     },
     {
-      "fr": "Integration terminee.",
+      "fr": "Integration terminée.",
       "en": "Integration complete."
     },
     {
-      "fr": "Selectionnez au moins 2 echantillons.",
+      "fr": "Sélectionnez au moins 2 échantillons.",
       "en": "Select at least 2 samples."
     },
     {
-      "fr": "Colore par echantillon (effet de lot)",
+      "fr": "Colore par échantillon (effet de lot)",
       "en": "Colored by sample (batch effect)"
     },
     {
@@ -2422,19 +2414,19 @@
       "en": "Standardized residuals (dataset x cluster)"
     },
     {
-      "fr": "Proportions par echantillon",
+      "fr": "Proportions par échantillon",
       "en": "Proportions per sample"
     },
     {
-      "fr": "Aucune integration calculee pour le moment. Selectionnez des echantillons et cliquez \"Lancer l'integration\".",
+      "fr": "Aucune intégration calculée pour le moment. Sélectionnez des échantillons et cliquez \"Lancer l'intégration\".",
       "en": "No integration computed yet. Select samples and click \"Run integration\"."
     },
     {
-      "fr": "Integration terminee — reduction utilisee : {red} ; {n} elements au total sur {ds} echantillon(s).",
+      "fr": "Integration terminée — reduction utilisee : {red} ; {n} elements au total sur {ds} échantillon(s).",
       "en": "Integration complete — reduction used: {red}; {n} elements total across {ds} sample(s)."
     },
     {
-      "fr": "%d echantillon(s) importe(s) — importez-en au moins 2 (onglet Import > Spatial) pour utiliser cette page.",
+      "fr": "%d échantillon(s) importé(s) — importez-en au moins 2 (onglet Import > Spatial) pour utiliser cette page.",
       "en": "%d sample(s) imported — import at least 2 (Import > Spatial tab) to use this page."
     },
     {
@@ -2514,7 +2506,7 @@
       "en": "Compute Ripley's K"
     },
     {
-      "fr": "Niches calculees : {n} niches sur {total} elements.",
+      "fr": "Niches calculées : {n} niches sur {total} elements.",
       "en": "Niches computed: {n} niches across {total} elements."
     },
     {
@@ -2542,7 +2534,7 @@
       "en": "Max target points tested"
     },
     {
-      "fr": "Options avancees (permutations / sous-echantillonnage RAM)",
+      "fr": "Options avancees (permutations / sous-échantillonnage RAM)",
       "en": "Advanced options (permutations / RAM subsampling)"
     },
     {
@@ -2566,7 +2558,7 @@
       "en": "PCA + UMAP (sketch, tab 4)"
     },
     {
-      "fr": "Indice de Moran / genes spatialement variables (onglet 1)",
+      "fr": "Indice de Moran / gènes spatialement variables (onglet 1)",
       "en": "Moran's I / spatially variable genes (tab 1)"
     },
     {
@@ -2590,7 +2582,7 @@
       "en": "🚀 Run the full pipeline"
     },
     {
-      "fr": "Resultats du pipeline",
+      "fr": "Résultats du pipeline",
       "en": "Pipeline results"
     },
     {
@@ -2610,15 +2602,15 @@
       "en": "❌ Error — see the log below."
     },
     {
-      "fr": "Aucune (ignorer cette etape)",
+      "fr": "Aucune (ignorer cette étape)",
       "en": "None (skip this step)"
     },
     {
-      "fr": "RCTD (reference partagee)",
+      "fr": "RCTD (référence partagée)",
       "en": "RCTD (shared reference)"
     },
     {
-      "fr": "Transfert d'ancres (Label Transfer, reference partagee)",
+      "fr": "Transfert d'ancres (Label Transfer, référence partagée)",
       "en": "Anchor transfer (Label Transfer, shared reference)"
     },
     {
@@ -2642,7 +2634,7 @@
       "en": "Export"
     },
     {
-      "fr": "Tout selectionner",
+      "fr": "Tout sélectionner",
       "en": "Select all"
     },
     {
@@ -2682,7 +2674,7 @@
       "en": "Maps (PNG)"
     },
     {
-      "fr": "Multi-echantillons (integration + composition diff.)",
+      "fr": "Multi-échantillons (intégration + composition diff.)",
       "en": "Multi-sample (integration + diff. composition)"
     },
     {
@@ -2706,7 +2698,7 @@
       "en": "Export error:"
     },
     {
-      "fr": "Etat actuel de l'echantillon (ce qui sera exporte)",
+      "fr": "État actuel de l'échantillon (ce qui sera exporté)",
       "en": "Current sample state (what will be exported)"
     },
     {
@@ -2718,11 +2710,11 @@
       "en": "Not computed"
     },
     {
-      "fr": "Non calculee",
+      "fr": "Non calculée",
       "en": "Not computed"
     },
     {
-      "fr": "Non calculees",
+      "fr": "Non calculées",
       "en": "Not computed"
     },
     {
@@ -2742,7 +2734,7 @@
       "en": "{n} niches"
     },
     {
-      "fr": "{n} genes testes",
+      "fr": "{n} gènes testes",
       "en": "{n} genes tested"
     },
     {
@@ -2762,11 +2754,11 @@
       "en": "Scope"
     },
     {
-      "fr": "Echantillon actif uniquement",
+      "fr": "Échantillon actif uniquement",
       "en": "Active sample only"
     },
     {
-      "fr": "Tous les echantillons analyses (multi-echantillons)",
+      "fr": "Tous les échantillons analyses (multi-échantillons)",
       "en": "All analyzed samples (multi-sample)"
     },
     {
@@ -2774,7 +2766,7 @@
       "en": "Sections to include"
     },
     {
-      "fr": "Apercu",
+      "fr": "Aperçu",
       "en": "Overview"
     },
     {
@@ -2782,7 +2774,7 @@
       "en": "UMAP (sketch)"
     },
     {
-      "fr": "Multi-echantillons (integration conjointe)",
+      "fr": "Multi-échantillons (intégration conjointe)",
       "en": "Multi-sample (joint integration)"
     },
     {
@@ -2802,15 +2794,15 @@
       "en": "Output format(s)"
     },
     {
-      "fr": "📄 Generer le rapport",
+      "fr": "📄 Générer le rapport",
       "en": "📄 Generate report"
     },
     {
-      "fr": "Importez d'abord un echantillon spatial.",
+      "fr": "Importez d'abord un échantillon spatial.",
       "en": "First import a spatial sample."
     },
     {
-      "fr": "Pret -- selectionnez les sections puis cliquez sur 'Generer le rapport'.",
+      "fr": "Prêt -- sélectionnez les sections puis cliquez sur 'Générer le rapport'.",
       "en": "Ready — select the sections then click 'Generate report'."
     },
     {
@@ -2818,11 +2810,11 @@
       "en": "Generating report..."
     },
     {
-      "fr": "Un seul echantillon charge -- la portee \"multi-echantillons\" sera ignoree.",
+      "fr": "Un seul échantillon chargé -- la portée \"multi-échantillons\" sera ignorée.",
       "en": "Only one sample loaded — the \"multi-sample\" scope will be ignored."
     },
     {
-      "fr": "{n} echantillons disponibles : {names}.",
+      "fr": "{n} échantillons disponibles : {names}.",
       "en": "{n} samples available: {names}."
     },
     {
@@ -2846,7 +2838,7 @@
       "en": "Pair distribution per spot"
     },
     {
-      "fr": "Scores LR calcules : {pairs} lignes de scores pairs; {spots} spots avec voisins.",
+      "fr": "Scores LR calculés : {pairs} lignes de scores pairs; {spots} spots avec voisins.",
       "en": "LR scores computed: {pairs} pair score rows; {spots} spots with neighbors."
     },
     {
@@ -2874,11 +2866,11 @@
       "en": "Saved visualizations"
     },
     {
-      "fr": "Par echantillon",
+      "fr": "Par échantillon",
       "en": "Per sample"
     },
     {
-      "fr": "Aucune section calculee pour cet echantillon au moment de l'export.",
+      "fr": "Aucune section calculée pour cet échantillon au moment de l'export.",
       "en": "No section computed for this sample at export time."
     },
     {
@@ -2894,11 +2886,11 @@
       "en": "clusters"
     },
     {
-      "fr": "Methode :",
+      "fr": "Méthode :",
       "en": "Method:"
     },
     {
-      "fr": "genes testes",
+      "fr": "gènes testes",
       "en": "genes tested"
     },
     {
@@ -2930,7 +2922,7 @@
       "en": "Dashed lines = p < 0.05 threshold (|z| > 1.96)"
     },
     {
-      "fr": "Top %d genes spatialement variables (%s)",
+      "fr": "Top %d gènes spatialement variables (%s)",
       "en": "Top %d spatially variable genes (%s)"
     },
     {
@@ -2954,35 +2946,35 @@
       "en": "% MT"
     },
     {
-      "fr": "Aucun des genes les mieux classes (Moran's I) n'est present dans le sketch (RAM). Relancez l'autocorrelation ou reduisez N.",
+      "fr": "Aucun des gènes les mieux classes (Moran's I) n'est present dans le sketch (RAM). Relancez l'autocorrelation ou reduisez N.",
       "en": "None of the top-ranked (Moran's I) genes are present in the sketch (RAM). Re-run the autocorrelation or lower N."
     },
     {
-      "fr": "Erreur (ou depassement du delai) pendant le calcul de Moran — voir le log. Essayez 'Reinitialiser les daemons' puis relancez.",
+      "fr": "Erreur (ou depassement du délai) pendant le calcul de Moran — voir le log. Essayez 'Reinitialiser les daemons' puis relancez.",
       "en": "Error (or timeout) during Moran's I computation — see the log. Try 'Reset daemons' then relaunch."
     },
     {
-      "fr": "Colonnes disponibles dans les metadonnees de l'objet Seurat (orig.ident, annotations importees, etc.) pour les elements du sketch en RAM.",
+      "fr": "Colonnes disponibles dans les métadonnées de l'objet Seurat (orig.ident, annotations importées, etc.) pour les elements du sketch en RAM.",
       "en": "Columns available in the Seurat object metadata (orig.ident, imported annotations, etc.) for the in-RAM sketch elements."
     },
     {
-      "fr": "Donnees BPCells introuvables sur disque — le sketch reste utilisable pour la visualisation, mais reimportez pour relancer clustering/deconvolution/Moran.",
+      "fr": "Données BPCells introuvables sur disque — le sketch reste utilisable pour la visualisation, mais réimportez pour relancer clustering/deconvolution/Moran.",
       "en": "BPCells data not found on disk — the sketch remains usable for visualization, but re-import to re-run clustering/deconvolution/Moran."
     },
     {
-      "fr": "Les seuils ci-dessous ne modifient pas les donnees sur disque : ils definissent quels spots/cellules sont inclus dans le clustering et la deconvolution. Ajustables a tout moment.",
+      "fr": "Les seuils ci-dessous ne modifient pas les données sur disque : ils definissent quels spots/cellules sont inclus dans le clustering et la deconvolution. Ajustables a tout moment.",
       "en": "The thresholds below do not modify the on-disk data: they define which spots/cells are included in clustering and deconvolution. Adjustable at any time."
     },
     {
-      "fr": "Calcul asynchrone (mirai) sur les 1000 genes les plus variables — n'interrompt pas votre session.",
+      "fr": "Calcul asynchrone (mirai) sur les 1000 gènes les plus variables — n'interrompt pas votre session.",
       "en": "Asynchronous computation (mirai) on the top 1000 most variable genes — does not interrupt your session."
     },
     {
-      "fr": "Methode alternative -- le nom des colonnes internes de Seurat differe de 'moransi' et n'est pas garanti stable entre versions ; le score affiche est detecte de facon defensive (generique) plutot que suppose. En cas de doute, preferez l'indice de Moran (par defaut).",
+      "fr": "Méthode alternative -- le nom des colonnes internes de Seurat diffère de 'moransi' et n'est pas garanti stable entre versions ; le score affiché est détecté de façon défensive (générique) plutot que suppose. En cas de doute, preferez l'indice de Moran (par défaut).",
       "en": "Alternative method — Seurat's internal column names differ from 'moransi' and are not guaranteed stable across versions; the displayed score is detected defensively (generic) rather than assumed. If in doubt, prefer Moran's I (default)."
     },
     {
-      "fr": "Regroupe les elements sur une grille avant le calcul de Moran's I — accelere fortement le calcul sur un puck Slide-seq (dizaines de milliers de beads) ou du Visium HD, au prix d'une resolution spatiale legerement reduite. Laissez a 0 pour le comportement standard (calcul point-par-point, adapte a Visium classique).",
+      "fr": "Regroupe les elements sur une grille avant le calcul de Moran's I — accélère fortement le calcul sur un puck Slide-seq (dizaines de milliers de beads) ou du Visium HD, au prix d'une résolution spatiale legerement réduite. Laissez a 0 pour le comportement standard (calcul point-par-point, adapte a Visium classique).",
       "en": "Groups elements onto a grid before computing Moran's I — greatly speeds up computation on a Slide-seq puck (tens of thousands of beads) or Visium HD, at the cost of slightly reduced spatial resolution. Leave at 0 for standard behavior (point-by-point, suited to classic Visium)."
     },
     {
@@ -3006,7 +2998,7 @@
       "en": "— choose from top Moran's I —"
     },
     {
-      "fr": " — %d echantillons charges, voir 'Multi-echantillons'",
+      "fr": " — %d échantillons charges, voir 'Multi-échantillons'",
       "en": " — %d samples loaded, see 'Multi-sample'"
     },
     {
@@ -3018,19 +3010,19 @@
       "en": " %d cell(s) excluded (too rare)."
     },
     {
-      "fr": " Aucune reference partagee (onglet Import > Spatial) — RCTD/Label Transfer seront ignores meme si selectionnes ; choisissez \"Sans reference (LDA)\" ou \"Aucune\".",
+      "fr": " Aucune référence partagée (onglet Import > Spatial) — RCTD/Label Transfer seront ignores même si selectionnes ; choisissez \"Sans référence (LDA)\" ou \"Aucune\".",
       "en": " No shared reference (Import > Spatial tab) — RCTD/Label Transfer will be ignored even if selected; choose \"Reference-free (LDA)\" or \"None\"."
     },
     {
-      "fr": " Comparez et integrez conjointement plusieurs echantillons spatiaux deja importes (onglet Import > Spatial). L'integration s'execute sur les \"sketches\" en RAM (echantillon <= max_sketch cellules par jeu de donnees, jamais les matrices pleine resolution) pour rester leger sur une machine CPU/32 Go.",
+      "fr": " Comparez et integrez conjointement plusieurs échantillons spatiaux déjà importés (onglet Import > Spatial). L'intégration s'exécute sur les \"sketches\" en RAM (échantillon <= max_sketch cellules par jeu de données, jamais les matrices pleine résolution) pour rester leger sur une machine CPU/32 Go.",
       "en": " Compare and jointly integrate several spatial samples already imported (Import > Spatial tab). Integration runs on the in-RAM \"sketches\" (<= max_sketch elements per dataset, never the full-resolution matrices) to stay light on a CPU/32 GB machine."
     },
     {
-      "fr": " Consultez les onglets numerotes (1 a 6) pour explorer/affiner chaque resultat en detail, ou les onglets \"7. Export\" / \"8. Rapport\" pour tout regrouper dans un paquet .zip / script R reproductible / rapport HTML-PDF.",
+      "fr": " Consultez les onglets numerotes (1 a 6) pour explorer/affiner chaque résultat en detail, ou les onglets \"7. Export\" / \"8. Rapport\" pour tout regrouper dans un paquet .zip / script R reproductible / rapport HTML-PDF.",
       "en": " See the numbered tabs (1 to 6) to explore/refine each result in detail, or the \"7. Export\" / \"8. Report\" tabs to bundle everything into a .zip package / reproducible R script / HTML-PDF report."
     },
     {
-      "fr": " Enchaine automatiquement, avec des parametres par defaut identiques a ceux des onglets individuels. Chaque etape ecrit ses resultats au MEME endroit que si vous l'aviez lancee manuellement depuis son propre onglet numerote -- vous pouvez ensuite affiner n'importe quelle etape individuellement sans tout relancer.",
+      "fr": " Enchaîne automatiquement, avec des paramètres par défaut identiques à ceux des onglets individuels. Chaque étape écrit ses résultats au MÊME endroit que si vous l'aviez lancée manuellement depuis son propre onglet numerote -- vous pouvez ensuite affiner n'importe quelle étape individuellement sans tout relancer.",
       "en": " Chains steps automatically, with defaults identical to the individual tabs. Each step writes its results to the SAME place as if you had launched it manually from its own numbered tab — you can then refine any step individually without re-running everything."
     },
     {
@@ -3038,7 +3030,7 @@
       "en": " Evaluates the spatial co-occurrence of ligand-receptor pairs based on gene expression within neighborhoods (BANKSY-lite). "
     },
     {
-      "fr": " Le test de composition differentielle (onglet \"Composition differentielle\") se recalcule automatiquement des qu'une integration conjointe est disponible ci-dessus — aucun bouton separe.",
+      "fr": " Le test de composition différentielle (onglet \"Composition différentielle\") se recalcule automatiquement dès qu'une intégration conjointe est disponible ci-dessus — aucun bouton séparé.",
       "en": " The differential composition test (\"Differential composition\" tab) recomputes automatically as soon as a joint integration is available above — no separate button."
     },
     {
@@ -3046,7 +3038,7 @@
       "en": " LR pairs must be supplied via lr_pairs_db (CSV file). Automatic download of CellTalkDB/CellPhoneDB is not supported in this module."
     },
     {
-      "fr": " Reference partagee disponible (%s cellules) — utilisable par RCTD/Label Transfer.",
+      "fr": " Référence partagée disponible (%s cellules) — utilisable par RCTD/Label Transfer.",
       "en": " Shared reference available (%s cells) — usable by RCTD/Label Transfer."
     },
     {
@@ -3062,7 +3054,7 @@
       "en": "%d cell types (%s)"
     },
     {
-      "fr": "%s cellules x %s genes (colonne '%s', backend: %s)%s — preparee le %s.",
+      "fr": "%s cellules x %s gènes (colonne '%s', backend: %s)%s — preparee le %s.",
       "en": "%s cells x %s genes (column '%s', backend: %s)%s — prepared on %s."
     },
     {
@@ -3074,7 +3066,7 @@
       "en": "{n_types} type(s) below {min_cells} cells: {types_list}."
     },
     {
-      "fr": "{n} marqueurs ROI calcules.",
+      "fr": "{n} marqueurs ROI calculés.",
       "en": "{n} ROI markers computed."
     },
     {
@@ -3114,11 +3106,11 @@
       "en": "Use only if the hires background chosen above still looks rotated. NEVER affects PNG export or clustering/Moran."
     },
     {
-      "fr": "Ajoutent chacune un peu de temps de calcul -- decochees par defaut. Consultez les onglets \"1. QC\" et \"6. Niches spatiales\" pour l'explication de chaque test.",
+      "fr": "Ajoutent chacune un peu de temps de calcul -- decochees par défaut. Consultez les onglets \"1. QC\" et \"6. Niches spatiales\" pour l'explication de chaque test.",
       "en": "Each adds some computation time — unchecked by default. See the \"1. QC\" and \"6. Spatial Niches\" tabs for an explanation of each test."
     },
     {
-      "fr": "Apercu (ce qui sera inclus dans le rapport)",
+      "fr": "Aperçu (ce qui sera inclus dans le rapport)",
       "en": "Overview (what will be included in the report)"
     },
     {
@@ -3130,11 +3122,11 @@
       "en": "At least 2 cell types required."
     },
     {
-      "fr": "Aucun echantillon a inclure dans le rapport.",
+      "fr": "Aucun échantillon a inclure dans le rapport.",
       "en": "No sample to include in the report."
     },
     {
-      "fr": "Aucun fichier a revérifier — uploadez d'abord une reference.",
+      "fr": "Aucun fichier a revérifier — uploadez d'abord une référence.",
       "en": "Nothing to re-check — upload a reference first."
     },
     {
@@ -3150,7 +3142,7 @@
       "en": "No level available for this grouping."
     },
     {
-      "fr": "aucune colonne 'type cellulaire' selectionnee",
+      "fr": "aucune colonne 'type cellulaire' sélectionnée",
       "en": "no 'cell type' column selected"
     },
     {
@@ -3166,7 +3158,7 @@
       "en": "No data"
     },
     {
-      "fr": "Aucune donnee a exporter.",
+      "fr": "Aucune donnée a exporter.",
       "en": "No data to export."
     },
     {
@@ -3182,19 +3174,19 @@
       "en": "No histology image available."
     },
     {
-      "fr": "Aucune integration conjointe calculee (onglet \"5. Multi-echantillons\") -- section omise.",
+      "fr": "Aucune intégration conjointe calculée (onglet \"5. Multi-échantillons\") -- section omise.",
       "en": "No joint integration computed (\"5. Multi-sample\" tab) — section omitted."
     },
     {
-      "fr": "Aucune reference chargee.",
+      "fr": "Aucune référence chargée.",
       "en": "No reference loaded."
     },
     {
-      "fr": "Aucune resolution de binning selectionnee (voir le panneau Visium HD ci-dessus).",
+      "fr": "Aucune résolution de binning sélectionnée (voir le panneau Visium HD ci-dessus).",
       "en": "No binning resolution selected (see the Visium HD panel above)."
     },
     {
-      "fr": "Aucune ROI selectionnee.",
+      "fr": "Aucune ROI sélectionnée.",
       "en": "No ROI selected."
     },
     {
@@ -3214,7 +3206,7 @@
       "en": "Low"
     },
     {
-      "fr": "Calcul termine, mais aucun gene ne passe les seuils definis.",
+      "fr": "Calcul terminé, mais aucun gène ne passe les seuils définis.",
       "en": "Computation finished, but no gene passes the defined thresholds."
     },
     {
@@ -3230,7 +3222,7 @@
       "en": "First compute a clustering, a deconvolution or niches to get a categorical grouping."
     },
     {
-      "fr": "Calculez d'abord une integration conjointe (bouton \"Lancer l'integration\" dans le panneau lateral).",
+      "fr": "Calculez d'abord une intégration conjointe (bouton \"Lancer l'intégration\" dans le panneau lateral).",
       "en": "First compute a joint integration (\"Run integration\" button in the sidebar)."
     },
     {
@@ -3246,23 +3238,23 @@
       "en": "ALSO loads 'raw_feature_bc_matrix.h5' (all barcodes, including off-tissue ones) into a separate BPCells matrix — reserved for future use (e.g. ambient noise correction). Affects NO current computation (QC/clustering/deconvolution keep using only the filtered matrix). Not available for Visium HD."
     },
     {
-      "fr": "Chargement de la reference en cours...",
+      "fr": "Chargement de la référence en cours...",
       "en": "Loading the reference..."
     },
     {
-      "fr": "chargement de la reference encore en cours -- patientez puis reessayez",
+      "fr": "chargement de la référence encore en cours -- patientez puis reessayez",
       "en": "reference still loading — wait then try again"
     },
     {
-      "fr": "Chargez d'abord une reference et choisissez la colonne 'type cellulaire'.",
+      "fr": "Chargez d'abord une référence et choisissez la colonne 'type cellulaire'.",
       "en": "First load a reference and choose the 'cell type' column."
     },
     {
-      "fr": "Chargez et preparez UNE FOIS une reference scRNA-seq annotee ici pour la reutiliser directement dans l'onglet \"Spatial > 3. Deconvolution\" (RCTD ET Label Transfer), sans avoir a la re-uploader/re-preparer a chaque echantillon ou a chaque session (tant que l'artefact reste sur ce disque — voir sauvegarde de session dans le panneau lateral).",
+      "fr": "Chargez et préparez UNE FOIS une référence scRNA-seq annotee ici pour la reutiliser directement dans l'onglet \"Spatial > 3. Deconvolution\" (RCTD ET Label Transfer), sans avoir a la re-uploader/re-préparer a chaque échantillon ou a chaque session (tant que l'artefact reste sur ce disque — voir sauvegarde de session dans le panneau lateral).",
       "en": "Load and prepare an annotated scRNA-seq reference ONCE here to reuse it directly in the \"Spatial > 3. Deconvolution\" tab (both RCTD AND Label Transfer), without re-uploading/re-preparing it for each sample or session (as long as the artifact stays on this disk — see session save in the sidebar)."
     },
     {
-      "fr": "Chi2 = %.1f, p = %.4g (%s) — composition %s entre echantillons (seuil 0.05).",
+      "fr": "Chi2 = %.1f, p = %.4g (%s) — composition %s entre échantillons (seuil 0.05).",
       "en": "Chi-square = %.1f, p = %.4g (%s) — composition %s across samples (0.05 threshold)."
     },
     {
@@ -3270,7 +3262,7 @@
       "en": "target '%s' (%s)"
     },
     {
-      "fr": "Cible choisie automatiquement = le cluster le plus peuple apres l'etape 2. Pour tester un autre cluster/niche/type cellulaire, utilisez l'onglet 6 directement.",
+      "fr": "Cible choisie automatiquement = le cluster le plus peuple après l'étape 2. Pour tester un autre cluster/niche/type cellulaire, utilisez l'onglet 6 directement.",
       "en": "Target automatically chosen = the most populated cluster after step 2. To test another cluster/niche/cell type, use tab 6 directly."
     },
     {
@@ -3290,7 +3282,7 @@
       "en": "full"
     },
     {
-      "fr": "Composition en clusters par echantillon",
+      "fr": "Composition en clusters par échantillon",
       "en": "Cluster composition per sample"
     },
     {
@@ -3302,7 +3294,7 @@
       "en": "Compressing (.zip)..."
     },
     {
-      "fr": "Controles deplaces dans le panneau lateral ('Apercu de la reference').",
+      "fr": "Controles deplaces dans le panneau lateral ('Aperçu de la référence').",
       "en": "Controls moved to the sidebar ('Reference preview')."
     },
     {
@@ -3310,7 +3302,7 @@
       "en": "Converting to a Seurat object..."
     },
     {
-      "fr": "Correlation\n(Pearson)",
+      "fr": "Corrélation\n(Pearson)",
       "en": "Correlation\n(Pearson)"
     },
     {
@@ -3326,11 +3318,11 @@
       "en": "Deconv"
     },
     {
-      "fr": "Degrade (metriques continues : QC, gene, Z-score...)",
+      "fr": "Degrade (metriques continues : QC, gène, Z-score...)",
       "en": "Degraded (continuous metrics: QC, gene, Z-score...)"
     },
     {
-      "fr": "Deja disponibles apres import, sans code supplementaire (ces onglets sont generiques a toutes les technologies) : SCTransform (case ci-dessous) ; clustering spatial onglet 2 (Lambda = 0 → equivalent PCA/UMAP/clusters \"classique\", sans terme de voisinage) ; indice de Moran onglet 1 (options avancees x.cuts/y.cuts pour accelerer sur un gros puck) ; deconvolution RCTD et transfert d'annotations scRNA-seq onglet 3 ; multi-pucks onglet 5.",
+      "fr": "Deja disponibles après import, sans code supplementaire (ces onglets sont génériques a toutes les technologies) : SCTransform (case ci-dessous) ; clustering spatial onglet 2 (Lambda = 0 → équivalent PCA/UMAP/clusters \"classique\", sans terme de voisinage) ; indice de Moran onglet 1 (options avancees x.cuts/y.cuts pour accelerer sur un gros puck) ; deconvolution RCTD et transfert d'annotations scRNA-seq onglet 3 ; multi-pucks onglet 5.",
       "en": "Already available after import, with no extra code (these tabs are generic to all technologies): SCTransform (checkbox below); spatial clustering tab 2 (Lambda = 0 → equivalent to \"classic\" PCA/UMAP/clusters, no neighborhood term); Moran's I tab 1 (advanced x.cuts/y.cuts options to speed up a large puck); RCTD deconvolution and scRNA-seq annotation transfer tab 3; multi-pucks tab 5."
     },
     {
@@ -3346,7 +3338,7 @@
       "en": "Deviations from independence (dataset x cluster)"
     },
     {
-      "fr": "Echantillon actif",
+      "fr": "Échantillon actif",
       "en": "Active sample"
     },
     {
@@ -3362,31 +3354,31 @@
       "en": "Neighborhood enrichment (k=%d, %d permutations)"
     },
     {
-      "fr": "Equivalent de DimPlot(brain.merge, group.by=c(\"ident\",\"orig.ident\")) : le panneau de gauche verifie l'effet de lot (les echantillons doivent bien se melanger si Harmony est actif) ; celui de droite montre les clusters biologiques resultants.",
+      "fr": "Équivalent de DimPlot(brain.merge, group.by=c(\"ident\",\"orig.ident\")) : le panneau de gauche vérifie l'effet de lot (les échantillons doivent bien se mélanger si Harmony est actif) ; celui de droite montre les clusters biologiques resultants.",
       "en": "Equivalent of DimPlot(brain.merge, group.by=c(\"ident\",\"orig.ident\")): the left panel checks the batch effect (samples should mix well if Harmony is active); the right one shows the resulting biological clusters."
     },
     {
-      "fr": "Equivalent de FindMarkers() applique a chaque cluster contre tous les autres (test de Wilcoxon) — necessite un clustering deja calcule ci-dessus. Asynchrone (mirai), sur les memes elements (QC-filtres) que le clustering.",
+      "fr": "Équivalent de FindMarkers() appliqué à chaque cluster contre tous les autres (test de Wilcoxon) — nécessite un clustering déjà calculé ci-dessus. Asynchrone (mirai), sur les mêmes elements (QC-filtres) que le clustering.",
       "en": "Equivalent of FindMarkers() applied to each cluster against all others (Wilcoxon test) — requires clustering computed above first. Asynchronous (mirai), on the same elements (QC-filtered) as the clustering."
     },
     {
-      "fr": "Equivalent de SpatialDimPlot(brain.merge) : une carte par echantillon selectionne, cote a cote, meme metrique/coloration pour comparaison directe.",
+      "fr": "Équivalent de SpatialDimPlot(brain.merge) : une carte par échantillon sélectionne, cote a cote, même metrique/coloration pour comparaison directe.",
       "en": "Equivalent of SpatialDimPlot(brain.merge): one map per selected sample, side by side, same metric/coloring for direct comparison."
     },
     {
-      "fr": "Erreur (ou depassement du delai de {ceiling}) pendant la deconvolution — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
+      "fr": "Erreur (ou depassement du délai de {ceiling}) pendant la deconvolution — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
       "en": "Error (or {ceiling} timeout exceeded) during deconvolution — see the log. Try 'Reset daemons' in the Spatial header then relaunch."
     },
     {
-      "fr": "Erreur (ou depassement du delai de 20 min) pendant le clustering — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
+      "fr": "Erreur (ou depassement du délai de 20 min) pendant le clustering — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
       "en": "Error (or 20 min timeout exceeded) during clustering — see the log. Try 'Reset daemons' in the Spatial header then relaunch."
     },
     {
-      "fr": "Erreur (ou depassement du delai) pendant l'integration multi-echantillons — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
+      "fr": "Erreur (ou depassement du délai) pendant l'intégration multi-échantillons — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
       "en": "Error (or timeout) during multi-sample integration — see the log. Try 'Reset daemons' in the Spatial header then relaunch."
     },
     {
-      "fr": "Erreur (ou depassement du delai) pendant la recherche de marqueurs — voir le log. Essayez 'Reinitialiser les daemons' puis relancez.",
+      "fr": "Erreur (ou depassement du délai) pendant la recherche de marqueurs — voir le log. Essayez 'Reinitialiser les daemons' puis relancez.",
       "en": "Error (or timeout) during marker search — see the log. Try 'Reset daemons' then relaunch."
     },
     {
@@ -3402,7 +3394,7 @@
       "en": "Error during Ripley's K computation — see the log. Try 'Reset daemons' then relaunch."
     },
     {
-      "fr": "Erreur test de composition differentielle :",
+      "fr": "Erreur test de composition différentielle :",
       "en": "Differential composition test error:"
     },
     {
@@ -3410,7 +3402,7 @@
       "en": "Filtering / merging rare types..."
     },
     {
-      "fr": "Fond disponible pour l'export PNG, mais echec de l'encodage Plotly.",
+      "fr": "Fond disponible pour l'export PNG, mais échec de l'encodage Plotly.",
       "en": "Background available for PNG export, but Plotly encoding failed."
     },
     {
@@ -3438,11 +3430,11 @@
       "en": "Gene '{g}' not found in the current sketch."
     },
     {
-      "fr": "Genere un rapport HTML et/ou PDF a partir de TOUS les resultats DEJA CALCULES (QC, clustering, deconvolution, Moran's I, niches, UMAP) -- une section n'apparait que si le calcul correspondant a deja ete lance au moins une fois, MEME si vous ne consultez pas cet onglet actuellement.",
+      "fr": "Genere un rapport HTML et/ou PDF à partir de TOUS les résultats DEJA CALCULES (QC, clustering, deconvolution, Moran's I, niches, UMAP) -- une section n'apparaît que si le calcul correspondant a déjà ete lance au moins une fois, MÊME si vous ne consultez pas cet onglet actuellement.",
       "en": "Generates an HTML and/or PDF report from ALL ALREADY-COMPUTED results (QC, clustering, deconvolution, Moran's I, niches, UMAP) — a section only appears if the corresponding computation has been run at least once, EVEN if you are not currently viewing that tab."
     },
     {
-      "fr": "Genes surdisperses maximum",
+      "fr": "Gènes surdisperses maximum",
       "en": "Maximum overdispersed genes"
     },
     {
@@ -3454,11 +3446,11 @@
       "en": "Hotspots (Getis-Ord)"
     },
     {
-      "fr": "Integration multi-echantillons disponible (%s, %s) -- incluse.",
+      "fr": "Integration multi-échantillons disponible (%s, %s) -- incluse.",
       "en": "Multi-sample integration available (%s, %s) — included."
     },
     {
-      "fr": "ℹ️ %d cellule(s) selectionnee(s) / isolee(s) (Spatial: %s, UMAP: %s)",
+      "fr": "ℹ️ %d cellule(s) sélectionnée(s) / isolee(s) (Spatial: %s, UMAP: %s)",
       "en": "ℹ️ %d cell(s) selected / isolated (Spatial: %s, UMAP: %s)"
     },
     {
@@ -3466,23 +3458,23 @@
       "en": "k=%d, %d permutations (LR spot scores)"
     },
     {
-      "fr": "la reference a echoue au chargement (%s)",
+      "fr": "la référence a echoue au chargement (%s)",
       "en": "the reference failed to load (%s)"
     },
     {
-      "fr": "Le calcul des distances par paires est en O(n^2) -- ces plafonds evitent une explosion RAM/temps sur un cluster tres majoritaire ou un gros jeu de donnees. Le titre du graphe indique si un sous-echantillonnage a ete applique.",
+      "fr": "Le calcul des distances par paires est en O(n^2) -- ces plafonds evitent une explosion RAM/temps sur un cluster très majoritaire ou un gros jeu de données. Le titre du graphe indique si un sous-échantillonnage a ete applique.",
       "en": "Pairwise distance computation is O(n^2) — these caps avoid a RAM/time explosion on a highly dominant cluster or a large dataset. The plot title indicates whether subsampling was applied."
     },
     {
-      "fr": "Le clustering s'applique aux elements passant les seuils QC (onglet 1) — reimportez ou ajustez les seuils si necessaire.",
+      "fr": "Le clustering s'applique aux elements passant les seuils QC (onglet 1) — réimportez ou ajustez les seuils si necessaire.",
       "en": "Clustering applies to elements passing the QC thresholds (tab 1) — re-import or adjust the thresholds if needed."
     },
     {
-      "fr": "Le fond histologique n'a pas pu etre prepare pour cette resolution.",
+      "fr": "Le fond histologique n'a pas pu etre prepare pour cette résolution.",
       "en": "The histology background could not be prepared for this resolution."
     },
     {
-      "fr": "Le script reproduit UNIQUEMENT les etapes DEJA LANCEES dans l'app (QC/clustering/deconvolution RCTD/niches) avec les MEMES parametres. Necessite que le dossier BPCells reste accessible au meme chemin (voir README/commentaires inclus dans le script). Les statistiques spatiales avancees (enrichissement/hotspots/Ripley's K) ne sont PAS re-executees par ce script -- leurs resultats DEJA calcules restent disponibles en CSV dans le paquet complet ci-dessus.",
+      "fr": "Le script reproduit UNIQUEMENT les étapes DEJA LANCEES dans l'app (QC/clustering/deconvolution RCTD/niches) avec les MEMES paramètres. Necessite que le dossier BPCells reste accessible au même chemin (voir README/commentaires inclus dans le script). Les statistiques spatiales avancees (enrichissement/hotspots/Ripley's K) ne sont PAS re-executees par ce script -- leurs résultats DEJA calculés restent disponibles en CSV dans le paquet complet ci-dessus.",
       "en": "The script reproduces ONLY the steps ALREADY RUN in the app (QC/clustering/RCTD deconvolution/niches) with the SAME parameters. Requires the BPCells folder to remain accessible at the same path (see README/comments included in the script). Advanced spatial statistics (enrichment/hotspots/Ripley's K) are NOT re-executed by this script — their ALREADY-computed results remain available as CSV in the full bundle above."
     },
     {
@@ -3494,7 +3486,7 @@
       "en": "Reading the raw matrix..."
     },
     {
-      "fr": "Lecture des metadonnees...",
+      "fr": "Lecture des métadonnées...",
       "en": "Reading metadata..."
     },
     {
@@ -3514,7 +3506,7 @@
       "en": "LogNormalize (fast)"
     },
     {
-      "fr": "Meme moteur que le bouton Export PNG ci-dessous. Decochez pour donner toute la largeur a la carte interactive Plotly.",
+      "fr": "Même moteur que le bouton Export PNG ci-dessous. Decochez pour donner toute la largeur a la carte interactive Plotly.",
       "en": "Same engine as the Export PNG button below. Uncheck to give the full width to the interactive Plotly map."
     },
     {
@@ -3534,7 +3526,7 @@
       "en": "Mean LR score"
     },
     {
-      "fr": "Ni 'arrow' ni 'nanoparquet' installes — necessaires pour lire les positions de bins (tissue_positions.parquet). L'import utilisera un chargeur degrade (coordonnees + comptages uniquement, PAS de fond histologique) si un fichier .csv de positions est aussi present ; sinon il echouera avec un message clair. Pour un import complet, installez l'un des deux : ",
+      "fr": "Ni 'arrow' ni 'nanoparquet' installes — necessaires pour lire les positions de bins (tissue_positions.parquet). L'import utilisera un chargeur degrade (coordonnées + comptages uniquement, PAS de fond histologique) si un fichier .csv de positions est aussi present ; sinon il echouera avec un message clair. Pour un import complet, installez l'un des deux : ",
       "en": "Neither 'arrow' nor 'nanoparquet' installed — needed to read bin positions (tissue_positions.parquet). The import will use a degraded loader (coordinates + counts only, NO histology background) if a positions .csv file is also present; otherwise it will fail with a clear message. For a full import, install either: "
     },
     {
@@ -3562,11 +3554,11 @@
       "en": "Not computed / skipped"
     },
     {
-      "fr": "Non calculee / ignoree",
+      "fr": "Non calculée / ignorée",
       "en": "Not computed / skipped"
     },
     {
-      "fr": "Non calcules",
+      "fr": "Non calculés",
       "en": "Not computed"
     },
     {
@@ -3582,7 +3574,7 @@
       "en": "Package 'arrow' absent but 'nanoparquet' present: full import still possible, via a lighter Parquet reader."
     },
     {
-      "fr": "PDF necessite une distribution LaTeX (ex: tinytex::install_tinytex()) sur la machine qui heberge l'app -- en son absence le rendu PDF echoue proprement avec un message clair (notification), sans bloquer un eventuel export HTML demande en parallele.",
+      "fr": "PDF nécessite une distribution LaTeX (ex: tinytex::install_tinytex()) sur la machine qui heberge l'app -- en son absence le rendu PDF echoue proprement avec un message clair (notification), sans bloquer un eventuel export HTML demande en parallele.",
       "en": "PDF requires a LaTeX distribution (e.g. tinytex::install_tinytex()) on the machine hosting the app — without it, PDF rendering fails cleanly with a clear message (notification), without blocking a parallel HTML export request."
     },
     {
@@ -3590,7 +3582,7 @@
       "en": "For each pair of labels (cluster, dominant cell type or niche), compares the number of observed neighborhoods to a null envelope obtained by randomly shuffling labels — a positive z-score signals spatial co-occurrence (e.g. tumor/stroma interface), negative mutual exclusion."
     },
     {
-      "fr": "Pour UN label cible, compare son agregation spatiale observee a une enveloppe nulle obtenue en reshufflant QUI porte ce label parmi les memes positions (etiquetage aleatoire) -- adaptation usuelle en transcriptomique spatiale (le tissu entier est la fenetre, pas un processus de Poisson) plutot qu'un vrai test CSR/spatstat.",
+      "fr": "Pour UN label cible, compare son agregation spatiale observee a une enveloppe nulle obtenue en reshufflant QUI porte ce label parmi les mêmes positions (etiquetage aleatoire) -- adaptation usuelle en transcriptomique spatiale (le tissu entier est la fenetre, pas un processus de Poisson) plutot qu'un vrai test CSR/spatstat.",
       "en": "For ONE target label, compares its observed spatial aggregation to a null envelope obtained by reshuffling WHO carries that label among the same positions (random labeling) — the usual adaptation in spatial transcriptomics (the whole tissue is the window, not a Poisson process) rather than a true CSR/spatstat test."
     },
     {
@@ -3598,11 +3590,11 @@
       "en": "Preparing PNG preview…"
     },
     {
-      "fr": "Preparation de l'artifact de reference...",
+      "fr": "Preparation de l'artifact de référence...",
       "en": "Preparing the reference artifact..."
     },
     {
-      "fr": "Pret : {cells} cellules x {genes} genes (backend: {backend}).{extra}",
+      "fr": "Prêt : {cells} cellules x {gènes} gènes (backend: {backend}).{extra}",
       "en": "Ready: {cells} cells x {genes} genes (backend: {backend}).{extra}"
     },
     {
@@ -3614,7 +3606,7 @@
       "en": "Mean\nproportion"
     },
     {
-      "fr": "Raccourci : gene spatialement variable (indice de Moran)",
+      "fr": "Raccourci : gène spatialement variable (indice de Moran)",
       "en": "Shortcut: spatially variable gene (Moran's I)"
     },
     {
@@ -3622,71 +3614,71 @@
       "en": "Radius r"
     },
     {
-      "fr": "RCTD necessite au moins {min_cells} cellules par type dans la reference. Type(s) insuffisant(s) : {bad_types}. ",
+      "fr": "RCTD nécessite au moins {min_cells} cellules par type dans la référence. Type(s) insuffisant(s) : {bad_types}. ",
       "en": "RCTD requires at least {min_cells} cells per type in the reference. Insufficient type(s): {bad_types}. "
     },
     {
-      "fr": "Recommande pour comparer des echantillons/conditions differents. Desactivez si vos coupes proviennent du meme tissu/bloc (ex: 2 moities d'un meme cerveau) — comportement de la vignette Seurat par defaut, sans correction.",
+      "fr": "Recommande pour comparer des échantillons/conditions differents. Desactivez si vos coupes proviennent du même tissu/bloc (ex: 2 moities d'un même cerveau) — comportement de la vignette Seurat par défaut, sans correction.",
       "en": "Recommended to compare different samples/conditions. Disable if your sections come from the same tissue/block (e.g. 2 halves of one brain) — Seurat vignette default behavior, no correction."
     },
     {
-      "fr": "Reference — erreur de conversion :",
+      "fr": "Référence — erreur de conversion :",
       "en": "Reference — conversion error:"
     },
     {
-      "fr": "Reference — erreur de copie du fichier :",
+      "fr": "Référence — erreur de copie du fichier :",
       "en": "Reference — file copy error:"
     },
     {
-      "fr": "Reference — erreur de lecture :",
+      "fr": "Référence — erreur de lecture :",
       "en": "Reference — read error:"
     },
     {
-      "fr": "Reference — erreur de lecture metadata :",
+      "fr": "Référence — erreur de lecture metadata :",
       "en": "Reference — metadata read error:"
     },
     {
-      "fr": "Reference — le fichier n'a pas pu etre converti en objet Seurat.",
+      "fr": "Référence — le fichier n'a pas pu etre converti en objet Seurat.",
       "en": "Reference — the file could not be converted to a Seurat object."
     },
     {
-      "fr": "Reference chargee : {cells} cellules x {genes} genes.",
+      "fr": "Référence chargée : {cells} cellules x {gènes} gènes.",
       "en": "Reference loaded: {cells} cells x {genes} genes."
     },
     {
-      "fr": "Reference introuvable ou illisible — reimportez le fichier de reference.",
+      "fr": "Référence introuvable ou illisible — réimportez le fichier de référence.",
       "en": "Reference missing or unreadable — re-upload the reference file."
     },
     {
-      "fr": "Reference partagee ACTIVE : {cells} cellules x {genes} genes (colonne '{col}') — ",
+      "fr": "Référence partagée ACTIVE : {cells} cellules x {gènes} gènes (colonne '{col}') — ",
       "en": "ACTIVE shared reference: {cells} cells x {genes} genes (column '{col}') — "
     },
     {
-      "fr": "reference partagee introuvable ou invalide -- reimportez-la depuis l'onglet Import > Spatial",
+      "fr": "référence partagée introuvable ou invalide -- réimportez-la depuis l'onglet Import > Spatial",
       "en": "shared reference missing or invalid — re-import it from the Import > Spatial tab"
     },
     {
-      "fr": "Reference partagee lue : {cells} cellules x {genes} genes.",
+      "fr": "Référence partagée lue : {cells} cellules x {gènes} gènes.",
       "en": "Shared reference read: {cells} cells x {genes} genes."
     },
     {
-      "fr": "reference pas encore preparee -- cliquez '1) Preparer la reference (disque)' puis reessayez",
+      "fr": "référence pas encore preparee -- cliquez '1) Préparer la référence (disque)' puis reessayez",
       "en": "reference not yet prepared — click '1) Prepare the reference (disk)' then try again"
     },
     {
-      "fr": "Reference pas encore preparee pour la deconvolution — cliquez ci-dessus.",
+      "fr": "Référence pas encore preparee pour la deconvolution — cliquez ci-dessus.",
       "en": "Reference not yet prepared for deconvolution — click above."
     },
     {
-      "fr": "Reference scRNA-seq",
+      "fr": "Référence scRNA-seq",
       "en": "scRNA-seq Reference"
     },
     {
-      "fr": "Regroupe les resultats DEJA CALCULES (QC, clustering, deconvolution, niches, statistiques spatiales avancees, cartes) pour l'echantillon actif dans une archive .zip, ou genere un script R autonome (+ contexte) pour reproduire le pipeline hors Shiny.",
+      "fr": "Regroupe les résultats DEJA CALCULES (QC, clustering, deconvolution, niches, statistiques spatiales avancees, cartes) pour l'échantillon actif dans une archive .zip, ou genere un script R autonome (+ contexte) pour reproduire le pipeline hors Shiny.",
       "en": "Bundles the ALREADY-COMPUTED results (QC, clustering, deconvolution, niches, advanced spatial statistics, maps) for the active sample into a .zip archive, or generates a standalone R script (+ context) to reproduce the pipeline outside Shiny."
     },
     {
-      "fr": "Regroupe les spots/cellules selon la COMPOSITION de leur voisinage spatial (quels clusters ou types cellulaires sont a proximite), pas selon leur propre expression — revele des regions definies par la coexistence de plusieurs populations (ex: interface tumeur/stroma, bordure d'un centre germinatif). Equivalent de Seurat::BuildNicheAssay().",
+      "fr": "Regroupe les spots/cellules selon la COMPOSITION de leur voisinage spatial (quels clusters ou types cellulaires sont a proximite), pas selon leur propre expression — revele des regions definies par la coexistence de plusieurs populations (ex: interface tumeur/stroma, bordure d'un centre germinatif). Équivalent de Seurat::BuildNicheAssay().",
       "en": "Groups spots/cells by the COMPOSITION of their spatial neighborhood (which clusters or cell types are nearby), not by their own expression — reveals regions defined by the coexistence of several populations (e.g. tumor/stroma interface, edge of a germinal center). Equivalent of Seurat::BuildNicheAssay()."
     },
     {
@@ -3706,7 +3698,7 @@
       "en": "Hotspot/Coldspot/NS distribution of LR pairs"
     },
     {
-      "fr": "Residu\nstandardise",
+      "fr": "Résidu\nstandardisé",
       "en": "Standardized\nresidual"
     },
     {
@@ -3718,7 +3710,7 @@
       "en": "Rest"
     },
     {
-      "fr": "Revérifier la reference (sans re-upload)",
+      "fr": "Revérifier la référence (sans re-upload)",
       "en": "Re-check the reference (no re-upload)"
     },
     {
@@ -3726,7 +3718,7 @@
       "en": "Ripley's K — '%s' (%s/%s elements)%s"
     },
     {
-      "fr": "Sauvegarde la vue ACTUELLE (coloration + parametres ci-dessus) pour l'onglet \"7. Export & Rapport\", meme apres avoir change d'onglet ou d'echantillon.",
+      "fr": "Sauvegarde la vue ACTUELLE (coloration + paramètres ci-dessus) pour l'onglet \"7. Export & Rapport\", même après avoir change d'onglet ou d'échantillon.",
       "en": "Saves the CURRENT view (coloring + parameters above) for the \"7. Export & Report\" tab, even after switching tabs or samples."
     },
     {
@@ -3734,7 +3726,7 @@
       "en": "SCTransform (slow)"
     },
     {
-      "fr": "SCTransform est significativement plus lourd que LogNormalize et s'execute de maniere SYNCHRONE pendant l'import (pas de mirai a cette etape) — reduisez la taille du sketch ci-dessus (ex: 10 000-20 000) si l'import devient trop long. N'affecte que le sketch (visualisation gene/UMAP) : le clustering spatial (BANKSY-lite) et l'indice de Moran restent en LogNormalize rapide sur les donnees completes, inchanges.",
+      "fr": "SCTransform est significativement plus lourd que LogNormalize et s'exécute de manière SYNCHRONE pendant l'import (pas de mirai a cette étape) — reduisez la taille du sketch ci-dessus (ex: 10 000-20 000) si l'import devient trop long. N'affecte que le sketch (visualisation gène/UMAP) : le clustering spatial (BANKSY-lite) et l'indice de Moran restent en LogNormalize rapide sur les données completes, inchanges.",
       "en": "SCTransform is significantly heavier than LogNormalize and runs SYNCHRONOUSLY during import (no mirai at this step) — reduce the sketch size above (e.g. 10,000-20,000) if the import becomes too slow. Only affects the sketch (gene/UMAP visualization): spatial clustering (BANKSY-lite) and Moran's I keep fast LogNormalize on the full data, unchanged."
     },
     {
@@ -3746,19 +3738,19 @@
       "en": "Select a ligand-receptor pair"
     },
     {
-      "fr": "Selectionnez le dossier racine contenant les fichiers bruts (ex: dossier 'outs' pour Visium/Xenium 10X, ou dossier CosMx AtoMx). Visium HD (dossier contenant 'binned_outputs/') est detecte automatiquement. Chaque import s'ajoute a la liste des echantillons (onglet Spatial > \"5. Multi-echantillons\") plutot que de remplacer le precedent.",
+      "fr": "Sélectionnez le dossier racine contenant les fichiers bruts (ex: dossier 'outs' pour Visium/Xenium 10X, ou dossier CosMx AtoMx). Visium HD (dossier contenant 'binned_outputs/') est détecté automatiquement. Chaque import s'ajoute a la liste des échantillons (onglet Spatial > \"5. Multi-échantillons\") plutot que de remplacer le précédent.",
       "en": "Select the root folder containing the raw files (e.g. the 'outs' folder for Visium/Xenium 10X, or a CosMx AtoMx folder). Visium HD (a folder containing 'binned_outputs/') is auto-detected. Each import is ADDED to the sample list (Spatial > \"5. Multi-sample\" tab) rather than replacing the previous one."
     },
     {
-      "fr": "Selectionnez un spot (pour la carte en dessous, si disponible):",
+      "fr": "Sélectionnez un spot (pour la carte en dessous, si disponible):",
       "en": "Select a spot (for the map below, if available):"
     },
     {
-      "fr": "Selectionnez une ROI depuis la Vue combinee, puis lancez le test Wilcoxon asynchrone contre le reste des spots.",
+      "fr": "Sélectionnez une ROI depuis la Vue combinee, puis lancez le test Wilcoxon asynchrone contre le reste des spots.",
       "en": "Select a ROI from the Combined view, then run the asynchronous Wilcoxon test against the remaining spots."
     },
     {
-      "fr": "Si le fond histologique apparait tourne/inverse par rapport aux spots apres import (probleme connu, cause = convention de colonnes GetTissueCoordinates() qui a change entre versions de Seurat), corrigez ici puis re-importez — verifiez visuellement dans l'onglet \"4. Visualisation\" > Carte spatiale.",
+      "fr": "Si le fond histologique apparaît tourne/inverse par rapport aux spots après import (probleme connu, cause = convention de colonnes GetTissueCoordinates() qui a change entre versions de Seurat), corrigez ici puis ré-importéz — vérifiez visuellement dans l'onglet \"4. Visualisation\" > Carte spatiale.",
       "en": "If the histology background appears rotated/flipped relative to the spots after import (known issue, cause = GetTissueCoordinates() column convention that changed between Seurat versions), correct here then re-import — check visually in the \"4. Visualization\" tab > Spatial map."
     },
     {
@@ -3774,7 +3766,7 @@
       "en": "Significance"
     },
     {
-      "fr": "Slide-seq (BETA) : counts (MTX ou DGE) + coordonnees des beads (CSV/TSV), sans image histologique (technologie sans imagerie associee).",
+      "fr": "Slide-seq (BETA) : counts (MTX ou DGE) + coordonnées des beads (CSV/TSV), sans image histologique (technologie sans imagerie associee).",
       "en": "Slide-seq (BETA): counts (MTX or DGE) + bead coordinates (CSV/TSV), no histology image (technology without associated imaging)."
     },
     {
@@ -3782,7 +3774,7 @@
       "en": "subsampled"
     },
     {
-      "fr": "Spots/cellules (echantillon)",
+      "fr": "Spots/cellules (échantillon)",
       "en": "Spots/cells (sample)"
     },
     {
@@ -3806,11 +3798,11 @@
       "en": "Done."
     },
     {
-      "fr": "Test du Chi2 d'independance (table de contingence dataset x cluster) sur l'integration conjointe -- repli automatique sur un p simule (2000 replicats) si des effectifs attendus sont trop faibles (< 5). Les residus standardises indiquent QUELS clusters/echantillons s'ecartent le plus de l'independance (|residu| > ~2 = ecart notable).",
+      "fr": "Test du Chi2 d'independance (table de contingence dataset x cluster) sur l'intégration conjointe -- repli automatique sur un p simule (2000 replicats) si des effectifs attendus sont trop faibles (< 5). Les residus standardises indiquent QUELS clusters/échantillons s'ecartent le plus de l'independance (|résidu| > ~2 = ecart notable).",
       "en": "Chi-square independence test (dataset x cluster contingency table) on the joint integration — automatic fallback to a simulated p-value (2000 replicates) if expected counts are too low (< 5). Standardized residuals show WHICH clusters/samples deviate most from independence (|residual| > ~2 = notable deviation)."
     },
     {
-      "fr": "Top marqueurs (triés par log2FC decroissant, p-adj < 0.05) par cluster — utilisez ces genes pour interpreter biologiquement chaque domaine spatial.",
+      "fr": "Top marqueurs (triés par log2FC decroissant, p-adj < 0.05) par cluster — utilisez ces gènes pour interpreter biologiquement chaque domaine spatial.",
       "en": "Top markers (sorted by decreasing log2FC, p-adj < 0.05) per cluster — use these genes to interpret each spatial domain biologically."
     },
     {
@@ -3826,7 +3818,7 @@
       "en": "Type: "
     },
     {
-      "fr": "Une fois calculees, les niches sont disponibles comme option de coloration (\"Niche spatiale\") dans l'onglet \"4. Visualisation\" — fond histologique, export PNG/CSV et ROI fonctionnent avec, exactement comme pour un cluster.",
+      "fr": "Une fois calculées, les niches sont disponibles comme option de coloration (\"Niche spatiale\") dans l'onglet \"4. Visualisation\" — fond histologique, export PNG/CSV et ROI fonctionnent avec, exactement comme pour un cluster.",
       "en": "Once computed, niches become available as a coloring option (\"Spatial niche\") in the \"4. Visualization\" tab — histology background, PNG/CSV export and ROI all work with them, exactly like a cluster."
     },
     {
@@ -3834,11 +3826,11 @@
       "en": "directly usable in Spatial > 3. Deconvolution."
     },
     {
-      "fr": "Visium HD detecte ('binned_outputs/'). Choisissez UNE resolution a importer — reimportez ce meme dossier pour ajouter l'autre resolution comme echantillon distinct (onglet Spatial > \"5. Multi-echantillons\").",
+      "fr": "Visium HD détecté ('binned_outputs/'). Choisissez UNE résolution à importer — réimportez ce même dossier pour ajouter l'autre résolution comme échantillon distinct (onglet Spatial > \"5. Multi-échantillons\").",
       "en": "Visium HD detected ('binned_outputs/'). Choose ONE resolution to import — re-import this same folder to add the other resolution as a distinct sample (Spatial > \"5. Multi-sample\" tab)."
     },
     {
-      "fr": "Visualisez la distribution des paires selectionnees (Hotspot/Coldspot/NS) sur le fond histologique.",
+      "fr": "Visualisez la distribution des paires sélectionnées (Hotspot/Coldspot/NS) sur le fond histologique.",
       "en": "Visualize the distribution of the selected pairs (Hotspot/Coldspot/NS) on the histology background."
     },
     {
@@ -3858,15 +3850,15 @@
       "en": "🐛 Raw background (debug PNG)"
     },
     {
-      "fr": "Aucune integration conjointe calculee pour cette session (onglet \"5. Multi-echantillons\").",
+      "fr": "Aucune intégration conjointe calculée pour cette session (onglet \"5. Multi-échantillons\").",
       "en": "No joint integration computed for this session (\"5. Multi-sample\" tab)."
     },
     {
-      "fr": "Multi-echantillons - Integration conjointe",
+      "fr": "Multi-échantillons - Integration conjointe",
       "en": "Multi-sample - Joint integration"
     },
     {
-      "fr": "Reduction utilisee : **%s** - %s elements sur %d echantillon(s) : %s.",
+      "fr": "Reduction utilisee : **%s** - %s elements sur %d échantillon(s) : %s.",
       "en": "Reduction used: **%s** - %s elements across %d sample(s): %s."
     },
     {
@@ -3878,7 +3870,7 @@
       "en": "*{tech} -- {n} elements (total) -- {sk} in RAM sketch*"
     },
     {
-      "fr": "non enregistres",
+      "fr": "non enregistrés",
       "en": "not recorded"
     },
     {
@@ -3894,11 +3886,11 @@
       "en": "Spatial clusters"
     },
     {
-      "fr": "Marqueurs differentiels (top 30, |log2FC| decroissant) :",
+      "fr": "Marqueurs différentiels (top 30, |log2FC| decroissant) :",
       "en": "Differential markers (top 30, decreasing |log2FC|):"
     },
     {
-      "fr": "Moran's I / Genes spatialement variables",
+      "fr": "Moran's I / Gènes spatialement variables",
       "en": "Moran's I / Spatially variable genes"
     },
     {
@@ -3914,7 +3906,7 @@
       "en": "UMAP (sketch, non-spatial)"
     },
     {
-      "fr": "Vues ajoutees depuis l'onglet \"4. Visualisation\" (bouton \"Ajouter cette vue au rapport\") -- reconstruites a partir des DERNIERS resultats disponibles au moment du rendu de ce rapport.",
+      "fr": "Vues ajoutées depuis l'onglet \"4. Visualisation\" (bouton \"Ajouter cette vue au rapport\") -- reconstruites à partir des DERNIERS résultats disponibles au moment du rendu de ce rapport.",
       "en": "Views added from the \"4. Visualization\" tab (\"Add this view to the report\" button) — rebuilt from the LATEST results available when this report was rendered."
     },
     {
@@ -3922,7 +3914,7 @@
       "en": "colored by: {x}"
     },
     {
-      "fr": "*(donnees indisponibles pour reconstruire cette vue -- relancez le calcul correspondant puis re-sauvegardez la vue depuis l'onglet 4)*",
+      "fr": "*(données indisponibles pour reconstruire cette vue -- relancez le calcul correspondant puis re-sauvegardez la vue depuis l'onglet 4)*",
       "en": "*(data unavailable to rebuild this view — re-run the corresponding computation then re-save the view from tab 4)*"
     },
     {
@@ -3938,7 +3930,7 @@
       "en": "Import multiple samples for Harmony."
     },
     {
-      "fr": "Formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou genes.tsv(.gz), matrix.mtx(.gz).",
+      "fr": "Formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou gènes.tsv(.gz), matrix.mtx(.gz).",
       "en": "Accepted formats: barcodes.tsv(.gz), features.tsv(.gz) or genes.tsv(.gz), matrix.mtx(.gz)."
     },
     {
@@ -4032,10 +4024,6 @@
     {
       "fr": "Sélectionner dossier contenant matrix.mtx",
       "en": "Select folder containing matrix.mtx"
-    },
-    {
-      "fr": "Nom de l'échantillon",
-      "en": "Sample name"
     },
     {
       "fr": "➕ Ajouter à la liste",
@@ -4262,7 +4250,7 @@
       "en": "Min genes = 50, Max genes = 10,000, % Mito = 40."
     },
     {
-      "fr": "Taille du sketch (vitesse vs precision)",
+      "fr": "Taille du sketch (vitesse vs précision)",
       "en": "Sketch size (speed vs precision)"
     },
     {
@@ -4486,7 +4474,7 @@
       "en": "Ensembl IDs (ENSG…) automatically converted if org.Hs.eg.db is available."
     },
     {
-      "fr": "Reference Cellulaire",
+      "fr": "Référence Cellulaire",
       "en": "Cellular Reference"
     },
     {
@@ -4514,7 +4502,7 @@
       "en": "Main (General)"
     },
     {
-      "fr": "Fine (Specifique)",
+      "fr": "Fine (Spécifique)",
       "en": "Fine (Specific)"
     },
     {
@@ -4642,7 +4630,7 @@
       "en": "3D Reduction (interactive)"
     },
     {
-      "fr": "Reduction a Visualiser",
+      "fr": "Reduction à Visualiser",
       "en": "Reduction to Visualize"
     },
     {
@@ -4670,7 +4658,7 @@
       "en": "Group/Color by:"
     },
     {
-      "fr": "Genes a Visualiser",
+      "fr": "Gènes à Visualiser",
       "en": "Genes to Visualize"
     },
     {
@@ -4690,7 +4678,7 @@
       "en": "Group 1 (Test)"
     },
     {
-      "fr": "Group 2 (Reference)",
+      "fr": "Group 2 (Référence)",
       "en": "Group 2 (Reference)"
     },
     {
@@ -4746,7 +4734,7 @@
       "en": "Reduction (>= 3 dimensions)"
     },
     {
-      "fr": "Max cellules affichees",
+      "fr": "Max cellules affichées",
       "en": "Max cells displayed"
     },
     {
@@ -4898,11 +4886,11 @@
       "en": "Find Markers"
     },
     {
-      "fr": "-> Ajouter selection a Viz",
-      "en": "-> Add selection to Viz"
+      "fr": "→ Ajouter sélection à Viz",
+      "en": "→ Add selection to Viz"
     },
     {
-      "fr": "Effacer selection",
+      "fr": "Effacer sélection",
       "en": "Clear selection"
     },
     {
@@ -4910,7 +4898,7 @@
       "en": "Hybrid Gene Selector"
     },
     {
-      "fr": "Paste genes (comma, space or newline separated):",
+      "fr": "Paste gènes (comma, space or newline separated):",
       "en": "Paste genes (comma, space or newline separated):"
     },
     {
@@ -4918,11 +4906,11 @@
       "en": "Add to Visualization"
     },
     {
-      "fr": "Marqueurs Differentiels",
-      "en": "Differential Markers"
+      "fr": "Marqueurs Différentiels",
+      "en": "Differential markers"
     },
     {
-      "fr": "Ajouter selection",
+      "fr": "Ajouter sélection",
       "en": "Add selection"
     },
     {
@@ -4950,11 +4938,11 @@
       "en": "No markers found"
     },
     {
-      "fr": "Selectionnez des lignes dans le tableau d'abord",
+      "fr": "Sélectionnez des lignes dans le tableau d'abord",
       "en": "Select rows in the table first"
     },
     {
-      "fr": "Aucun gene valide trouve.",
+      "fr": "Aucun gène valide trouve.",
       "en": "No valid gene found."
     },
     {
@@ -4962,11 +4950,11 @@
       "en": "Currently selected:"
     },
     {
-      "fr": "gene(s)",
+      "fr": "gène(s)",
       "en": "gene(s)"
     },
     {
-      "fr": "Trouve les genes correles avec un gene cible.",
+      "fr": "Trouve les gènes corrélés avec un gène cible.",
       "en": "Finds genes correlated with a target gene."
     },
     {
@@ -4974,11 +4962,11 @@
       "en": "Target Gene"
     },
     {
-      "fr": "Gene de reference pour calculer les correlations",
+      "fr": "Gène de référence pour calculer les corrélations",
       "en": "Reference gene for computing correlations"
     },
     {
-      "fr": "Parametres de Recherche",
+      "fr": "Paramètres de Recherche",
       "en": "Search Parameters"
     },
     {
@@ -4994,11 +4982,11 @@
       "en": "|r| Threshold"
     },
     {
-      "fr": "Nombre max de genes",
+      "fr": "Nombre max de gènes",
       "en": "Max number of genes"
     },
     {
-      "fr": "Rechercher Genes Correles",
+      "fr": "Rechercher Gènes Correles",
       "en": "Search Correlated Genes"
     },
     {
@@ -5018,11 +5006,11 @@
       "en": "Export Edge List (CSV)"
     },
     {
-      "fr": "Analyse de Correlation",
+      "fr": "Analyse de Corrélation",
       "en": "Correlation Analysis"
     },
     {
-      "fr": "Ajouter selection a Viz",
+      "fr": "Ajouter sélection a Viz",
       "en": "Add selection to Viz"
     },
     {
@@ -5066,11 +5054,11 @@
       "en": "Correlation error:"
     },
     {
-      "fr": "Correlation positive",
+      "fr": "Corrélation positive",
       "en": "Positive correlation"
     },
     {
-      "fr": "Correlation negative",
+      "fr": "Corrélation negative",
       "en": "Negative correlation"
     },
     {
@@ -5078,7 +5066,7 @@
       "en": "Target gene"
     },
     {
-      "fr": "Reseau de Correlation -",
+      "fr": "Reseau de Corrélation -",
       "en": "Correlation Network -"
     },
     {
@@ -5090,24 +5078,12 @@
       "en": "Ensembl IDs (ENSG…) are automatically converted to symbols."
     },
     {
-      "fr": "Source de genes",
-      "en": "Gene source"
-    },
-    {
       "fr": "Marqueurs calculés",
       "en": "Computed markers"
     },
     {
-      "fr": "Genes correles",
+      "fr": "Gènes corrélés",
       "en": "Correlated genes"
-    },
-    {
-      "fr": "Selection manuelle",
-      "en": "Manual selection"
-    },
-    {
-      "fr": "Base de donnees",
-      "en": "Database"
     },
     {
       "fr": "GO Biological Process",
@@ -5214,11 +5190,11 @@
       "en": "Pseudotime Distribution"
     },
     {
-      "fr": "Genes vs Pseudotemps",
+      "fr": "Gènes vs Pseudotemps",
       "en": "Genes vs Pseudotime"
     },
     {
-      "fr": "Genes a tracer",
+      "fr": "Gènes à tracer",
       "en": "Genes to plot"
     },
     {
@@ -5258,7 +5234,7 @@
       "en": "Computing trajectory..."
     },
     {
-      "fr": "Trajectoire calculee",
+      "fr": "Trajectoire calculée",
       "en": "Trajectory computed"
     },
     {
@@ -5326,11 +5302,11 @@
       "en": "Unspliced barcodes"
     },
     {
-      "fr": "Features/genes spliced",
+      "fr": "Features/gènes spliced",
       "en": "Spliced features/genes"
     },
     {
-      "fr": "Features/genes unspliced",
+      "fr": "Features/gènes unspliced",
       "en": "Unspliced features/genes"
     },
     {
@@ -5342,11 +5318,11 @@
       "en": "Strict automatic detection"
     },
     {
-      "fr": "Genes x cellules",
+      "fr": "Gènes x cellules",
       "en": "Genes x cells"
     },
     {
-      "fr": "Cellules x genes",
+      "fr": "Cellules x gènes",
       "en": "Cells x genes"
     },
     {
@@ -5366,7 +5342,7 @@
       "en": "Validate velocity matrices"
     },
     {
-      "fr": "Phase portrait & vecteurs pre-calcules",
+      "fr": "Phase portrait & vecteurs pre-calculés",
       "en": "Phase portrait & precomputed vectors"
     },
     {
@@ -5394,11 +5370,11 @@
       "en": "Export validation summary (CSV)"
     },
     {
-      "fr": "Exporter alignement cellules/genes (CSV)",
+      "fr": "Exporter alignement cellules/gènes (CSV)",
       "en": "Export cell/gene alignment table (CSV)"
     },
     {
-      "fr": "Exporter resultat valide (RDS)",
+      "fr": "Exporter résultat valide (RDS)",
       "en": "Export validated result (RDS)"
     },
     {
@@ -5578,10 +5554,6 @@
       "en": "per Sample"
     },
     {
-      "fr": "Échantillon",
-      "en": "Sample"
-    },
-    {
       "fr": "Distribution du Pseudotemps par Cluster",
       "en": "Pseudotime Distribution per Cluster"
     },
@@ -5638,11 +5610,11 @@
       "en": "Import mode"
     },
     {
-      "fr": "Merged matrix (un seul fichier)",
+      "fr": "Matrice fusionnée (un seul fichier)",
       "en": "Merged matrix (single file)"
     },
     {
-      "fr": "One file per sample",
+      "fr": "Un fichier par échantillon",
       "en": "One file per sample"
     },
     {
@@ -5662,11 +5634,11 @@
       "en": "Matrix format"
     },
     {
-      "fr": "Genes en lignes (standard)",
+      "fr": "Gènes en lignes (standard)",
       "en": "Genes in rows (standard)"
     },
     {
-      "fr": "Genes en colonnes (transposé)",
+      "fr": "Gènes en colonnes (transposé)",
       "en": "Genes in columns (transposed)"
     },
     {
@@ -5746,7 +5718,7 @@
       "en": "Bulk files (one file = one sample)"
     },
     {
-      "fr": "Seuil max. gene IDs dupliqués (fraction)",
+      "fr": "Seuil max. gène IDs dupliqués (fraction)",
       "en": "Max duplicated gene IDs threshold (fraction)"
     },
     {
@@ -5778,7 +5750,7 @@
       "en": "📂 Reading counts file..."
     },
     {
-      "fr": " ↻ Matrice transposée (genes étaient en colonnes)",
+      "fr": " ↻ Matrice transposée (gènes étaient en colonnes)",
       "en": " ↻ Matrix transposed (genes were in columns)"
     },
     {
@@ -6114,10 +6086,6 @@
       "en": "Metadata error:"
     },
     {
-      "fr": "Aperçu",
-      "en": "Preview"
-    },
-    {
       "fr": "Dimensions : ",
       "en": "Dimensions: "
     },
@@ -6206,11 +6174,11 @@
       "en": "it is triggered only by this button, never automatically. For Spatial,"
     },
     {
-      "fr": "seul le \"sketch\" (echantillon RAM) est garanti portable : les donnees BPCells sur",
+      "fr": "seul le \"sketch\" (échantillon RAM) est garanti portable : les données BPCells sur",
       "en": "only the \"sketch\" (RAM sample) is guaranteed portable: the BPCells data on"
     },
     {
-      "fr": "disque doivent rester disponibles au meme chemin pour relancer clustering/deconvolution.",
+      "fr": "disque doivent rester disponibles au même chemin pour relancer clustering/deconvolution.",
       "en": "disk must remain available at the same path to re-run clustering/deconvolution."
     },
     {
@@ -6254,11 +6222,11 @@
       "en": "— disk not found"
     },
     {
-      "fr": "— {n} echantillons charges",
+      "fr": "— {n} échantillons charges",
       "en": "— {n} samples loaded"
     },
     {
-      "fr": "— reference partagee : {c} cellules",
+      "fr": "— référence partagée : {c} cellules",
       "en": "— shared reference: {c} cells"
     },
     {
@@ -6298,11 +6266,11 @@
       "en": "Bulk RNA: Count matrices (CSV/TSV) + optional metadata"
     },
     {
-      "fr": "Spatial: Visium / Xenium / CosMx — converti automatiquement en matrice BPCells sur disque + echantillon RAM (\"sketch\"). Importez plusieurs echantillons pour activer l'onglet \"5. Multi-echantillons\" (comparaison/ integration Harmony conjointe).",
+      "fr": "Spatial: Visium / Xenium / CosMx — converti automatiquement en matrice BPCells sur disque + échantillon RAM (\"sketch\"). Importez plusieurs échantillons pour activer l'onglet \"5. Multi-échantillons\" (comparaison/ intégration Harmony conjointe).",
       "en": "Spatial: Visium / Xenium / CosMx — automatically converted to on-disk BPCells matrix + RAM sample (\"sketch\"). Import multiple samples to enable the \"5. Multi-sample\" tab (Harmony joint comparison/integration)."
     },
     {
-      "fr": "Astuce: Pour Harmony (correction de batch), importez 2 échantillons ou plus dans l'onglet Single-Cell (ou Spatial, voir \"Multi-echantillons\").",
+      "fr": "Astuce: Pour Harmony (correction de batch), importez 2 échantillons ou plus dans l'onglet Single-Cell (ou Spatial, voir \"Multi-échantillons\").",
       "en": "Tip: For Harmony (batch correction), import 2 or more samples in the Single-Cell tab (or Spatial, see \"Multi-sample\")."
     },
     {
@@ -6342,7 +6310,7 @@
       "en": "Bulk RNA: Differential analysis with DESeq2/edgeR"
     },
     {
-      "fr": "Spatial: Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation spatiale (WebGL optionnel via leafgl) → Multi-echantillons (integration Harmony conjointe, asynchrone) → Export (paquet .zip / script R reproductible)",
+      "fr": "Spatial: Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation spatiale (WebGL optionnel via leafgl) → Multi-échantillons (intégration Harmony conjointe, asynchrone) → Export (paquet .zip / script R reproductible)",
       "en": "Spatial: Auto pipeline (1 click) OR QC → Clustering (BANKSY, async) → Deconvolution (RCTD/Label Transfer/STdeconvolve, async) → Spatial visualization (optional WebGL via leafgl) → Multi-sample (Harmony joint integration, async) → Export (.zip bundle / reproducible R script)"
     },
     {
@@ -6366,7 +6334,7 @@
       "en": "SingleR Guide"
     },
     {
-      "fr": "RNA Velocity — Phase portrait & vecteurs pre-calcules",
+      "fr": "RNA Velocity — Phase portrait & vecteurs pre-calculés",
       "en": "RNA Velocity — Phase portrait & pre-computed vectors"
     },
     {
@@ -6427,10 +6395,6 @@
     },
     {
       "fr": "Non calculé",
-      "en": "Not computed"
-    },
-    {
-      "fr": "Non calculés",
       "en": "Not computed"
     },
     {
@@ -6538,7 +6502,7 @@
       "en": "🧬 Pathway ORA on top markers"
     },
     {
-      "fr": "🧬 Gene Correlation (auto: gène le plus significatif)",
+      "fr": "🧬 Gene Corrélation (auto: gène le plus significatif)",
       "en": "🧬 Gene Correlation (auto: most significant gene)"
     },
     {
@@ -6834,7 +6798,7 @@
       "en": "Additional analyses"
     },
     {
-      "fr": "La sélection des gènes (Gènes vs Pseudotemps) se fait uniquement dans l'onglet Genes vs Pseudotemps ci-dessous — sélecteur unique.",
+      "fr": "La sélection des gènes (Gènes vs Pseudotemps) se fait uniquement dans l'onglet Gènes vs Pseudotemps ci-dessous — sélecteur unique.",
       "en": "Gene selection (Genes vs Pseudotime) is only in the Genes vs Pseudotime tab below — single selector."
     },
     {
@@ -6934,10 +6898,6 @@
       "en": "✓ {n} markers"
     },
     {
-      "fr": "Sélectionnez des lignes dans le tableau d'abord",
-      "en": "Select rows in the table first"
-    },
-    {
       "fr": "Actuellement sélectionnés : {n} gène(s)",
       "en": "Currently selected: {n} gene(s)"
     },
@@ -6950,16 +6910,12 @@
       "en": "Subsampling: {before} → {after} cells (max {cap}/sample) to speed up correlation."
     },
     {
-      "fr": "✓ {n} gènes corrélés avec {gene}",
+      "fr": "✓ {n} gènes corrélés avec {gène}",
       "en": "✓ {n} genes correlated with {gene}"
     },
     {
       "fr": "Réseau de Corrélation -",
       "en": "Correlation Network -"
-    },
-    {
-      "fr": "Corrélation positive",
-      "en": "Positive correlation"
     },
     {
       "fr": "Corrélation négative",
@@ -7054,11 +7010,11 @@
       "en": "Example: CD3D, MS4A1, CD8A, NKG7"
     },
     {
-      "fr": "Current selection in selectize box above",
+      "fr": "Current sélection in selectize box above",
       "en": "Current selection in selectize box above"
     },
     {
-      "fr": "Selectionnez genes",
+      "fr": "Sélectionnez gènes",
       "en": "Select genes"
     },
     {
@@ -7086,7 +7042,7 @@
       "en": "Ambiguous barcodes"
     },
     {
-      "fr": "Features/genes ambiguous",
+      "fr": "Features/gènes ambiguous",
       "en": "Ambiguous features/genes"
     },
     {
@@ -7106,7 +7062,7 @@
       "en": "the Seurat object — the first column is never assumed correct."
     },
     {
-      "fr": "Les corrections d'identifiants sont desactivees par defaut. ",
+      "fr": "Les corrections d'identifiants sont desactivees par défaut. ",
       "en": "Identifier corrections are disabled by default."
     },
     {
@@ -7118,11 +7074,11 @@
       "en": "Metadata variable for grouping"
     },
     {
-      "fr": "Genes du panier ci-dessus (max 50). Clustering hierarchique lignes/colonnes.",
+      "fr": "Gènes du panier ci-dessus (max 50). Clustering hierarchique lignes/colonnes.",
       "en": "Genes from basket above (max 50). Hierarchical clustering of rows/columns."
     },
     {
-      "fr": "Utilise 'Grouper/Colorer par' ci-dessous. Si vide, choisissez PCA (UMAP/t-SNE sont 2D par defaut).",
+      "fr": "Utilise 'Grouper/Colorer par' ci-dessous. Si vide, choisissez PCA (UMAP/t-SNE sont 2D par défaut).",
       "en": "Uses 'Group/Color by' below. If empty, choose PCA (UMAP/t-SNE are 2D by default)."
     },
     {
@@ -7178,11 +7134,11 @@
       "en": "Sketch preset"
     },
     {
-      "fr": "Les corrections d'identifiants sont desactivees par defaut.",
+      "fr": "Les corrections d'identifiants sont desactivees par défaut.",
       "en": "Identifier corrections are disabled by default."
     },
     {
-      "fr": "Objet Seurat modifie : reimportez et validez les donnees velocity.",
+      "fr": "Objet Seurat modifie : réimportez et validez les données velocity.",
       "en": "Seurat object changed: re-import and validate the velocity data."
     },
     {
@@ -7214,8 +7170,8 @@
       "en": "Compute UMAP (uncheck for PCA only — much faster, debug mode)"
     },
     {
-      "fr": "Référence",
-      "en": "Reference"
+      "fr": "Référence chargée — choisissez la colonne 'type cellulaire' puis cliquez '1) Préparer la référence (disque)' ci-dessous.",
+      "en": "\""
     },
     {
       "fr": "FindAllMarkers après clustering",
@@ -7246,19 +7202,19 @@
       "en": "Communication"
     },
     {
-      "fr": "Communication cellule-cellule — import de resultats externes uniquement (CellChat / CellPhoneDB). ",
+      "fr": "Communication cellule-cellule — import de résultats externes uniquement (CellChat / CellPhoneDB). ",
       "en": "Cell-cell communication — external results import only (CellChat / CellPhoneDB). "
     },
     {
-      "fr": "Aucun recalcul, aucun score recompose. Les scores de sources differentes ne sont pas comparables.",
+      "fr": "Aucun recalcul, aucun score recompose. Les scores de sources différentes ne sont pas comparables.",
       "en": "No recomputation, no rebuilt scores. Scores from different sources are not comparable."
     },
     {
-      "fr": "Source des resultats",
+      "fr": "Source des résultats",
       "en": "Results source"
     },
     {
-      "fr": "CellChat (table exportee)",
+      "fr": "CellChat (table exportée)",
       "en": "CellChat (exported table)"
     },
     {
@@ -7266,7 +7222,7 @@
       "en": "CellPhoneDB (means.txt)"
     },
     {
-      "fr": "Table CellChat exportee (CSV/TSV)",
+      "fr": "Table CellChat exportée (CSV/TSV)",
       "en": "Exported CellChat table (CSV/TSV)"
     },
     {
@@ -7310,7 +7266,7 @@
       "en": "Export import summary (CSV)"
     },
     {
-      "fr": "Communication cellule-cellule — resultats importes",
+      "fr": "Communication cellule-cellule — résultats importés",
       "en": "Cell-cell communication — imported results"
     },
     {
@@ -7338,7 +7294,7 @@
       "en": "Technical validity only: a valid import implies no biological validity."
     },
     {
-      "fr": "Les scores ne sont pas compares entre sources differentes (CellChat vs CellPhoneDB).",
+      "fr": "Les scores ne sont pas compares entre sources différentes (CellChat vs CellPhoneDB).",
       "en": "Scores are not compared across different sources (CellChat vs CellPhoneDB)."
     },
     {
@@ -7350,11 +7306,11 @@
       "en": "Labels with no exact match in the chosen column are kept as-is and listed — never renamed."
     },
     {
-      "fr": "En attente d'import de resultats de communication...",
+      "fr": "En attente d'import de résultats de communication...",
       "en": "Waiting for communication results import..."
     },
     {
-      "fr": "Objet Seurat modifie : reimportez la table de communication.",
+      "fr": "Objet Seurat modifie : réimportez la table de communication.",
       "en": "Seurat object changed: re-import the communication table."
     },
     {
@@ -7366,7 +7322,7 @@
       "en": "Communication import error:"
     },
     {
-      "fr": "Mapping resolu de facon deterministe a l'import — aucune conversion supposee entre schemas incompatibles.",
+      "fr": "Mapping resolu de façon deterministe a l'import — aucune conversion supposee entre schemas incompatibles.",
       "en": "Mapping resolved deterministically at import — no assumed conversion between incompatible schemas."
     },
     {
@@ -7374,11 +7330,11 @@
       "en": "Source rows (before conversion)"
     },
     {
-      "fr": "Lignes canoniques (apres QC)",
+      "fr": "Lignes canoniques (après QC)",
       "en": "Canonical rows (after QC)"
     },
     {
-      "fr": "Lignes supprimees (champs requis vides)",
+      "fr": "Lignes supprimées (champs requis vides)",
       "en": "Dropped rows (empty required fields)"
     },
     {
@@ -7414,7 +7370,7 @@
       "en": "Warnings produced at import"
     },
     {
-      "fr": "Objet CellChat (.rds, resultats deja calcules)",
+      "fr": "Objet CellChat (.rds, résultats déjà calculés)",
       "en": "CellChat object (.rds, already-computed results)"
     },
     {
@@ -7422,7 +7378,7 @@
       "en": "Saved CellChat object (.rds)"
     },
     {
-      "fr": "Extraction des resultats deja calcules (net$prob) — aucune methode CellChat n'est relancee. La colonne pathway reste vide pour cette route.",
+      "fr": "Extraction des résultats déjà calculés (net$prob) — aucune méthode CellChat n'est relancee. La colonne pathway reste vide pour cette route.",
       "en": "Extraction of already-computed results (net$prob) — no CellChat method is re-run. The pathway column stays empty on this route."
     },
     {
@@ -8006,7 +7962,7 @@
       "en": "Export bundle generated."
     },
     {
-      "fr": "Colonne 'echantillon' (replicat biologique)",
+      "fr": "Colonne 'échantillon' (replicat biologique)",
       "en": "Sample column (biological replicate)"
     },
     {
@@ -8626,11 +8582,11 @@
       "en": "Local RDS file"
     },
     {
-      "fr": "Fichier .rds (liste nommée ou data.frame signature/gene)",
+      "fr": "Fichier .rds (liste nommée ou data.frame signature/gène)",
       "en": ".rds file (named list or signature/gene data.frame)"
     },
     {
-      "fr": "Liste nommée de vecteurs de gènes, ou data.frame avec colonnes 'signature' et 'gene'.",
+      "fr": "Liste nommée de vecteurs de gènes, ou data.frame avec colonnes 'signature' et 'gène'.",
       "en": "Named list of gene vectors, or data.frame with 'signature' and 'gene' columns."
     },
     {
@@ -9190,7 +9146,7 @@
       "en": "✓ SC dataset registered as \"%s\"."
     },
     {
-      "fr": " Test au niveau ECHANTILLON (pseudobulk), pas au niveau cellule -- evite la pseudo-replication de FindAllMarkers/FindMarkers pour comparer des CONDITIONS (traite/controle, etc.). Necessite au moins 2 echantillons biologiques par condition.",
+      "fr": " Test au niveau ECHANTILLON (pseudobulk), pas au niveau cellule -- evite la pseudo-replication de FindAllMarkers/FindMarkers pour comparer des CONDITIONS (traite/contrôle, etc.). Necessite au moins 2 échantillons biologiques par condition.",
       "en": " SAMPLE-level test (pseudobulk), not cell-level — avoids the pseudo-replication of FindAllMarkers/FindMarkers when comparing CONDITIONS (treated/control, etc.). Requires at least 2 biological samples per condition."
     },
     {
@@ -9202,11 +9158,11 @@
       "en": "2. Differential analysis (pseudobulk)"
     },
     {
-      "fr": "Aucun (pseudobulk par echantillon entier)",
+      "fr": "Aucun (pseudobulk par échantillon entier)",
       "en": "None (pseudobulk over the whole sample)"
     },
     {
-      "fr": "Chaque point = un pseudo-echantillon (cellules sommees par echantillon). Verifiez qu'il n'y a pas d'outlier/mauvais etiquetage avant d'interpreter le contraste.",
+      "fr": "Chaque point = un pseudo-échantillon (cellules sommees par échantillon). Vérifiez qu'il n'y a pas d'outlier/mauvais etiquetage avant d'interpreter le contraste.",
       "en": "Each point = one pseudo-sample (cells summed per sample). Check for outliers / mislabelling before interpreting the contrast."
     },
     {
@@ -9354,7 +9310,7 @@
       "en": "Per-lineage mode: each cell is attached to the first finite pseudotime_slingshot_* column (branch point = first lineage). Lineages are never collapsed."
     },
     {
-      "fr": "Objet CellChat (.rds) : extraction de resultats deja calcules uniquement — le mapping ligand-receptor vers pathway n'est pas reconstitue.",
+      "fr": "Objet CellChat (.rds) : extraction de résultats déjà calculés uniquement — le mapping ligand-receptor vers pathway n'est pas reconstitue.",
       "en": "CellChat object (.rds): extraction of already computed results only — the ligand-receptor to pathway mapping is not reconstructed."
     },
     {
@@ -9606,7 +9562,7 @@
       "en": "LIANA aggregation mode (required)"
     },
     {
-      "fr": "Specificite — l'interaction est-elle specifique de ces types cellulaires ?",
+      "fr": "Specificite — l'interaction est-elle spécifique de ces types cellulaires ?",
       "en": "Specificity — is this interaction specific to these cell types?"
     },
     {
@@ -9614,15 +9570,15 @@
       "en": "Magnitude — is this interaction abundant?"
     },
     {
-      "fr": "Colonne de rang a importer (requis)",
+      "fr": "Colonne de rang à importer (requis)",
       "en": "Rank column to import (required)"
     },
     {
-      "fr": "Colonnes de rang : mean_rank, aggregate_rank ou {methode}.rank. Dans LIANA, rang 1 = meilleur (inverse de prob) : aucun score n'est reconstitue, et les modes specificite/magnitude ne sont pas comparables entre eux.",
+      "fr": "Colonnes de rang : mean_rank, aggregate_rank ou {méthode}.rank. Dans LIANA, rang 1 = meilleur (inverse de prob) : aucun score n'est reconstitue, et les modes specificite/magnitude ne sont pas comparables entre eux.",
       "en": "Rank columns: mean_rank, aggregate_rank or {method}.rank. In LIANA, rank 1 = best (opposite of prob): no score is reconstructed, and specificity/magnitude modes are not comparable to each other."
     },
     {
-      "fr": "Communication cellule-cellule — import de resultats externes uniquement (CellChat / CellPhoneDB / LIANA). ",
+      "fr": "Communication cellule-cellule — import de résultats externes uniquement (CellChat / CellPhoneDB / LIANA). ",
       "en": "Cell-cell communication — import of external results only (CellChat / CellPhoneDB / LIANA). "
     },
     {
@@ -10106,11 +10062,11 @@
       "en": "no correction"
     },
     {
-      "fr": "Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat dans l'application. ",
+      "fr": "Communication cellule-cellule — import de résultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat dans l'application. ",
       "en": "Cell-cell communication — import external results (CellChat / CellPhoneDB / LIANA) or compute CellChat in the app. "
     },
     {
-      "fr": "Aucun score recompose. Les scores de sources differentes ne sont pas comparables.",
+      "fr": "Aucun score recompose. Les scores de sources différentes ne sont pas comparables.",
       "en": "No score is recomposed. Scores from different sources are not comparable."
     },
     {
@@ -10130,7 +10086,7 @@
       "en": "Mouse (CellChatDB.mouse)"
     },
     {
-      "fr": "Choix OBLIGATOIRE : la base ligand-recepteur en decoule, elle ne se devine pas a partir des donnees.",
+      "fr": "Choix OBLIGATOIRE : la base ligand-recepteur en decoule, elle ne se devine pas à partir des données.",
       "en": "REQUIRED choice: the ligand-receptor database follows from it and cannot be guessed from the data."
     },
     {
@@ -10138,7 +10094,7 @@
       "en": "Number of permutations"
     },
     {
-      "fr": "Les p-values viennent d'une permutation : la graine est un parametre du calcul, elle est tracee dans la provenance. Plus de permutations = calcul plus long.",
+      "fr": "Les p-values viennent d'une permutation : la graine est un paramètre du calcul, elle est tracee dans la provenance. Plus de permutations = calcul plus long.",
       "en": "p-values come from a permutation: the seed is a computation parameter and is traced in the provenance. More permutations means a longer computation."
     },
     {
@@ -10458,7 +10414,7 @@
       "en": "Exploratory no-replicate mode"
     },
     {
-      "fr": "Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat / LIANA dans l'application. ",
+      "fr": "Communication cellule-cellule — import de résultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat / LIANA dans l'application. ",
       "en": "Cell-cell communication — import external results (CellChat / CellPhoneDB / LIANA) or compute CellChat / LIANA in the app. "
     },
     {
@@ -10470,7 +10426,7 @@
       "en": "Native LIANA: results are computed for each biological sample."
     },
     {
-      "fr": "Colonne d'echantillon (LIANA)",
+      "fr": "Colonne d'échantillon (LIANA)",
       "en": "Sample column (LIANA)"
     },
     {
@@ -10482,7 +10438,7 @@
       "en": "The identity column uses the common selector."
     },
     {
-      "fr": "Methode LIANA",
+      "fr": "Méthode LIANA",
       "en": "LIANA method"
     },
     {
@@ -10494,7 +10450,7 @@
       "en": "LIANA seed"
     },
     {
-      "fr": "Cellules minimum par echantillon",
+      "fr": "Cellules minimum par échantillon",
       "en": "Minimum cells per sample"
     },
     {
@@ -10506,11 +10462,11 @@
       "en": "Run LIANA computation"
     },
     {
-      "fr": "Echantillon actif (LIANA)",
+      "fr": "Échantillon actif (LIANA)",
       "en": "Active sample (LIANA)"
     },
     {
-      "fr": "Exporter manifeste des echantillons (CSV)",
+      "fr": "Exporter manifeste des échantillons (CSV)",
       "en": "Export sample manifest (CSV)"
     },
     {
@@ -10530,19 +10486,19 @@
       "en": "No LIANA collection."
     },
     {
-      "fr": "Collection LIANA : statut {status} — {n} echantillon(s), {c} condition(s).",
+      "fr": "Collection LIANA : statut {status} — {n} échantillon(s), {c} condition(s).",
       "en": "LIANA collection: status {status} — {n} sample(s), {c} condition(s)."
     },
     {
-      "fr": "Calcul LIANA par echantillon en cours...",
+      "fr": "Calcul LIANA par échantillon en cours...",
       "en": "Running LIANA by sample..."
     },
     {
-      "fr": "Choisissez d'abord la colonne de metadonnees Seurat decrivant les identites des populations.",
+      "fr": "Choisissez d'abord la colonne de métadonnées Seurat decrivant les identites des populations.",
       "en": "First choose the Seurat metadata column describing population identities."
     },
     {
-      "fr": "Choisissez la colonne d'echantillon LIANA.",
+      "fr": "Choisissez la colonne d'échantillon LIANA.",
       "en": "Choose the LIANA sample column."
     },
     {
@@ -10554,7 +10510,7 @@
       "en": "The native LIANA engine is unavailable: install the required packages."
     },
     {
-      "fr": "La collection LIANA ne contient aucun echantillon.",
+      "fr": "La collection LIANA ne contient aucun échantillon.",
       "en": "The LIANA collection contains no sample."
     },
     {
@@ -10562,7 +10518,7 @@
       "en": "LIANA computation finished."
     },
     {
-      "fr": "Echantillon actif absent de la collection LIANA.",
+      "fr": "Échantillon actif absent de la collection LIANA.",
       "en": "Active sample is absent from the LIANA collection."
     },
     {
@@ -10818,7 +10774,7 @@
       "en": "🔍 Parent folder scan:"
     },
     {
-      "fr": "Aucun resultat de hotspots a exporter.",
+      "fr": "Aucun résultat de hotspots a exporter.",
       "en": "No hotspot results to export."
     },
     {
@@ -10826,7 +10782,7 @@
       "en": "Interactive network (hover over nodes)"
     },
     {
-      "fr": "Option A (dossiers) — formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou genes.tsv(.gz), matrix.mtx(.gz). L'Option B (fichiers) accepte .rds, .h5, .h5ad, .loom, .rda/.RData.",
+      "fr": "Option A (dossiers) — formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou gènes.tsv(.gz), matrix.mtx(.gz). L'Option B (fichiers) accepte .rds, .h5, .h5ad, .loom, .rda/.RData.",
       "en": "Option A (folders) — accepted formats: barcodes.tsv(.gz), features.tsv(.gz) or genes.tsv(.gz), matrix.mtx(.gz). Option B (files) accepts .rds, .h5, .h5ad, .loom, .rda/.RData."
     },
     {
@@ -11218,7 +11174,7 @@
       "en": "Harmonisation: %d label(s) without exact match — correspondence proposals in the 'Identity harmonisation' sub-tab."
     },
     {
-      "fr": "Mapping interactif disponible pour les resultats importes uniquement.",
+      "fr": "Mapping interactif disponible pour les résultats importés uniquement.",
       "en": "Interactive mapping available for imported results only."
     },
     {
@@ -11254,7 +11210,7 @@
       "en": "Mapping application error:"
     },
     {
-      "fr": "Aucun resultat importe — importez d'abord une table de communication.",
+      "fr": "Aucun résultat importé — importez d'abord une table de communication.",
       "en": "No imported result — import a communication table first."
     },
     {
@@ -11462,7 +11418,7 @@
       "en": "In silico perturbation simulation..."
     },
     {
-      "fr": "Objet CellChat (.rds) : extraction de resultats deja calcules uniquement ; les paires ligand-receptor sont appariées EXACTEMENT sur @LR$LRsig (ligand, receptor, pathway_name) — aucune reconstruction heuristique ; un @LR$LRsig absent est remonté comme « engine_failure » explicite.",
+      "fr": "Objet CellChat (.rds) : extraction de résultats déjà calculés uniquement ; les paires ligand-receptor sont appariées EXACTEMENT sur @LR$LRsig (ligand, receptor, pathway_name) — aucune reconstruction heuristique ; un @LR$LRsig absent est remonté comme « engine_failure » explicite.",
       "en": "CellChat (.rds) object: extraction of pre-computed results only; ligand-receptor pairs are matched EXACTLY against @LR$LRsig (ligand, receptor, pathway_name) — no heuristic reconstruction; a missing @LR$LRsig is reported as an explicit engine_failure."
     },
     {
@@ -11746,11 +11702,11 @@
       "en": "Delegation to the differential-abundance design (Milo / scCODA) — no added logic."
     },
     {
-      "fr": "Colonne absente des metadonnees : la validation ne peut pas porter sur cette selection.",
+      "fr": "Colonne absente des métadonnées : la validation ne peut pas porter sur cette sélection.",
       "en": "Column missing from metadata: validation cannot apply to this selection."
     },
     {
-      "fr": "Colonne a un seul niveau : aucune categorie exploitable pour une reference.",
+      "fr": "Colonne a un seul niveau : aucune categorie exploitable pour une référence.",
       "en": "Single-level column: no usable category for a reference."
     },
     {
@@ -11770,7 +11726,7 @@
       "en": "Column with more than 100 levels: beyond usual cell types — plausible for a fine-grained atlas, please verify."
     },
     {
-      "fr": "Nom de colonne suspect (donneur / echantillon / lot / barcode...) : probablement pas un type cellulaire.",
+      "fr": "Nom de colonne suspect (donneur / échantillon / lot / barcode...) : probablement pas un type cellulaire.",
       "en": "Suspicious column name (donor / sample / batch / barcode...): probably not a cell type."
     },
     {
@@ -11778,7 +11734,7 @@
       "en": "A single level covers at least 99% of cells: the column barely discriminates."
     },
     {
-      "fr": "Colonnes triees : compatibles en premier (vert), a verifier (orange), incompatibles (rouge) — chaque colonne est evaluee par le composant de validation des metadonnees.",
+      "fr": "Colonnes triees : compatibles en premier (vert), a verifier (orange), incompatibles (rouge) — chaque colonne est evaluee par le composant de validation des métadonnées.",
       "en": "Columns sorted: compatible first (green), to verify (orange), incompatible (red) — each column is assessed by the metadata validation component."
     },
     {
@@ -11790,7 +11746,7 @@
       "en": "Columns assessed: {n_ok} compatible, {n_warn} to verify, {n_danger} incompatible."
     },
     {
-      "fr": "Preparation bloquee : cochez la case de confirmation pour utiliser cette colonne.",
+      "fr": "Preparation bloquée : cochez la case de confirmation pour utiliser cette colonne.",
       "en": "Preparation blocked: tick the confirmation box to use this column."
     },
     {
@@ -11874,7 +11830,7 @@
       "en": "Dataset health — issues detected:"
     },
     {
-      "fr": "Santé du dataset : %d anomalie(s) warn — détail dans le panneau « Datasets découverts ».",
+      "fr": "Santé du dataset : %d avertissement(s) — détail dans le panneau « Datasets découverts ».",
       "en": "Dataset health: %d warn issue(s) — details in the 'Discovered datasets' panel."
     },
     {
@@ -11978,7 +11934,7 @@
       "en": "Finish"
     },
     {
-      "fr": "Roles CellChat indisponibles (voie import ou centralite non calculee) — vue derivee seule.",
+      "fr": "Roles CellChat indisponibles (voie import ou centralite non calculée) — vue derivee seule.",
       "en": "CellChat roles unavailable (import path or centrality not computed) — derived view only."
     },
     {
@@ -12434,7 +12390,7 @@
       "en": "b\u001c\u0013 Pseudobulk registered as \"%s\" b"
     },
     {
-      "fr": "Enregistrez l'objet SC courant (brut ou traitC)) sous un label, avec la relation dC)clarC)e vis-C -vis du jeu de rC)fC)rence : mode 1 = analyses sC)parC)es C  paramC(tres partagC)s, mode 2 = paramC(tres distincts. Le jeu actif n'est jamais modifiC).",
+      "fr": "Enregistrez l'objet SC courant (brut ou traitC)) sous un label, avec la relation dC)clarC)e vis-C -vis du jeu de rC)fC)rence : mode 1 = analyses sC)parC)es C  paramC(très partagC)s, mode 2 = paramC(très distincts. Le jeu actif n'est jamais modifiC).",
       "en": "Register the current SC object (raw or processed) under a label, with the declared relation to the reference dataset: mode 1 = separate analyses with shared parameters, mode 2 = distinct parameters. The active dataset is never modified."
     },
     {
@@ -12562,7 +12518,7 @@
       "en": "Per-lineage mode: each cell is attached to the first finite pseudotime_slingshot_* column (branch point = first lineage). Lineages are never collapsed."
     },
     {
-      "fr": "Objet CellChat (.rds) : extraction de resultats deja calcules uniquement b",
+      "fr": "Objet CellChat (.rds) : extraction de résultats déjà calculés uniquement b",
       "en": "CellChat object (.rds): extraction of already computed results only b"
     },
     {
@@ -12866,7 +12822,7 @@
       "en": "Strict reading of the spliced/unspliced layers (+ ambiguous when present). No inference; duplicated gene symbols are made unique (warning shown)."
     },
     {
-      "fr": "Reference mapping (MapQuery)",
+      "fr": "Référence mapping (MapQuery)",
       "en": "Reference mapping (MapQuery)"
     },
     {
@@ -12918,7 +12874,7 @@
       "en": "S.Score + G2M.Score (complete)"
     },
     {
-      "fr": "Reference mapping (MapQuery)...",
+      "fr": "Référence mapping (MapQuery)...",
       "en": "Reference mapping (MapQuery)..."
     },
     {
@@ -13120,14 +13076,6 @@
     {
       "fr": "Tout afficher",
       "en": "Show all"
-    },
-    {
-      "fr": "Aperçu du jeu de données",
-      "en": "Dataset Overview"
-    },
-    {
-      "fr": "Gènes spatialement variables (Moran's I)",
-      "en": "Spatially Variable Genes (Moran's I)"
     },
     {
       "fr": "Interactions affichées",
@@ -13646,7 +13594,7 @@
       "en": "4d. Profile clustering"
     },
     {
-      "fr": "4e. Dose–réponse / time-course",
+      "fr": "4e. Dose–réponse / série temporelle",
       "en": "4e. Dose–response / time-course"
     },
     {
@@ -13902,11 +13850,11 @@
       "en": "Comparison unavailable: at least 2 complete CellChat (engine) runs in this session are required. Use 'Run CellChat by condition (CC-2)' on a multi-condition object or run CellChat on two separate objects."
     },
     {
-      "fr": "Déposez des dossiers 10X (matrix.mtx + barcodes.tsv + features/genes.tsv) ou des fichiers SC (.rds, .h5, .h5ad, .loom) dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.",
+      "fr": "Déposez des dossiers 10X (matrix.mtx + barcodes.tsv + features/gènes.tsv) ou des fichiers SC (.rds, .h5, .h5ad, .loom) dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.",
       "en": "Drop 10X folders (matrix.mtx + barcodes.tsv + features/genes.tsv) or SC files (.rds, .h5, .h5ad, .loom) into the directory, then scan: nothing is read at startup and nothing is loaded without your click."
     },
     {
-      "fr": "Importez au moins 2 echantillons spatiaux (onglet Import > Spatial).",
+      "fr": "Importez au moins 2 échantillons spatiaux (onglet Import > Spatial).",
       "en": "Import at least 2 spatial samples (Import > Spatial tab)."
     },
     {
@@ -14086,7 +14034,7 @@
       "en": "No custom folders saved."
     },
     {
-      "fr": "Spatial: Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation spatiale → Multi-echantillons (integration Harmony conjointe, asynchrone) → Export (paquet .zip / script R reproductible)",
+      "fr": "Spatial: Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation spatiale → Multi-échantillons (intégration Harmony conjointe, asynchrone) → Export (paquet .zip / script R reproductible)",
       "en": "Spatial: Auto pipeline (1 click) OR QC → Clustering (BANKSY, async) → Deconvolution (RCTD/Label Transfer/STdeconvolve, async) → Spatial visualization → Multi-sample (joint Harmony integration, async) → Export (.zip bundle / reproducible R script)"
     },
     {
@@ -14312,6 +14260,274 @@
     {
       "fr": "Colonne d'identités cellulaires non définie.",
       "en": "Cell identity column not defined."
+    },
+    {
+      "fr": "Réduit le panel aux gènes les plus variables avant de construire la référence/le puck spatial — borne la RAM sur un gros Visium HD/Slide-seq sans perdre les types cellulaires (Backlog #6).",
+      "en": "Reduces the panel to the most variable genes before building the reference/spatial puck — caps RAM on a large Visium HD/Slide-seq run without losing signal."
+    },
+    {
+      "fr": "Vérifiez visuellement que les types cellulaires sont bien séparés avant de lancer RCTD/Label Transfer ci-dessous.",
+      "en": "Visually check that the cell types are well separated before running RCTD/Label Transfer below."
+    },
+    {
+      "fr": "Repréparez la référence partagée depuis l'onglet Import > Spatial (case 'Fusionner/exclure les types rares') avant de relancer.",
+      "en": "Re-prepare the shared reference from the Import > Spatial tab (the 'Merge/exclude rare types' box) before re-running."
+    },
+    {
+      "fr": "Cochez 'Fusionner/exclure les types rares' (sidebar) puis cliquez à nouveau '1) Préparer la référence' avant de relancer.",
+      "en": "Check 'Merge/exclude rare types' (sidebar) then click '1) Prepare the reference' again before re-running."
+    },
+    {
+      "fr": "Sous-échantillonnage stratifié (chaque type garde sa proportion relative) — accélère nettement RCTD/Label Transfer sur une grosse référence (ex: >50k cellules).",
+      "en": "Stratified subsampling (each type keeps its relative proportion) — markedly speeds up RCTD/Label Transfer on a large reference (e.g. >50k cells)."
+    },
+    {
+      "fr": "Avec 'Fusionner/exclure les types rares' coché, ces cellules seront regroupées sous 'Autre' puis, si ce groupe reste trop petit, exclues de la référence.",
+      "en": "With 'Merge/exclude rare types' checked, these cells will be grouped under 'Other' and, if that group stays too small, excluded from the reference."
+    },
+    {
+      "fr": "RCTD modélise l'expression par une loi de Poisson résolue par programmation quadratique — pic RAM attendu sous ~2 Go. Exécuté en mono-cœur (max_cores=1). Nécessite au moins 25 cellules par type dans la référence.",
+      "en": "RCTD models expression with a Poisson likelihood solved by quadratic programming — expect a RAM peak under ~2 GB. Runs single-core (max_cores=1). Requires at least 25 cells per type in the reference."
+    },
+    {
+      "fr": "Installez 'glmGamPoi' (BiocManager::install('glmGamPoi')) pour accélérer, sinon réduisez plutôt le nombre de cellules par type (section référence).",
+      "en": "Install 'glmGamPoi' (BiocManager::install('glmGamPoi')) to speed things up, or reduce the number of cells per type (reference section)."
+    },
+    {
+      "fr": "Référence",
+      "en": "Reference"
+    },
+    {
+      "fr": "Projection 2D (réduction — distances NON physiques)",
+      "en": "2D projection (dimensionality reduction — distances are NOT physical)"
+    },
+    {
+      "fr": "Coordonnées spatiales (bundle spatial courant)",
+      "en": "Spatial coordinates (current spatial bundle)"
+    },
+    {
+      "fr": "Suppression",
+      "en": "Removal"
+    },
+    {
+      "fr": "Atténuation",
+      "en": "Attenuation"
+    },
+    {
+      "fr": "Récepteur",
+      "en": "Receptor"
+    },
+    {
+      "fr": "Interaction (ligand -> récepteur)",
+      "en": "Interaction (ligand -> receptor)"
+    },
+    {
+      "fr": "Population sender",
+      "en": "Sender population"
+    },
+    {
+      "fr": "Population receiver",
+      "en": "Receiver population"
+    },
+    {
+      "fr": "Nom de colonne suspect (donneur / echantillon / lot / barcode...) : probablement pas un type cellulaire.",
+      "en": "Suspicious column name (donor / sample / batch / barcode...): probably not a cell type."
+    },
+    {
+      "fr": "Colonne a un seul niveau : aucune categorie exploitable pour une reference.",
+      "en": "Single-level column: no usable category for a reference."
+    },
+    {
+      "fr": "Colonne absente des metadonnees : la validation ne peut pas porter sur cette selection.",
+      "en": "Column missing from metadata: validation cannot apply to this selection."
+    },
+    {
+      "fr": "Preparation bloquee : cochez la case de confirmation pour utiliser cette colonne.",
+      "en": "Preparation blocked: tick the confirmation box to use this column."
+    },
+    {
+      "fr": "Colonnes triees : compatibles en premier (vert), a verifier (orange), incompatibles (rouge) — chaque colonne est evaluee par le composant de validation des metadonnees.",
+      "en": "Columns sorted: compatible first (green), to verify (orange), incompatible (red) — each column is assessed by the metadata validation component."
+    },
+    {
+      "fr": "Aucun resultat de hotspots a exporter.",
+      "en": "No hotspot results to export."
+    },
+    {
+      "fr": "✅ Import termine : {name} ({tech}{hd}) — {n} echantillon(s) au total",
+      "en": "✅ Import complete: {name} ({tech}{hd}) — {n} sample(s) total"
+    },
+    {
+      "fr": "Aucun dossier selectionne",
+      "en": "No folder selected"
+    },
+    {
+      "fr": "Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat dans l'application. ",
+      "en": "Cell-cell communication — import external results (CellChat / CellPhoneDB / LIANA) or compute CellChat in the app. "
+    },
+    {
+      "fr": "Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat / LIANA dans l'application. ",
+      "en": "Cell-cell communication — import external results (CellChat / CellPhoneDB / LIANA) or compute CellChat / LIANA in the app. "
+    },
+    {
+      "fr": "Les scores ne sont pas compares entre sources differentes (CellChat vs CellPhoneDB).",
+      "en": "Scores are not compared across different sources (CellChat vs CellPhoneDB)."
+    },
+    {
+      "fr": "CellChat (table exportee)",
+      "en": "CellChat (exported table)"
+    },
+    {
+      "fr": "Objet CellChat (.rds, resultats deja calcules)",
+      "en": "CellChat object (.rds, already-computed results)"
+    },
+    {
+      "fr": "Colonne d'echantillon (LIANA)",
+      "en": "Sample column (LIANA)"
+    },
+    {
+      "fr": "Methode LIANA",
+      "en": "LIANA method"
+    },
+    {
+      "fr": "Cellules minimum par echantillon",
+      "en": "Minimum cells per sample"
+    },
+    {
+      "fr": "Echantillon actif (LIANA)",
+      "en": "Active sample (LIANA)"
+    },
+    {
+      "fr": "Exporter manifeste des echantillons (CSV)",
+      "en": "Export sample manifest (CSV)"
+    },
+    {
+      "fr": "Collection LIANA : statut {status} — {n} echantillon(s), {c} condition(s).",
+      "en": "LIANA collection: status {status} — {n} sample(s), {c} condition(s)."
+    },
+    {
+      "fr": "Calcul LIANA par echantillon en cours...",
+      "en": "Running LIANA by sample..."
+    },
+    {
+      "fr": "Choisissez d'abord la colonne de metadonnees Seurat decrivant les identites des populations.",
+      "en": "First choose the Seurat metadata column describing population identities."
+    },
+    {
+      "fr": "Choisissez la colonne d'echantillon LIANA.",
+      "en": "Choose the LIANA sample column."
+    },
+    {
+      "fr": "La collection LIANA ne contient aucun echantillon.",
+      "en": "The LIANA collection contains no sample."
+    },
+    {
+      "fr": "Echantillon actif absent de la collection LIANA.",
+      "en": "Active sample is absent from the LIANA collection."
+    },
+    {
+      "fr": "Echantillon actif : {name} (resultats precedents restaures).",
+      "en": "Active sample: {name} (previous results restored)."
+    },
+    {
+      "fr": "Echantillon actif : {name}",
+      "en": "Active sample: {name}"
+    },
+    {
+      "fr": "Mapping interactif disponible pour les resultats importes uniquement.",
+      "en": "Interactive mapping available for imported results only."
+    },
+    {
+      "fr": " Comparez et integrez conjointement plusieurs echantillons spatiaux deja importes (onglet Import > Spatial). L'integration s'execute sur les \"sketches\" en RAM (echantillon <= max_sketch cellules par jeu de donnees, jamais les matrices pleine resolution) pour rester leger sur une machine CPU/32 Go.",
+      "en": " Compare and jointly integrate several spatial samples already imported (Import > Spatial tab). Integration runs on the in-RAM \"sketches\" (<= max_sketch elements per dataset, never the full-resolution matrices) to stay light on a CPU/32 GB machine."
+    },
+    {
+      "fr": "%s cellules x %s genes (colonne '%s', backend: %s)%s — preparee le %s.",
+      "en": "%s cells x %s genes (column '%s', backend: %s)%s — prepared on %s."
+    },
+    {
+      "fr": "Ajoutent chacune un peu de temps de calcul -- decochees par defaut. Consultez les onglets \"1. QC\" et \"6. Niches spatiales\" pour l'explication de chaque test.",
+      "en": "Each adds some computation time — unchecked by default. See the \"1. QC\" and \"6. Spatial Niches\" tabs for an explanation of each test."
+    },
+    {
+      "fr": "Aucun fichier a revérifier — uploadez d'abord une reference.",
+      "en": "Nothing to re-check — upload a reference first."
+    },
+    {
+      "fr": "Aucun score recompose. Les scores de sources differentes ne sont pas comparables.",
+      "en": "No score is recomposed. Scores from different sources are not comparable."
+    },
+    {
+      "fr": "Chargez et preparez UNE FOIS une reference scRNA-seq annotee ici pour la reutiliser directement dans l'onglet \"Spatial > 3. Deconvolution\" (RCTD ET Label Transfer), sans avoir a la re-uploader/re-preparer a chaque echantillon ou a chaque session (tant que l'artefact reste sur ce disque — voir sauvegarde de session dans le panneau lateral).",
+      "en": "Load and prepare an annotated scRNA-seq reference ONCE here to reuse it directly in the \"Spatial > 3. Deconvolution\" tab (both RCTD AND Label Transfer), without re-uploading/re-preparing it for each sample or session (as long as the artifact stays on this disk — see session save in the sidebar)."
+    },
+    {
+      "fr": "Controles deplaces dans le panneau lateral ('Apercu de la reference').",
+      "en": "Controls moved to the sidebar ('Reference preview')."
+    },
+    {
+      "fr": "Equivalent de DimPlot(brain.merge, group.by=c(\"ident\",\"orig.ident\")) : le panneau de gauche verifie l'effet de lot (les echantillons doivent bien se melanger si Harmony est actif) ; celui de droite montre les clusters biologiques resultants.",
+      "en": "Equivalent of DimPlot(brain.merge, group.by=c(\"ident\",\"orig.ident\")): the left panel checks the batch effect (samples should mix well if Harmony is active); the right one shows the resulting biological clusters."
+    },
+    {
+      "fr": "Importez d'abord un echantillon spatial.",
+      "en": "First import a spatial sample."
+    },
+    {
+      "fr": "Preparation de l'artifact de reference...",
+      "en": "Preparing the reference artifact..."
+    },
+    {
+      "fr": "Reference — le fichier n'a pas pu etre converti en objet Seurat.",
+      "en": "Reference — the file could not be converted to a Seurat object."
+    },
+    {
+      "fr": "Sauvegarde la vue ACTUELLE (coloration + parametres ci-dessus) pour l'onglet \"7. Export & Rapport\", meme apres avoir change d'onglet ou d'echantillon.",
+      "en": "Saves the CURRENT view (coloring + parameters above) for the \"7. Export & Report\" tab, even after switching tabs or samples."
+    },
+    {
+      "fr": "Si le fond histologique apparait tourne/inverse par rapport aux spots apres import (probleme connu, cause = convention de colonnes GetTissueCoordinates() qui a change entre versions de Seurat), corrigez ici puis re-importez — verifiez visuellement dans l'onglet \"4. Visualisation\" > Carte spatiale.",
+      "en": "If the histology background appears rotated/flipped relative to the spots after import (known issue, cause = GetTissueCoordinates() column convention that changed between Seurat versions), correct here then re-import — check visually in the \"4. Visualization\" tab > Spatial map."
+    },
+    {
+      "fr": "Une fois calculees, les niches sont disponibles comme option de coloration (\"Niche spatiale\") dans l'onglet \"4. Visualisation\" — fond histologique, export PNG/CSV et ROI fonctionnent avec, exactement comme pour un cluster.",
+      "en": "Once computed, niches become available as a coloring option (\"Spatial niche\") in the \"4. Visualization\" tab — histology background, PNG/CSV export and ROI all work with them, exactly like a cluster."
+    },
+    {
+      "fr": "Deja disponibles apres import, sans code supplementaire (ces onglets sont generiques a toutes les technologies) : SCTransform (case ci-dessous) ; clustering spatial onglet 2 (Lambda = 0 → equivalent PCA/UMAP/clusters \"classique\", sans terme de voisinage) ; indice de Moran onglet 1 (options avancees x.cuts/y.cuts pour accelerer sur un gros puck) ; deconvolution RCTD et transfert d'annotations scRNA-seq onglet 3 ; multi-pucks onglet 5.",
+      "en": "Already available after import, with no extra code (these tabs are generic to all technologies): SCTransform (checkbox below); spatial clustering tab 2 (Lambda = 0 → equivalent to \"classic\" PCA/UMAP/clusters, no neighborhood term); Moran's I tab 1 (advanced x.cuts/y.cuts options to speed up a large puck); RCTD deconvolution and scRNA-seq annotation transfer tab 3; multi-pucks tab 5."
+    },
+    {
+      "fr": " — %d echantillons charges, voir 'Multi-echantillons'",
+      "en": " — %d samples loaded, see 'Multi-sample'"
+    },
+    {
+      "fr": " Le test de composition differentielle (onglet \"Composition differentielle\") se recalcule automatiquement des qu'une integration conjointe est disponible ci-dessus — aucun bouton separe.",
+      "en": " The differential composition test (\"Differential composition\" tab) recomputes automatically as soon as a joint integration is available above — no separate button."
+    },
+    {
+      "fr": "Aucune integration calculee pour le moment. Selectionnez des echantillons et cliquez \"Lancer l'integration\".",
+      "en": "No integration computed yet. Select samples and click \"Run integration\"."
+    },
+    {
+      "fr": "Calculez d'abord une integration conjointe (bouton \"Lancer l'integration\" dans le panneau lateral).",
+      "en": "First compute a joint integration (\"Run integration\" button in the sidebar)."
+    },
+    {
+      "fr": "Methode alternative -- le nom des colonnes internes de Seurat differe de 'moransi' et n'est pas garanti stable entre versions ; le score affiche est detecte de facon defensive (generique) plutot que suppose. En cas de doute, preferez l'indice de Moran (par defaut).",
+      "en": "Alternative method — Seurat's internal column names differ from 'moransi' and are not guaranteed stable across versions; the displayed score is detected defensively (generic) rather than assumed. If in doubt, prefer Moran's I (default)."
+    },
+    {
+      "fr": "reference pas encore preparee -- cliquez '1) Preparer la reference (disque)' puis reessayez",
+      "en": "reference not yet prepared — click '1) Prepare the reference (disk)' then try again"
+    },
+    {
+      "fr": "Selectionnez le dossier racine contenant les fichiers bruts (ex: dossier 'outs' pour Visium/Xenium 10X, ou dossier CosMx AtoMx). Visium HD (dossier contenant 'binned_outputs/') est detecte automatiquement. Chaque import s'ajoute a la liste des echantillons (onglet Spatial > \"5. Multi-echantillons\") plutot que de remplacer le precedent.",
+      "en": "Select the root folder containing the raw files (e.g. the 'outs' folder for Visium/Xenium 10X, or a CosMx AtoMx folder). Visium HD (a folder containing 'binned_outputs/') is auto-detected. Each import is ADDED to the sample list (Spatial > \"5. Multi-sample\" tab) rather than replacing the previous one."
+    },
+    {
+      "fr": "Visium HD detecte ('binned_outputs/'). Choisissez UNE resolution a importer — reimportez ce meme dossier pour ajouter l'autre resolution comme echantillon distinct (onglet Spatial > \"5. Multi-echantillons\").",
+      "en": "Visium HD detected ('binned_outputs/'). Choose ONE resolution to import — re-import this same folder to add the other resolution as a distinct sample (Spatial > \"5. Multi-sample\" tab)."
     }
   ]
 }

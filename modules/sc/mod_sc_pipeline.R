@@ -240,7 +240,7 @@ mod_sc_pipeline_ui <- function(id) {
     # --- UI: sketch size preset selector ---
     selectInput(
       ns("sketch_preset"),
-      i18n$t("Taille du sketch (vitesse vs precision)"),
+      i18n$t("Taille du sketch (vitesse vs précision)"),
       choices = setNames(
         c("fast", "light", "medium", "standard", "high", "max", "custom"),
         c(.tr_plain("Rapide (test, 5 000 cellules)"),
@@ -261,9 +261,11 @@ mod_sc_pipeline_ui <- function(id) {
     ),
     hr(),
     h6(i18n$t("Normalisation")),
+    # choiceNames spans (motif app.R workflow_display_mode) : le shim JS
+    # bascule les libellés en live — .tr_plain reste FR après un switch EN.
     radioButtons(ns("norm_method"), NULL,
-      choices=setNames(c("log", "sct"),
-                       c(.tr_plain("LogNormalize (Standard)"), .tr_plain("SCTransform (Avancé)")))),
+      choiceNames = list(i18n$t("LogNormalize (Standard)"), i18n$t("SCTransform (Avancé)")),
+      choiceValues = c("log", "sct")),
     hr(),
     h6(i18n$t("Réduction Dimensionnelle")),
     selectInput(ns("reduction_method"), i18n$t("Méthode de Réduction (principale)"),
@@ -347,7 +349,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
       updateSliderInput(session, "max_contamination", label = .tr("Contamination ambiante max"))
       updateCheckboxInput(session, "run_ambient", label = .tr("Décontamination ambiante (SoupX/celda) — opt-in"))
       updateSelectInput(session, "sketch_preset",
-        label = .tr("Taille du sketch (vitesse vs precision)"),
+        label = .tr("Taille du sketch (vitesse vs précision)"),
         choices = setNames(
           c("fast", "light", "medium", "standard", "high", "max", "custom"),
           c(.tr("Rapide (test, 5 000 cellules)"),

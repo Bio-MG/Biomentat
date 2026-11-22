@@ -292,7 +292,7 @@ mod_bulk_de_venn_ui <- function(id) {
     card_header("Venn / UpSet"),
     div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #9B59B6;",
        bsicons::bs_icon("info-circle"),
-       " ", i18n$t("Compare les g\u00e8nes significatifs ENTRE plusieurs contrastes (utile apr\u00e8s un run Pairwise auto). Seuils utilis\u00e9s : ceux du panneau Step 2 (|Log2FC| / p-adj) \u2014 se mettent \u00e0 jour en direct si vous les changez, sans recalcul DE.")),
+       " ", i18n$t("Compare les g\u00e8nes significatifs ENTRE plusieurs contrastes (utile apr\u00e8s un run Pairwise auto). Seuils utilis\u00e9s : ceux du panneau \u00c9tape 2 (|Log2FC| / p-adj) \u2014 se mettent \u00e0 jour en direct si vous les changez, sans recalcul DE.")),
     uiOutput(ns("venn_gate_message")),
     fluidRow(
       column(7, selectizeInput(ns("venn_contrasts"), i18n$t("Contrastes \u00e0 comparer"),
@@ -330,7 +330,7 @@ mod_bulk_de_multimethod_ui <- function(id) {
     card_header(i18n$t("Multi-m\u00e9thodes (DESeq2 / edgeR / limma-voom)")),
     div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #F39C12;",
        bsicons::bs_icon("info-circle"),
-       " ", i18n$t("Compare le M\u00caME contraste (Cible/R\u00e9f\u00e9rence du panneau Step 2) avec les 3 moteurs statistiques disponibles. Le consensus de rang moyenne le classement p-value de chaque m\u00e9thode \u2014 un g\u00e8ne coh\u00e9rent entre m\u00e9thodes (rang faible, m\u00eame sens du Log2FC) est un candidat plus robuste qu'un g\u00e8ne significatif sur une seule m\u00e9thode.")),
+       " ", i18n$t("Compare le M\u00caME contraste (Cible/R\u00e9f\u00e9rence du panneau \u00c9tape 2) avec les 3 moteurs statistiques disponibles. Le consensus de rang moyenne le classement p-value de chaque m\u00e9thode \u2014 un g\u00e8ne coh\u00e9rent entre m\u00e9thodes (rang faible, m\u00eame sens du Log2FC) est un candidat plus robuste qu'un g\u00e8ne significatif sur une seule m\u00e9thode.")),
 
     uiOutput(ns("multimethod_status_ui")),
 

@@ -55,7 +55,7 @@ test_that("sidebar panels 3e and 3g have greyed span + padlock gating matching 3
     "4b. Réseau de co-expression (WGCNA)",
     "4c. Survie & association clinique",
     "4d. Clustering de profils",
-    "4e. Dose–réponse / time-course",
+    "4e. Dose–réponse / série temporelle",
     "5. Réseau PCSF (interactome)"
   )
   for (lbl in expected_locked) {

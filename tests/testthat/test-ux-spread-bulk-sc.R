@@ -240,8 +240,19 @@ test_that("mod_bulk_ui renders .ts-bulk-side-head + bulk_progress_ribbon_ui with
                info = "BULK-9: mod_bulk_ui must NOT set fillable = TRUE")
   app_src <- paste(readLines(file.path(ts_project_root(), "app.R"),
                              warn = FALSE, encoding = "UTF-8"), collapse = "\n")
-  expect_false(grepl('fillable\\s*=[^\\n]*tab_bulk', app_src),
-               info = "BULK-9: app.R must NOT opt tab_bulk into fillable")
+  # DEMANDE OPÉRATEUR (2026-11-22, « spread les 2 choses ») : le fill s'étend
+  # aux 3 workflows — app.R opte EXACTEMENT c("tab_spatial","tab_sc","tab_bulk")
+  # (commenté dans app.R ; les 3 modules retournent layout_sidebar en enfant
+  # unique, BULK-7 respecté). Le garde devient un PIN positif de l'ensemble
+  # exact (non-vacuité : un retrait silencieux ou un 4ᵉ id redeviennent
+  # visibles), tandis que la garde INTERNE ci-dessus (mod_bulk_ui ne doit pas
+  # poser fillable=TRUE lui-même) reste inchangée.
+  fill_line <- grep("fillable\\s*=", app_src, value = TRUE)[1]
+  expect_true(grepl('fillable\\s*=\\s*c\\(\\s*"tab_spatial"\\s*,\\s*"tab_sc"\\s*,\\s*"tab_bulk"\\s*\\)',
+                    fill_line),
+              info = paste0("BULK-9 (révisé 2026-11-22, demande opérateur) : ",
+                            "app.R doit opter exactement les 3 workflows dans fillable ; ",
+                            "ligne lue : ", fill_line))
 })
 
 test_that("mod_sc_ui renders .ts-sc-side-head + sc_progress_ribbon_ui", {

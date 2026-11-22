@@ -41,7 +41,7 @@ mod_sc_communication_ui <- function(id) {
       id = ns("comm_config_accordion"),
       open = "comm_config_panel",
       accordion_panel(
-        title = tagList(icon("sliders"), " ", i18n$t("Source des resultats")),
+        title = tagList(icon("sliders"), " ", i18n$t("Source des résultats")),
         value = "comm_config_panel",
     # Le moteur natif (CC-5) n'est pas un repli mais la voie NORMALE : il est
     # donc propose EN TETE et SELECTIONNE par defaut (decision utilisateur du
@@ -49,7 +49,7 @@ mod_sc_communication_ui <- function(id) {
     # ordre d'origine. ⚠️ Le defaut est DECLARE ici ET repris par le repli
     # serveur (`input$comm_source %||% ...`) : les deux doivent rester
     # d'accord — garde test-sc-communication-engine-ui.R.
-    radioButtons(ns("comm_source"), i18n$t("Source des resultats"),
+    radioButtons(ns("comm_source"), i18n$t("Source des résultats"),
                  choices = setNames(
                    c("cellchat_engine", "cellchat", "cellchat_object", "cellphonedb", "liana", "liana_engine"),
                    c(.tr_plain("Calculer dans l'application (CellChat)"),
@@ -62,7 +62,7 @@ mod_sc_communication_ui <- function(id) {
 
     conditionalPanel(
       condition = "input.comm_source == 'cellchat'", ns = ns,
-      fileInput(ns("comm_cellchat_file"), i18n$t("Table CellChat exportee (CSV/TSV)"),
+      fileInput(ns("comm_cellchat_file"), i18n$t("Table CellChat exportée (CSV/TSV)"),
                 accept = c(".csv", ".tsv", ".txt"), width = "100%",
                 buttonLabel = i18n$t("Parcourir...")),
       div(class = "small text-muted mb-2",
@@ -75,7 +75,7 @@ mod_sc_communication_ui <- function(id) {
                 accept = c(".rds", ".RDS", ".rda", ".RData"), width = "100%",
                 buttonLabel = i18n$t("Parcourir...")),
       div(class = "small text-muted mb-2",
-          i18n$t("Extraction des resultats deja calcules (net$prob) — aucune methode CellChat n'est relancee. La colonne pathway reste vide pour cette route."))
+          i18n$t("Extraction des résultats déjà calculés (net$prob) — aucune méthode CellChat n'est relancee. La colonne pathway reste vide pour cette route."))
     ),
 
     conditionalPanel(
@@ -101,13 +101,13 @@ mod_sc_communication_ui <- function(id) {
                 buttonLabel = i18n$t("Parcourir...")),
       radioButtons(ns("comm_liana_mode"), i18n$t("Mode d'agregation LIANA (requis)"),
                    choices = setNames(c("specificity", "magnitude"),
-                                      c(.tr_plain("Specificite — l'interaction est-elle specifique de ces types cellulaires ?"),
+                                      c(.tr_plain("Specificite — l'interaction est-elle spécifique de ces types cellulaires ?"),
                                         .tr_plain("Magnitude — l'interaction est-elle abondante ?"))),
                    selected = character(0)),
-      selectInput(ns("comm_liana_rank"), i18n$t("Colonne de rang a importer (requis)"),
+      selectInput(ns("comm_liana_rank"), i18n$t("Colonne de rang à importer (requis)"),
                   choices = character(0), width = "100%"),
       div(class = "small text-muted mb-2",
-          i18n$t("Colonnes de rang : mean_rank, aggregate_rank ou {methode}.rank. Dans LIANA, rang 1 = meilleur (inverse de prob) : aucun score n'est reconstitue, et les modes specificite/magnitude ne sont pas comparables entre eux."))
+          i18n$t("Colonnes de rang : mean_rank, aggregate_rank ou {méthode}.rank. Dans LIANA, rang 1 = meilleur (inverse de prob) : aucun score n'est reconstitue, et les modes specificite/magnitude ne sont pas comparables entre eux."))
     ),
 
     # ── CC-5 : Path B — calculer CellChat DANS l'application ──────────────────
@@ -124,13 +124,13 @@ mod_sc_communication_ui <- function(id) {
                                        .tr_plain("Souris (CellChatDB.mouse)"))),
                   selected = character(0), width = "100%"),
       div(class = "small text-muted mb-2",
-          i18n$t("Choix OBLIGATOIRE : la base ligand-recepteur en decoule, elle ne se devine pas a partir des donnees.")),
+          i18n$t("Choix OBLIGATOIRE : la base ligand-recepteur en decoule, elle ne se devine pas à partir des données.")),
       numericInput(ns("comm_engine_seed"), i18n$t("Graine"),
                    value = TS_CELLCHAT_SEED_DEFAULT, min = 1, step = 1, width = "100%"),
       numericInput(ns("comm_engine_nboot"), i18n$t("Nombre de permutations"),
                    value = TS_CELLCHAT_NBOOT_DEFAULT, min = 1, step = 1, width = "100%"),
       div(class = "small text-muted mb-2",
-          i18n$t("Les p-values viennent d'une permutation : la graine est un parametre du calcul, elle est tracee dans la provenance. Plus de permutations = calcul plus long.")),
+          i18n$t("Les p-values viennent d'une permutation : la graine est un paramètre du calcul, elle est tracee dans la provenance. Plus de permutations = calcul plus long.")),
       selectInput(ns("comm_engine_condition_col"),
                   i18n$t("Colonne de condition (CellChat par condition)"),
                   choices = character(0), selected = character(0), width = "100%"),
@@ -209,7 +209,7 @@ mod_sc_communication_ui <- function(id) {
     downloadButton(ns("dl_comm_liana_manifest"), i18n$t("Exporter manifeste des echantillons (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
     downloadButton(ns("dl_comm_liana_condition_summary"), i18n$t("Exporter resume des conditions (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
     downloadButton(ns("dl_comm_centrality"), i18n$t("Exporter centralite (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
-    downloadButton(ns("dl_comm_rds"), i18n$t("Exporter resultat valide (RDS)"), class = "btn-sm btn-info w-100 mt-1")
+    downloadButton(ns("dl_comm_rds"), i18n$t("Exporter résultat valide (RDS)"), class = "btn-sm btn-info w-100 mt-1")
   )
 }
 
@@ -259,7 +259,7 @@ mod_sc_communication_output_ui <- function(id) {
     # pas — il porte le résumé et l'accès direct aux panneaux.
     card_header(
       div(class = "d-flex justify-content-between align-items-center gap-2",
-          tags$span(i18n$t("Communication cellule-cellule — resultats importes")),
+          tags$span(i18n$t("Communication cellule-cellule — résultats importés")),
           tags$button(type = "button",
                       class = "btn btn-sm btn-outline-secondary flex-shrink-0",
                       `data-bs-toggle` = "offcanvas",
@@ -538,7 +538,7 @@ mod_sc_communication_output_ui <- function(id) {
                                               "🧬 ", i18n$t("Objets RDS CellChat")),
                                     # 3D (O28, spéc §2.16) : texte aligné sur le moteur —
                                     # appariement EXACT (jamais « non reconstitué ») :
-                                    i18n$t("Objet CellChat (.rds) : extraction de resultats deja calcules uniquement ; les paires ligand-receptor sont appariées EXACTEMENT sur @LR$LRsig (ligand, receptor, pathway_name) — aucune reconstruction heuristique ; un @LR$LRsig absent est remonté comme « engine_failure » explicite."))))))
+                                    i18n$t("Objet CellChat (.rds) : extraction de résultats déjà calculés uniquement ; les paires ligand-receptor sont appariées EXACTEMENT sur @LR$LRsig (ligand, receptor, pathway_name) — aucune reconstruction heuristique ; un @LR$LRsig absent est remonté comme « engine_failure » explicite."))))))
       ),
     ),
     # ── 2L (O28, spéc §2.23 point 2) : tiroir offcanvas secondaire (droite) ──
@@ -692,7 +692,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       ctx_results = list(spatial = NULL, trajectory = NULL,
                          velocity = NULL, perturbation = NULL)
     )
-    comm_status_rv <- reactiveVal(.tr("En attente d'import de resultats de communication..."))
+    # i18n-safe STATE : rv NULL tant qu'aucun statut métier n'a été écrit —
+    # le placeholder est rendu à l'affichage dans la langue COURANTE (les deux
+    # sorties ci-dessous lisent global_data$language pour re-rendre).
+    comm_status_rv <- reactiveVal(NULL)
 
     output$comm_status <- renderText({
       # R-3bis (idiome repo, cf. mod_bulk.R fix 2026-11-06) : une sortie
@@ -702,15 +705,18 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       # feuille active fait RE-EXÉCUTER le render quand l'opérateur navigue
       # dans le drawer — livraison garantie à l'ouverture.
       state_get(shared_rv, "comm_tabs_current")
-      comm_status_rv()
+      global_data$language                # i18n : re-rendu au changement de langue
+      v <- comm_status_rv()
+      if (is.null(v)) .tr("En attente d'import de résultats de communication...") else v
     })
 
     output$comm_empty_hint <- renderUI({
       state_get(shared_rv, "comm_tabs_current")
+      global_data$language                # i18n : re-rendu au changement de langue
       if (!is.null(comm_state$result)) return(NULL)
       div(
         class = "small text-muted border-start border-3 border-secondary ps-2 py-1 mb-2",
-        icon("circle-info"), " ", comm_status_rv()
+        icon("circle-info"), " ", comm_status_rv() %||% .tr("En attente d'import de résultats de communication...")
       )
     })
 
@@ -768,7 +774,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     # perime par construction) + resynchronisation des choix de colonne.
     observeEvent(global_data$sc_obj, {
       .clear_result_state()
-      comm_status_rv(.tr("Objet Seurat modifie : reimportez la table de communication."))
+      comm_status_rv(.tr("Objet Seurat modifie : réimportez la table de communication."))
       updateSelectInput(session, "comm_identity_column", choices = character(0),
                         selected = character(0))
       updateSelectInput(session, "comm_liana_sample_col", choices = character(0),
@@ -2279,7 +2285,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       roles <- comm_state$result$cellchat_roles
       validate(need(
         !is.null(roles) && is.data.frame(roles) && nrow(roles) > 0L,
-        .tr("Roles CellChat indisponibles (voie import ou centralite non calculee) — vue derivee seule.")
+        .tr("Roles CellChat indisponibles (voie import ou centralite non calculée) — vue derivee seule.")
       ))
       plot_communication_roles_dot(
         roles,
@@ -2293,7 +2299,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       roles <- comm_state$result$cellchat_roles
       validate(need(
         !is.null(roles) && is.data.frame(roles) && nrow(roles) > 0L,
-        .tr("Roles CellChat indisponibles (voie import ou centralite non calculee) — vue derivee seule.")
+        .tr("Roles CellChat indisponibles (voie import ou centralite non calculée) — vue derivee seule.")
       ))
       if (isTRUE(input$comm_centrality_hide_minor) && "role" %in% colnames(roles)) {
         roles <- roles[as.character(roles$role) != "minor", , drop = FALSE]
@@ -2563,7 +2569,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
 
     output$comm_schema_note <- renderText({
       req(comm_state$result)
-      .tr("Mapping resolu de facon deterministe a l'import — aucune conversion supposee entre schemas incompatibles.")
+      .tr("Mapping resolu de façon deterministe a l'import — aucune conversion supposee entre schemas incompatibles.")
     })
 
     output$comm_mapping <- DT::renderDataTable({
@@ -2622,7 +2628,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       # sans résultat importé, la surface n'a rien à proposer — dire-le.
       if (is.null(comm_state$result)) {
         showNotification(
-          .tr("Aucun resultat importe — importez d'abord une table de communication."),
+          .tr("Aucun résultat importé — importez d'abord une table de communication."),
           type = "warning", duration = 6
         )
         return()
@@ -2763,8 +2769,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       .row <- function(k, v) tags$tr(tags$th(style = "width:65%;", k), tags$td(v))
       rows <- list(
         .row(.tr("Lignes source (avant conversion)"), as.character(r$input_summary$n_rows_input)),
-        .row(.tr("Lignes canoniques (apres QC)"), as.character(r$input_summary$n_rows_canonical)),
-        .row(.tr("Lignes supprimees (champs requis vides)"), as.character(qc$n_dropped_required_fields %||% 0L)),
+        .row(.tr("Lignes canoniques (après QC)"), as.character(r$input_summary$n_rows_canonical)),
+        .row(.tr("Lignes supprimées (champs requis vides)"), as.character(qc$n_dropped_required_fields %||% 0L)),
         .row(.tr("Auto-interactions (sender = receiver)"), as.character(qc$n_self_interactions %||% 0L)),
         .row(.tr("Interactions dupliquees (conservees et flagees)"), as.character(qc$n_duplicate_interactions %||% 0L)),
         .row(.tr("Pathways manquants"), as.character(qc$n_pathway_missing %||% 0L)),
