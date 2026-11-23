@@ -218,6 +218,7 @@ APP_DAEMON_SOURCE_FILES <- c(
   # appelle bulk_assert_raw_counts(), defini dans le premier. Mesure : sourcer
   # bulk_helpers.R seul laisse cette fonction introuvable dans le daemon.
   "tools/pkg_skeleton/R/batch_correction.R",
+  "tools/pkg_skeleton/R/bulk_mnar_de.R",
   "tools/pkg_skeleton/R/bulk_helpers.R",
   # --- SC : fonctions de modules requises par le coeur auto-pipeline (2026-11-10)
   # BUG MESURE (run operateur 16:07-16:12, session 6561 vivante) : le pipeline

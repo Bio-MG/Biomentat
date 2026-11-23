@@ -883,6 +883,48 @@ run_dream_de <- function(counts_matrix, metadata, condition_col,
 
 #' Dispatch DE engine call
 
+.run_mnar_de_contrast <- function(counts_matrix, metadata, condition_col,
+                                  group_target, group_ref,
+                                  p_adjust_method = "BH") {
+  if (!exists("run_bulk_mnar_de", mode = "function")) {
+    stop(errorCondition("Moteur MNAR (run_bulk_mnar_de) indisponible.", class = "bulk_de_error"))
+  }
+  if (is.null(metadata) || !condition_col %in% colnames(metadata)) {
+    stop(errorCondition(paste0("Colonne de condition absente des m\u00e9tadonn\u00e9es : ", condition_col),
+                        class = "bulk_de_error"))
+  }
+  cond_vals <- as.character(metadata[[condition_col]])
+  keep <- !is.na(cond_vals) & cond_vals %in% c(group_ref, group_target)
+  if (sum(keep) < 2L) {
+    stop(errorCondition("Au moins 2 \u00e9chantillons requis pour l'analyse MNAR/MAR.",
+                        class = "bulk_de_error"))
+  }
+  sub_mat <- as.matrix(counts_matrix[, keep, drop = FALSE])
+  sub_grp <- factor(cond_vals[keep], levels = c(group_ref, group_target))
+  out <- run_bulk_mnar_de(
+    mat = sub_mat,
+    groups = sub_grp,
+    ctrl_level = group_ref,
+    case_level = group_target,
+    fdr_method = p_adjust_method
+  )
+  tbl <- out$table
+  res_df <- data.frame(
+    log2FoldChange = tbl$log2FC,
+    pvalue = tbl$pvalue_combined,
+    padj = tbl$FDR,
+    baseMean = rowMeans(cbind(tbl$mean_ctrl, tbl$mean_case), na.rm = TRUE),
+    regime = tbl$regime,
+    pct_na_ctrl = tbl$pct_na_ctrl,
+    pct_na_case = tbl$pct_na_case,
+    pvalue_intensity = tbl$pvalue_intensity,
+    pvalue_missingness = tbl$pvalue_missingness,
+    row.names = tbl$feature,
+    stringsAsFactors = FALSE
+  )
+  res_df
+}
+
 run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
                                   group_target, group_ref, dds = NULL, shrink = TRUE,
@@ -898,8 +940,11 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
   # La garde est posée ici, une seule fois, pour les trois moteurs : le moteur
   # deseq2 consomme un dds déjà construit par build_dds(), qui applique la même
   # garde — les deux chemins sont donc couverts.
-  bulk_assert_raw_counts(counts_matrix, paste0("analyse différentielle (", engine, ")"),
-                         allow_non_integer = allow_non_integer)
+  # BK-05 : le moteur mnar accepte les intensités continues (log2) et les NAs.
+  if (!identical(engine, "mnar")) {
+    bulk_assert_raw_counts(counts_matrix, paste0("analyse différentielle (", engine, ")"),
+                           allow_non_integer = allow_non_integer)
+  }
 
   # GEMS PA v1/v2 : le bloc apparié (pair_col) est supporté par limma et dream.
   # Refus HONNÊTE plutôt qu'un traitement silencieux comme indépendant —
@@ -928,6 +973,8 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
     limma = run_limma_voom_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method, pair_col = pair_col, treat_lfc = treat_lfc),
 
     dream = run_dream_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method, pair_col = pair_col, treat_lfc = treat_lfc),
+
+    mnar = .run_mnar_de_contrast(counts_matrix, metadata, condition_col, group_target, group_ref, p_adjust_method = p_adjust_method),
 
     stop(errorCondition(paste0("Moteur DE non supporté : ", engine), class = "bulk_de_error"))
 
@@ -1107,6 +1154,7 @@ bulk_de_engine_label <- function(engine) {
          edger  = "edgeR",
          limma  = "limma-voom",
          dream  = "limma-dream",
+         mnar   = "PolySTest (MNAR/MAR)",
          toupper(eng))
 }
 

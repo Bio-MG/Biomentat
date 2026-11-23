@@ -203,6 +203,8 @@ mod_bulk_report_ui <- function(id) {
                    class = "btn-outline-secondary w-100"),
     downloadButton(ns("dl_bulk_methods_md"), i18n$t("📝 Brouillon Matériels & Méthodes (.md)"),
                    class = "btn-outline-secondary w-100 mt-1"),
+    downloadButton(ns("dl_audit_qmd"), i18n$t("📓 Export Journal d'Audit Quarto (.qmd)"),
+                   class = "btn-outline-secondary w-100 mt-1"),
     div(class = "small text-muted mt-1", textOutput(ns("report_status")))
   )
 }
@@ -420,6 +422,16 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
         lang <- if (identical(tolower(global_data$language %||% "fr"), "en")) "en" else "fr"
         draft <- build_methods_draft(shared_rv, lang = lang)
         writeLines(draft$markdown, file, useBytes = TRUE)
+      }
+    )
+
+    output$dl_audit_qmd <- downloadHandler(
+      filename = function() paste0("biomentat_audit_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".qmd"),
+      content = function(file) {
+        ts_drive_export_audit_qmd(out_path = file, format = "qmd")
+        shared_rv$last_report <- list(name = basename(file),
+                                      kind = .tr("Audit Quarto"),
+                                      at   = format(Sys.time(), "%H:%M:%S"))
       }
     )
 

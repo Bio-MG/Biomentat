@@ -14544,6 +14544,18 @@
     {
       "fr": "Méta-analyse : méthode=%s | %d études | %d gènes harmonisés | %d gènes FDR < %s",
       "en": "Meta-analysis: method=%s | %d studies | %d harmonized genes | %d genes FDR < %s"
+    },
+    {
+      "fr": "📓 Export Journal d'Audit Quarto (.qmd)",
+      "en": "📓 Export Quarto Audit Notebook (.qmd)"
+    },
+    {
+      "fr": "Audit Quarto",
+      "en": "Quarto Audit"
+    },
+    {
+      "fr": "PolySTest MNAR/MAR (NAs / protéomique)",
+      "en": "PolySTest MNAR/MAR (NAs / proteomics)"
     }
   ]
 }
