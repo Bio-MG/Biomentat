@@ -14732,6 +14732,26 @@
     {
       "fr": "Milo spatial : %d voisinages testés | %d significatifs (FDR < 0.05) | k=%d",
       "en": "Spatial Milo: %d neighbourhoods tested | %d significant (FDR < 0.05) | k=%d"
+    },
+    {
+      "fr": "📊 Table d'attrition (.csv)",
+      "en": "📊 Attrition Table (.csv)"
+    },
+    {
+      "fr": "Diagramme d'attrition (OMOP / QC)",
+      "en": "Attrition Diagram (OMOP / QC)"
+    },
+    {
+      "fr": "Attrition de cohorte / QC",
+      "en": "Cohort / QC Attrition"
+    },
+    {
+      "fr": "Attrition cohorte",
+      "en": "Cohort Attrition"
+    },
+    {
+      "fr": "Mermaid (attrition)",
+      "en": "Mermaid (attrition)"
     }
   ]
 }

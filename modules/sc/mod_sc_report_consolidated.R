@@ -31,6 +31,8 @@ mod_sc_report_consolidated_ui <- function(id) {
                    class = "btn-outline-secondary w-100 mt-1"),
     downloadButton(ns("dl_lite_explorer"), i18n$t("📦 Explorateur Lite autonome (.zip)"),
                    class = "btn-outline-secondary w-100 mt-1"),
+    downloadButton(ns("dl_attrition_csv"), i18n$t("📊 Table d'attrition (.csv)"),
+                   class = "btn-outline-secondary w-100 mt-1"),
     div(class = "small text-muted mt-1", textOutput(ns("rep_consolide_status")))
   )
 }
@@ -57,6 +59,14 @@ mod_sc_report_consolidated_output_ui <- function(id) {
     uiOutput(ns("rep_verdicts_ui")),
     hr(),
     uiOutput(ns("rep_provenance_count_ui")),
+    hr(),
+    h6(i18n$t("Diagramme d'attrition (OMOP / QC)")),
+    plotOutput(ns("rep_attrition_plot"), height = "260px"),
+    tags$details(
+      tags$summary(class = "small text-muted", style = "cursor:pointer;",
+                   i18n$t("Mermaid (attrition)")),
+      verbatimTextOutput(ns("rep_attrition_mermaid"))
+    ),
     # Tiroir état (résumé vivant — verdicts compacts, sections refusées,
     # provenance) :
     tags$div(
@@ -287,6 +297,47 @@ mod_sc_report_consolidated_server <- function(id, global_data, shared_rv = NULL)
             showNotification(paste0("✗ ", .tr("Échec de l'explorateur Lite : "), conditionMessage(e)), type = "error", duration = 12)
           })
         })
+      }
+    )
+
+    # ── BK-11 : Attrition cohorte / QC (lecture seule de l'état) ─────────────
+    .sc_attrition_df <- reactive({
+      obj <- global_data$sc_obj
+      if (is.null(obj)) return(NULL)
+      n_final <- suppressWarnings(as.integer(ncol(obj)))
+      if (length(n_final) != 1L || is.na(n_final) || n_final < 0L) n_final <- 0L
+      raw_rv <- if (!is.null(shared_rv)) suppressWarnings(as.integer(state_get(shared_rv, "n_cells_raw"))) else integer(0)
+      qc_rv  <- if (!is.null(shared_rv)) suppressWarnings(as.integer(state_get(shared_rv, "n_cells_post_qc"))) else integer(0)
+      dbl_rv <- if (!is.null(shared_rv)) suppressWarnings(as.integer(state_get(shared_rv, "n_cells_post_doublets"))) else integer(0)
+      n_dbl <- if (length(dbl_rv) == 1L && !is.na(dbl_rv)) max(dbl_rv, n_final) else n_final
+      n_qc  <- if (length(qc_rv)  == 1L && !is.na(qc_rv))  max(qc_rv, n_dbl)    else n_dbl
+      n_raw <- if (length(raw_rv) == 1L && !is.na(raw_rv)) max(raw_rv, n_qc)    else n_qc
+      attrition_from_sc_qc(n_raw, n_qc, n_dbl, n_final)
+    })
+
+    output$rep_attrition_plot <- renderPlot({
+      df <- .sc_attrition_df()
+      req(df)
+      plot_attrition_diagram(df, title = .tr("Attrition de cohorte / QC"))
+    })
+
+    output$rep_attrition_mermaid <- renderText({
+      df <- .sc_attrition_df()
+      if (is.null(df)) return(.tr("Objet SC requis."))
+      format_attrition_mermaid(df)
+    })
+
+    output$dl_attrition_csv <- downloadHandler(
+      filename = function() consolidated_report_export_filename("attrition_cohorte", "csv"),
+      content = function(file) {
+        df <- .sc_attrition_df()
+        if (is.null(df)) {
+          showNotification(.tr("Objet SC requis : importez et traitez un objet d'abord."),
+                           type = "error", duration = 8)
+          validate(.tr("Objet SC requis."))
+          return()
+        }
+        utils::write.csv(df, file, row.names = FALSE)
       }
     )
   })

@@ -205,6 +205,8 @@ mod_bulk_report_ui <- function(id) {
                    class = "btn-outline-secondary w-100 mt-1"),
     downloadButton(ns("dl_audit_qmd"), i18n$t("📓 Export Journal d'Audit Quarto (.qmd)"),
                    class = "btn-outline-secondary w-100 mt-1"),
+    downloadButton(ns("dl_bulk_attrition_csv"), i18n$t("📊 Table d'attrition (.csv)"),
+                   class = "btn-outline-secondary w-100 mt-1"),
     div(class = "small text-muted mt-1", textOutput(ns("report_status")))
   )
 }
@@ -431,6 +433,32 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
         ts_drive_export_audit_qmd(out_path = file, format = "qmd")
         shared_rv$last_report <- list(name = basename(file),
                                       kind = .tr("Audit Quarto"),
+                                      at   = format(Sys.time(), "%H:%M:%S"))
+      }
+    )
+
+    output$dl_bulk_attrition_csv <- downloadHandler(
+      filename = function() paste0("attrition_bulk_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv"),
+      content = function(file) {
+        raw_cnt <- tryCatch(global_data$bulk_obj$counts, error = function(e) NULL)
+        if (is.null(raw_cnt)) {
+          showNotification(.tr("Aucun jeu bulk chargé."), type = "error", duration = 8)
+          validate(.tr("Aucun jeu bulk chargé."))
+          return()
+        }
+        n_raw <- nrow(raw_cnt)
+        n_flt <- if (!is.null(shared_rv$filtered_counts)) min(nrow(shared_rv$filtered_counts), n_raw) else n_raw
+        n_vst <- if (!is.null(shared_rv$vst_mat)) min(nrow(shared_rv$vst_mat), n_flt) else n_flt
+        steps <- data.frame(
+          step = c("Raw Features", "Filtered Counts", "VST Matrix"),
+          n_remaining = c(n_raw, n_flt, n_vst),
+          reason = c("Initial matrix", "Low-count filter", "VST normalization"),
+          stringsAsFactors = FALSE
+        )
+        df <- build_attrition_table(steps, unit = "genes")
+        utils::write.csv(df, file, row.names = FALSE)
+        shared_rv$last_report <- list(name = basename(file),
+                                      kind = .tr("Attrition cohorte"),
                                       at   = format(Sys.time(), "%H:%M:%S"))
       }
     )
