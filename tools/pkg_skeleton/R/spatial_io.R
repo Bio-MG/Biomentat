@@ -766,7 +766,7 @@ check_histology_coord_alignment <- function(coords, hist_img) {
 #' @param seurat_obj Seurat object as returned by load_spatial_visium()
 #'   / Seurat::LoadXenium() / Seurat::LoadNanostring().
 #' @param dataset_id Character, unique slug for this dataset.
-#' @param technology One of "visium", "xenium", "cosmx", "slideseq".
+#' @param technology One of "visium", "xenium", "cosmx", "slideseq", "merscope".
 #' @param assay Character, assay holding raw counts.
 #' @param simplify_tol Numeric tolerance passed to Seurat::Simplify().
 #' @param max_sketch Integer, max cells/spots kept in the in-RAM sketch.
@@ -786,7 +786,7 @@ check_histology_coord_alignment <- function(coords, hist_img) {
 #'   this field.
 #' @return List — see file header CONTRACT.
 convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
-                                       technology = c("visium", "xenium", "cosmx", "slideseq"),
+                                       technology = c("visium", "xenium", "cosmx", "slideseq", "merscope"),
                                        assay = NULL,
                                        simplify_tol = 20,
                                        max_sketch = 50000,

@@ -14752,6 +14752,26 @@
     {
       "fr": "Mermaid (attrition)",
       "en": "Mermaid (attrition)"
+    },
+    {
+      "fr": "MERSCOPE / MERFISH (subcellulaire)",
+      "en": "MERSCOPE / MERFISH (subcellular)"
+    },
+    {
+      "fr": "MERSCOPE / MERFISH : sélectionnez le dossier contenant 'cell_by_gene.csv' et 'cell_metadata.csv'.",
+      "en": "MERSCOPE / MERFISH: select the folder containing 'cell_by_gene.csv' and 'cell_metadata.csv'."
+    },
+    {
+      "fr": "Filtrer les sondes contrôles Blank",
+      "en": "Filter Blank control probes"
+    },
+    {
+      "fr": "Agrégation super-bins (optionnel)",
+      "en": "Super-bin pooling (optional)"
+    },
+    {
+      "fr": "Aucune (natif)",
+      "en": "None (native)"
     }
   ]
 }

@@ -92,3 +92,47 @@ test_that("aggregate_visium_hd_bins pools 4x4 grid into 4 super-bins preserving 
   expect_equal(sum(out$counts), sum(cnt))
   expect_equal(sum(out$coords$n_subbins), 16L)
 })
+
+test_that("load_spatial_merscope and apply_visium_hd_bin_pooling return valid Seurat objects", {
+  skip_if_not_installed("Seurat")
+  skip_if_not_installed("Matrix")
+  source(.hd_test_root("tools/pkg_skeleton/R/spatial_io.R"), local = globalenv())
+  source(.hd_test_root("tools/pkg_skeleton/R/spatial_hd_ingest.R"), local = globalenv())
+
+  tmp_dir <- tempfile("merscope_seurat_")
+  dir.create(tmp_dir, recursive = TRUE)
+  on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+
+  cnt_df <- data.frame(
+    EntityID = sprintf("c%d", 1:6),
+    Gene1 = c(5, 2, 4, 1, 3, 6),
+    Gene2 = c(1, 3, 2, 4, 2, 1),
+    Blank_ctrl = c(1, 0, 1, 0, 0, 1),
+    stringsAsFactors = FALSE
+  )
+  meta_df <- data.frame(
+    EntityID = sprintf("c%d", 1:6),
+    center_x = c(0, 2, 0, 2, 4, 4),
+    center_y = c(0, 0, 2, 2, 0, 2),
+    stringsAsFactors = FALSE
+  )
+  utils::write.csv(cnt_df, file.path(tmp_dir, "cell_by_gene.csv"), row.names = FALSE)
+  utils::write.csv(meta_df, file.path(tmp_dir, "cell_metadata.csv"), row.names = FALSE)
+
+  obj <- load_spatial_merscope(tmp_dir, sample_name = "MS_Test")
+  expect_s4_class(obj, "Seurat")
+  expect_equal(ncol(obj), 6L)
+  expect_equal(nrow(obj), 2L)
+  expect_equal(attr(obj, "ts_spatial_mode"), "merscope")
+  expect_equal(attr(obj, "ts_merscope_blanks_removed"), 1L)
+  expect_true(all(c("coord_x", "coord_y") %in% colnames(obj@meta.data)))
+
+  same_obj <- apply_visium_hd_bin_pooling(obj, bin_factor = 1L)
+  expect_identical(ncol(same_obj), ncol(obj))
+
+  pooled_obj <- apply_visium_hd_bin_pooling(obj, bin_factor = 2L)
+  expect_s4_class(pooled_obj, "Seurat")
+  expect_true(ncol(pooled_obj) < ncol(obj))
+  expect_equal(attr(pooled_obj, "ts_hd_pool_factor"), 2L)
+  expect_true("n_subbins" %in% colnames(pooled_obj@meta.data))
+})

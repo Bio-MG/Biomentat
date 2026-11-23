@@ -256,3 +256,73 @@ aggregate_visium_hd_bins <- function(counts_mat, coords, bin_factor = 4L) {
     platform = "visium_hd"
   )
 }
+
+#' Load a MERSCOPE / MERFISH directory into a Seurat Spatial object
+#'
+#' @param dir_path Directory containing `cell_by_gene.csv` and `cell_metadata.csv`.
+#' @param sample_name Character sample identifier.
+#' @param drop_blanks Logical; drop `^Blank[-_]` control probes when `TRUE`.
+#' @param min_counts Minimum total counts per cell to retain.
+#' @return A `Seurat` object with `coord_x`/`coord_y` metadata and
+#'   `attr(obj, "ts_spatial_mode") == "merscope"`.
+#' @export
+load_spatial_merscope <- function(dir_path,
+                                  sample_name = "MERSCOPE_Sample",
+                                  drop_blanks = TRUE,
+                                  min_counts = 1L) {
+  if (!requireNamespace("Seurat", quietly = TRUE)) {
+    stop(.spatial_hd_stop("Package 'Seurat' is required for load_spatial_merscope()."))
+  }
+  det <- detect_spatial_hd_format(dir_path)
+  if (!identical(det$platform, "merscope_merfish")) {
+    stop(.spatial_hd_stop(sprintf(
+      "Directory does not contain MERSCOPE/MERFISH files (cell_by_gene.csv + cell_metadata.csv): %s",
+      as.character(dir_path)
+    )))
+  }
+  res <- read_merscope_merfish(
+    counts_path = det$files$counts,
+    metadata_path = det$files$metadata,
+    drop_blanks = isTRUE(drop_blanks),
+    min_counts = as.numeric(min_counts)
+  )
+  obj <- Seurat::CreateSeuratObject(counts = res$counts, assay = "Spatial", project = sample_name)
+  obj$orig.ident <- sample_name
+  obj$coord_x <- res$coords$x
+  obj$coord_y <- res$coords$y
+  attr(obj, "ts_spatial_mode") <- "merscope"
+  attr(obj, "ts_merscope_blanks_removed") <- res$n_blanks_removed
+  obj
+}
+
+#' Pool a Visium HD Seurat object into coarser spatial super-bins
+#'
+#' @param seurat_obj A `Seurat` object loaded from Visium HD.
+#' @param bin_factor Integer pooling factor (`<= 1L` returns `seurat_obj` unchanged).
+#' @return A `Seurat` object with pooled sparse counts and `coord_x`/`coord_y`/`n_subbins`.
+#' @export
+apply_visium_hd_bin_pooling <- function(seurat_obj, bin_factor = 1L) {
+  bf <- suppressWarnings(as.integer(bin_factor))
+  if (length(bf) != 1L || is.na(bf) || bf <= 1L) {
+    return(seurat_obj)
+  }
+  if (!requireNamespace("Seurat", quietly = TRUE) || !requireNamespace("SeuratObject", quietly = TRUE)) {
+    stop(.spatial_hd_stop("Packages 'Seurat' and 'SeuratObject' are required for apply_visium_hd_bin_pooling()."))
+  }
+  assay <- Seurat::DefaultAssay(seurat_obj)
+  counts_mat <- SeuratObject::LayerData(seurat_obj, assay = assay, layer = "counts")
+  coords <- get_spatial_coords(seurat_obj)
+  if (is.null(coords) || nrow(coords) == 0L) {
+    stop(.spatial_hd_stop("Cannot pool Visium HD bins: spatial coordinates are missing."))
+  }
+  pooled <- aggregate_visium_hd_bins(counts_mat, coords, bin_factor = bf)
+  proj <- tryCatch(seurat_obj@project.name, error = function(e) "VisiumHD_Pooled")
+  obj <- Seurat::CreateSeuratObject(counts = pooled$counts, assay = assay, project = proj)
+  obj$orig.ident <- proj
+  obj$coord_x <- pooled$coords$x
+  obj$coord_y <- pooled$coords$y
+  obj$n_subbins <- pooled$coords$n_subbins
+  attr(obj, "ts_spatial_mode") <- "visium_hd_pooled"
+  attr(obj, "ts_hd_pool_factor") <- pooled$bin_factor
+  obj
+}

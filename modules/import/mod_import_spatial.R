@@ -154,11 +154,12 @@ mod_import_spatial_ui <- function(id) {
         width = 400, title = i18n$t("Import Spatial"),
         
         radioButtons(ns("technology"), i18n$t("Technologie"),
-                     choices = stats::setNames(c("visium", "xenium", "cosmx", "slideseq"),
+                     choices = stats::setNames(c("visium", "xenium", "cosmx", "slideseq", "merscope"),
                                                c(.tr_plain("Visium (spots)"),
                                                  .tr_plain("Xenium (subcellulaire)"),
                                                  .tr_plain("CosMx (subcellulaire)"),
-                                                 .tr_plain("Slide-seq (beads, beta)"))),
+                                                 .tr_plain("Slide-seq (beads, beta)"),
+                                                 .tr_plain("MERSCOPE / MERFISH (subcellulaire)"))),
                      selected = "visium"),
         
         div(class = "alert alert-light", style = "font-size:0.8rem;",
@@ -237,6 +238,18 @@ mod_import_spatial_ui <- function(id) {
           hr(),
           sliderInput(ns("simplify_tol"), i18n$t("Tolerance de simplification des polygones"),
                       1, 100, 20, step = 1)
+        ),
+
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'merscope'", ns("technology")),
+          hr(),
+          div(class = "alert alert-light", style = "font-size:0.8rem;",
+              bsicons::bs_icon("info-circle"),
+              " ", i18n$t("MERSCOPE / MERFISH : sélectionnez le dossier contenant 'cell_by_gene.csv' et 'cell_metadata.csv'.")),
+          checkboxInput(ns("merscope_drop_blanks"),
+                        i18n$t("Filtrer les sondes contrôles Blank"),
+                        value = TRUE),
+          numericInput(ns("min_counts_ms"), i18n$t("nCount minimum"), 1, min = 0, step = 1)
         ),
         
         hr(),
@@ -346,9 +359,10 @@ mod_import_spatial_server <- function(id, global_data) {
     observeEvent(global_data$language, {
       updateRadioButtons(session, "technology",
         label = .tr("Technologie"),
-        choices = stats::setNames(c("visium", "xenium", "cosmx", "slideseq"),
+        choices = stats::setNames(c("visium", "xenium", "cosmx", "slideseq", "merscope"),
                                   c(.tr("Visium (spots)"), .tr("Xenium (subcellulaire)"),
-                                    .tr("CosMx (subcellulaire)"), .tr("Slide-seq (beads, beta)"))))
+                                    .tr("CosMx (subcellulaire)"), .tr("Slide-seq (beads, beta)"),
+                                    .tr("MERSCOPE / MERFISH (subcellulaire)"))))
       updateTextInput(session, "sample_name", label = .tr("Nom de l'échantillon"))
       updateNumericInput(session, "min_counts", label = .tr("nCount_Spatial minimum"))
       updateNumericInput(session, "min_features", label = .tr("nFeature_Spatial minimum"))
@@ -360,6 +374,9 @@ mod_import_spatial_server <- function(id, global_data) {
       updateCheckboxInput(session, "orient_flip_y", label = .tr("Miroir vertical"))
       updateNumericInput(session, "min_counts_ss", label = .tr("nCount minimum"))
       updateNumericInput(session, "min_features_ss", label = .tr("nFeature minimum"))
+      updateCheckboxInput(session, "merscope_drop_blanks",
+        label = .tr("Filtrer les sondes contrôles Blank"))
+      updateNumericInput(session, "min_counts_ms", label = .tr("nCount minimum"))
       updateSliderInput(session, "simplify_tol",
         label = .tr("Tolerance de simplification des polygones"))
       updateNumericInput(session, "max_sketch", label = .tr("Taille max. du sketch (RAM)"))
@@ -516,9 +533,15 @@ mod_import_spatial_server <- function(id, global_data) {
         },
 
         if (length(bins) > 0) {
-          selectInput(ns("hd_bin_size"), .tr("Resolution de binning"),
-                      choices = stats::setNames(bins, paste0(bins, " \u00b5m")),
-                      selected = if (16 %in% bins) 16 else bins[1])
+          tagList(
+            selectInput(ns("hd_bin_size"), .tr("Resolution de binning"),
+                        choices = stats::setNames(bins, paste0(bins, " \u00b5m")),
+                        selected = if (16 %in% bins) 16 else bins[1]),
+            selectInput(ns("hd_pool_factor"), .tr("Agrégation super-bins (optionnel)"),
+                        choices = stats::setNames(c("1", "2", "4"),
+                                                  c(.tr("Aucune (natif)"), "2x2", "4x4")),
+                        selected = "1")
+          )
         }
       )
     })
@@ -574,8 +597,11 @@ mod_import_spatial_server <- function(id, global_data) {
       orient_flip_x  <- isTRUE(shiny::isolate(input$orient_flip_x))
       orient_flip_y  <- isTRUE(shiny::isolate(input$orient_flip_y))
       hd_bin_size    <- shiny::isolate(input$hd_bin_size)
+      hd_pool_factor <- suppressWarnings(as.integer(shiny::isolate(input$hd_pool_factor) %||% 1L))
       min_counts_ss  <- shiny::isolate(input$min_counts_ss)   %||% 100
       min_features_ss <- shiny::isolate(input$min_features_ss) %||% 200
+      merscope_drop_blanks <- isTRUE(shiny::isolate(input$merscope_drop_blanks) %||% TRUE)
+      min_counts_ms  <- shiny::isolate(input$min_counts_ms)   %||% 1
 
       mode <- if (identical(technology, "visium")) {
         tryCatch(get_visium_import_mode(path), error = function(e) "visium")
@@ -607,10 +633,16 @@ mod_import_spatial_server <- function(id, global_data) {
                             "visium" = {
                               if (is_hd) {
                                 add_log(sprintf(.tr("  Visium HD détecté -- import du binning %sum."), hd_bin_size))
-                                load_spatial_visium_hd(path, bin_size = as.integer(hd_bin_size),
-                                                       sample_name = sample_name,
-                                                       min_counts = min_counts,
-                                                       min_features = min_features)
+                                hd_obj <- load_spatial_visium_hd(path, bin_size = as.integer(hd_bin_size),
+                                                                 sample_name = sample_name,
+                                                                 min_counts = min_counts,
+                                                                 min_features = min_features)
+                                if (!is.na(hd_pool_factor) && hd_pool_factor >= 2L) {
+                                  hd_obj <- apply_visium_hd_bin_pooling(hd_obj, bin_factor = hd_pool_factor)
+                                  add_log(sprintf("  ✓ Visium HD super-bins (%dx%d): %d bins",
+                                                  hd_pool_factor, hd_pool_factor, ncol(hd_obj)))
+                                }
+                                hd_obj
                               } else {
                                 load_spatial_visium(path, sample_name = sample_name,
                                                     min_counts = min_counts,
@@ -622,8 +654,15 @@ mod_import_spatial_server <- function(id, global_data) {
                             "slideseq" = load_spatial_slideseq(path, sample_name = sample_name,
                                                                min_counts = min_counts_ss,
                                                                min_features = min_features_ss),
+                            "merscope" = load_spatial_merscope(path, sample_name = sample_name,
+                                                               drop_blanks = merscope_drop_blanks,
+                                                               min_counts = min_counts_ms),
                             stop(errorCondition(.tr("Technologie inconnue."), class = "spatial_import_error"))
           )
+          if (identical(technology, "merscope") && !is.null(attr(raw_obj, "ts_merscope_blanks_removed"))) {
+            add_log(sprintf("  ✓ MERSCOPE Blank probes removed: %d",
+                            as.integer(attr(raw_obj, "ts_merscope_blanks_removed"))))
+          }
           if (isTRUE(attr(raw_obj, "ts_manual_hd_loader"))) {
             add_log(.tr("  ⚠ Chargeur HD dégradé utilisé (pas de package Parquet complet) : coordonnées et comptages disponibles, PAS de fond histologique natif pour cet échantillon (le fond depuis 'spatial/' racine reste tenté séparément)."))
           }
