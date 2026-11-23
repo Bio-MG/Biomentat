@@ -14680,6 +14680,58 @@
     {
       "fr": "DTU (%s) : %d gènes testés (%d FDR < 0.05) | %d transcrits testés",
       "en": "DTU (%s): %d genes tested (%d FDR < 0.05) | %d transcripts tested"
+    },
+    {
+      "fr": "Filtres Azimuthaux de Gabor (AGF — BANKSY complet)",
+      "en": "Azimuthal Gabor Filters (AGF — full BANKSY)"
+    },
+    {
+      "fr": "Abondance différentielle (Milo spatial)",
+      "en": "Differential abundance (Spatial Milo)"
+    },
+    {
+      "fr": "Détection de voisinages spatiaux différentiellement abondants entre conditions répliquées (spatial_milo_da — requiert au moins 2 échantillons Référence et 2 échantillons Cible après intégration conjointe).",
+      "en": "Detects differentially abundant spatial neighbourhoods across replicated conditions (spatial_milo_da — requires at least 2 Reference and 2 Target samples after joint integration)."
+    },
+    {
+      "fr": "Échantillons Référence (>= 2)",
+      "en": "Reference samples (>= 2)"
+    },
+    {
+      "fr": "Échantillons Cible (>= 2)",
+      "en": "Target samples (>= 2)"
+    },
+    {
+      "fr": "Lancer Milo spatial",
+      "en": "Run Spatial Milo"
+    },
+    {
+      "fr": "Lancez d'abord l'intégration multi-échantillons avant Milo spatial.",
+      "en": "Run multi-sample integration first before Spatial Milo."
+    },
+    {
+      "fr": "Sélectionnez au moins 2 échantillons Référence et 2 échantillons Cible disjoints.",
+      "en": "Select at least 2 disjoint Reference and 2 Target samples."
+    },
+    {
+      "fr": "Coordonnées d'embedding ou effectif insuffisants pour Milo spatial.",
+      "en": "Insufficient embedding coordinates or spots for Spatial Milo."
+    },
+    {
+      "fr": "Milo spatial impossible : %s",
+      "en": "Spatial Milo failed: %s"
+    },
+    {
+      "fr": "✓ Milo spatial terminé.",
+      "en": "✓ Spatial Milo completed."
+    },
+    {
+      "fr": "En attente — sélectionnez >= 2 échantillons Référence et >= 2 Cible puis lancez Milo spatial.",
+      "en": "Waiting — select >= 2 Reference and >= 2 Target samples then run Spatial Milo."
+    },
+    {
+      "fr": "Milo spatial : %d voisinages testés | %d significatifs (FDR < 0.05) | k=%d",
+      "en": "Spatial Milo: %d neighbourhoods tested | %d significant (FDR < 0.05) | k=%d"
     }
   ]
 }

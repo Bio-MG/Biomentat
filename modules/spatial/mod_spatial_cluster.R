@@ -61,6 +61,7 @@ mod_spatial_cluster_controls_ui <- function(id) {
       numericInput(ns("k_geom"), i18n$t("Voisins geometriques (k_geom)"), 18, min = 4, max = 100, step = 1),
       numericInput(ns("npcs"), i18n$t("Composantes PCA"), 30, min = 5, max = 100, step = 5),
       numericInput(ns("resolution"), i18n$t("Resolution (Leiden)"), 0.8, min = 0.1, max = 3, step = 0.1),
+      checkboxInput(ns("use_agf"), i18n$t("Filtres Azimuthaux de Gabor (AGF \u2014 BANKSY complet)"), value = FALSE),
 
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           i18n$t("Le clustering s'applique aux elements passant les seuils QC (onglet 1) — réimportez ou ajustez les seuils si necessaire.")),
@@ -117,6 +118,7 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
                          label = .tr("Voisins geometriques (k_geom)"))
       updateNumericInput(session, "npcs", label = .tr("Composantes PCA"))
       updateNumericInput(session, "resolution", label = .tr("Resolution (Leiden)"))
+      updateCheckboxInput(session, "use_agf", label = .tr("Filtres Azimuthaux de Gabor (AGF \u2014 BANKSY complet)"))
       updateNumericInput(session, "logfc_threshold",
                          label = .tr("Seuil log2FC minimum"))
       updateNumericInput(session, "min_pct",
@@ -127,7 +129,8 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
     tracker  <- create_reactive_tracker(session, log_file)
 
     cluster_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords,
-                                               lambda, k_geom, npcs, resolution, log_file) {
+                                               lambda, k_geom, npcs, resolution,
+                                               log_file, use_agf = FALSE) {
       mirai::mirai(
         {
           if (!requireNamespace("RANN", quietly = TRUE)) {
@@ -152,26 +155,43 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
           obj <- obj[, keep]
           coords_mat <- as.matrix(coords_df[keep, , drop = FALSE])
 
-          write_mirai_log(log_file, sprintf("Voisinage spatial (k=%d, RANN)...", k_geom), 4, 8)
-          nn <- RANN::nn2(coords_mat, k = min(k_geom + 1, nrow(coords_mat)))
-          neighbor_idx <- nn$nn.idx[, -1, drop = FALSE]  # drop self (1st column, distance 0)
+          if (isTRUE(use_agf) && exists("spatial_banksy_augment", mode = "function")) {
+            write_mirai_log(log_file, "Augmentation BANKSY + AGF (Filtres Azimuthaux)...", 5, 8)
+            coords_sub <- data.frame(
+              id = rownames(coords_mat),
+              x = coords_mat[, "x"],
+              y = coords_mat[, "y"],
+              stringsAsFactors = FALSE
+            )
+            augmented <- spatial_banksy_augment(
+              expr_mat = as.matrix(SeuratObject::LayerData(obj, layer = "data")[var_feat, , drop = FALSE]),
+              coords = coords_sub,
+              k_geom = k_geom,
+              lambda = lambda,
+              use_agf = TRUE
+            )$augmented
+          } else {
+            write_mirai_log(log_file, sprintf("Voisinage spatial (k=%d, RANN)...", k_geom), 4, 8)
+            nn <- RANN::nn2(coords_mat, k = min(k_geom + 1, nrow(coords_mat)))
+            neighbor_idx <- nn$nn.idx[, -1, drop = FALSE]  # drop self (1st column, distance 0)
 
-          write_mirai_log(log_file, "Augmentation BANKSY-lite (moyenne du voisinage)...", 5, 8)
-          own_mat <- t(as.matrix(SeuratObject::LayerData(obj, layer = "data")[var_feat, , drop = FALSE]))
-          n  <- nrow(own_mat)
-          kk <- ncol(neighbor_idx)
-          # ONE sparse-matrix multiply instead of a per-row loop (same trick
-          # as helpers_sc.R::remap_seurat_ids_to_symbol()'s duplicate collapse).
-          W <- Matrix::sparseMatrix(
-            i = rep(seq_len(n), each = kk), j = as.vector(t(neighbor_idx)),
-            x = 1 / kk, dims = c(n, n)
-          )
-          nbr_mat <- as.matrix(W %*% own_mat)
-          dimnames(nbr_mat) <- dimnames(own_mat)
+            write_mirai_log(log_file, "Augmentation BANKSY-lite (moyenne du voisinage)...", 5, 8)
+            own_mat <- t(as.matrix(SeuratObject::LayerData(obj, layer = "data")[var_feat, , drop = FALSE]))
+            n  <- nrow(own_mat)
+            kk <- ncol(neighbor_idx)
+            # ONE sparse-matrix multiply instead of a per-row loop (same trick
+            # as helpers_sc.R::remap_seurat_ids_to_symbol()'s duplicate collapse).
+            W <- Matrix::sparseMatrix(
+              i = rep(seq_len(n), each = kk), j = as.vector(t(neighbor_idx)),
+              x = 1 / kk, dims = c(n, n)
+            )
+            nbr_mat <- as.matrix(W %*% own_mat)
+            dimnames(nbr_mat) <- dimnames(own_mat)
 
-          own_scaled <- scale(own_mat); own_scaled[!is.finite(own_scaled)] <- 0
-          nbr_scaled <- scale(nbr_mat); nbr_scaled[!is.finite(nbr_scaled)] <- 0
-          augmented  <- cbind(sqrt(1 - lambda) * own_scaled, sqrt(lambda) * nbr_scaled)
+            own_scaled <- scale(own_mat); own_scaled[!is.finite(own_scaled)] <- 0
+            nbr_scaled <- scale(nbr_mat); nbr_scaled[!is.finite(nbr_scaled)] <- 0
+            augmented  <- cbind(sqrt(1 - lambda) * own_scaled, sqrt(lambda) * nbr_scaled)
+          }
 
           write_mirai_log(log_file, "PCA sur la matrice augmentee...", 6, 8)
           n_pc <- max(2, min(npcs, ncol(augmented) - 1, nrow(augmented) - 1))
@@ -205,7 +225,7 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
         },
         bpcells_dir = bpcells_dir, pass_idx = pass_idx, coords = coords,
         lambda = lambda, k_geom = k_geom, npcs = npcs, resolution = resolution,
-        log_file = log_file, .timeout = MIRAI_TASK_TIMEOUT_MS
+        log_file = log_file, use_agf = use_agf, .timeout = MIRAI_TASK_TIMEOUT_MS
       )
     })
     bslib::bind_task_button(cluster_task, "btn_cluster")
@@ -222,15 +242,18 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
       # v3 (export/script reproductible) : miroir des parametres UTILISES,
       # lu uniquement par mod_spatial_export.R -- purement additif.
       res_val <- ts_parse_numeric_input(input$resolution, default = 0.8)
+      agf_val <- isTRUE(input$use_agf)
       shared_rv$cluster_params <- list(lambda = input$lambda, k_geom = input$k_geom,
-                                       npcs = input$npcs, resolution = res_val)
+                                       npcs = input$npcs, resolution = res_val,
+                                       use_agf = agf_val)
       cluster_task$invoke(
         bpcells_dir = global_data$spatial_obj$bpcells_dir,
         pass_idx    = pass_idx,
         coords      = global_data$spatial_obj$coords,
         lambda      = input$lambda, k_geom = input$k_geom,
         npcs        = input$npcs, resolution = res_val,
-        log_file    = log_file
+        log_file    = log_file,
+        use_agf     = agf_val
       )
     })
     observeEvent(cluster_task$status(), {

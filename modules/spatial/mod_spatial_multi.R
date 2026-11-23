@@ -129,6 +129,27 @@ mod_spatial_multi_ui <- function(id) {
         DT::DTOutput(ns("diffcomp_contingency_table"))
       ),
       nav_panel(
+        i18n$t("Abondance différentielle (Milo spatial)"),
+        value = "spatial_milo",
+        div(class = "alert alert-light small mt-2 mb-2",
+            i18n$t("Détection de voisinages spatiaux différentiellement abondants entre conditions répliquées (spatial_milo_da — requiert au moins 2 échantillons Référence et 2 échantillons Cible après intégration conjointe).")),
+        fluidRow(
+          column(4, selectizeInput(ns("milo_ref_datasets"),
+                                   i18n$t("Échantillons Référence (>= 2)"),
+                                   choices = NULL, multiple = TRUE)),
+          column(4, selectizeInput(ns("milo_target_datasets"),
+                                   i18n$t("Échantillons Cible (>= 2)"),
+                                   choices = NULL, multiple = TRUE)),
+          column(4, div(style = "margin-top:24px;",
+                        actionButton(ns("btn_spatial_milo"),
+                                     i18n$t("Lancer Milo spatial"),
+                                     icon = icon("diagram-project"),
+                                     class = "btn-primary w-100")))
+        ),
+        verbatimTextOutput(ns("spatial_milo_status"), placeholder = TRUE),
+        DT::DTOutput(ns("spatial_milo_table"))
+      ),
+      nav_panel(
         i18n$t("Resume"),
         uiOutput(ns("summary_ui")),
         DT::DTOutput(ns("n_per_dataset_table"))
@@ -159,6 +180,12 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
         choices = stats::setNames(c("ncount", "cluster"),
                                   c(.tr("nCount (avant intégration)"),
                                     .tr("Cluster integre (après intégration)"))))
+      updateSelectizeInput(session, "milo_ref_datasets",
+        label = .tr("Échantillons Référence (>= 2)"))
+      updateSelectizeInput(session, "milo_target_datasets",
+        label = .tr("Échantillons Cible (>= 2)"))
+      updateActionButton(session, "btn_spatial_milo",
+        label = .tr("Lancer Milo spatial"))
     }, ignoreInit = TRUE)
 
     # ── Dataset picker (dynamic: reflects whatever has been imported) ────
@@ -430,6 +457,113 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       colnames(tab) <- c(.tr("Échantillon"), .tr("Elements (sketch)"))
       ts_datatable(tab, page_length = 15L, filename_base = "spatial_multi_n_per_dataset",
                    filter = "none", scroll_x = FALSE)
+    })
+
+    # ── P2.4 (iii): Abondance différentielle spatiale (Milo spatial) ────────
+    milo_source <- reactive({
+      integration_result() %||% global_data$spatial_multi_integration
+    })
+
+    observe({
+      res <- milo_source()
+      if (is.null(res) || is.null(res$embeddings) || !"dataset" %in% colnames(res$embeddings)) {
+        return()
+      }
+      ds_choices <- sort(unique(as.character(res$embeddings$dataset)))
+      prev_ref <- intersect(input$milo_ref_datasets %||% character(0), ds_choices)
+      prev_tgt <- intersect(input$milo_target_datasets %||% character(0), ds_choices)
+      updateSelectizeInput(session, "milo_ref_datasets", choices = ds_choices, selected = prev_ref)
+      updateSelectizeInput(session, "milo_target_datasets", choices = ds_choices, selected = prev_tgt)
+    })
+
+    spatial_milo_res <- reactiveVal(NULL)
+
+    observeEvent(input$btn_spatial_milo, {
+      global_data$language
+      res <- milo_source()
+      if (is.null(res) || is.null(res$embeddings) || nrow(res$embeddings) < 10L) {
+        showNotification(.tr("Lancez d'abord l'intégration multi-échantillons avant Milo spatial."),
+                         type = "error", duration = 8)
+        return()
+      }
+      ref_ds <- unique(as.character(input$milo_ref_datasets %||% character(0)))
+      tgt_ds <- unique(as.character(input$milo_target_datasets %||% character(0)))
+      if (length(ref_ds) < 2L || length(tgt_ds) < 2L || length(intersect(ref_ds, tgt_ds)) > 0L) {
+        showNotification(.tr("Sélectionnez au moins 2 échantillons Référence et 2 échantillons Cible disjoints."),
+                         type = "error", duration = 8)
+        return()
+      }
+
+      emb_df <- res$embeddings
+      emb_sub <- emb_df[as.character(emb_df$dataset) %in% c(ref_ds, tgt_ds), , drop = FALSE]
+      coord_cols <- if (all(c("dim1", "dim2") %in% colnames(emb_sub))) {
+        c("dim1", "dim2")
+      } else {
+        c("UMAP_1", "UMAP_2")
+      }
+      if (!all(coord_cols %in% colnames(emb_sub)) || nrow(emb_sub) < 10L) {
+        showNotification(.tr("Coordonnées d'embedding ou effectif insuffisants pour Milo spatial."),
+                         type = "error", duration = 8)
+        return()
+      }
+
+      spot_ids <- if ("cell_id" %in% colnames(emb_sub)) {
+        as.character(emb_sub$cell_id)
+      } else if (!is.null(emb_sub$original_id)) {
+        make.unique(paste0(as.character(emb_sub$dataset), "_", as.character(emb_sub$original_id)))
+      } else {
+        paste0("spot_", seq_len(nrow(emb_sub)))
+      }
+
+      emb_mat <- as.matrix(emb_sub[, coord_cols, drop = FALSE])
+      storage.mode(emb_mat) <- "double"
+      rownames(emb_mat) <- spot_ids
+
+      meta_df <- data.frame(
+        sample = as.character(emb_sub$dataset),
+        condition = ifelse(as.character(emb_sub$dataset) %in% ref_ds, "ref", "target"),
+        niche = if ("cluster" %in% colnames(emb_sub)) as.character(emb_sub$cluster) else "C0",
+        row.names = spot_ids,
+        stringsAsFactors = FALSE
+      )
+
+      milo_out <- tryCatch(
+        spatial_milo_da(
+          embedding = emb_mat,
+          metadata = meta_df,
+          sample_col = "sample",
+          condition_col = "condition",
+          ref_level = "ref",
+          target_level = "target",
+          niche_col = "niche"
+        ),
+        error = function(e) e
+      )
+
+      if (inherits(milo_out, "error")) {
+        showNotification(sprintf(.tr("Milo spatial impossible : %s"), conditionMessage(milo_out)),
+                         type = "error", duration = 10)
+        return()
+      }
+      spatial_milo_res(milo_out)
+      showNotification(.tr("\u2713 Milo spatial terminé."), type = "message", duration = 5)
+    })
+
+    output$spatial_milo_status <- renderText({
+      global_data$language
+      r <- spatial_milo_res()
+      if (is.null(r)) {
+        return(.tr("En attente \u2014 sélectionnez >= 2 échantillons Référence et >= 2 Cible puis lancez Milo spatial."))
+      }
+      n_sig <- sum(r$DA_table$FDR < 0.05, na.rm = TRUE)
+      sprintf(.tr("Milo spatial : %d voisinages testés | %d significatifs (FDR < 0.05) | k=%d"),
+              nrow(r$DA_table), n_sig, r$parameters$k)
+    })
+
+    output$spatial_milo_table <- DT::renderDT({
+      global_data$language
+      r <- req(spatial_milo_res())
+      ts_datatable(r$DA_table, page_length = 15L, filename_base = "spatial_milo_da")
     })
   })
 }

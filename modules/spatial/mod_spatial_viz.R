@@ -2174,9 +2174,27 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     roi_log_file <- spatial_log_path(session, "roi_markers")
     roi_tracker <- create_reactive_tracker(session, roi_log_file)
     
-    roi_markers_task <- ExtendedTask$new(function(sketch_path, roi_ids, log_file) {
+    roi_markers_task <- ExtendedTask$new(function(sketch_path, roi_ids, log_file, bpcells_dir = NULL) {
       mirai::mirai(
         {
+          bp_res <- NULL
+          if (!is.null(bpcells_dir) && nzchar(bpcells_dir) && dir.exists(bpcells_dir) &&
+              exists("spatial_roi_de_bpcells", mode = "function") &&
+              requireNamespace("BPCells", quietly = TRUE)) {
+            write_mirai_log(log_file, "Ouverture BPCells pleine resolution (ROI DE)...", 1, 4)
+            bp_res <- tryCatch({
+              mat <- BPCells::open_matrix_dir(bpcells_dir)
+              write_mirai_log(log_file, "Calcul Wilcoxon ROI (spatial_roi_de_bpcells)...", 2, 4)
+              out <- spatial_roi_de_bpcells(counts_mat = mat, roi_ids = roi_ids)$markers
+              write_mirai_log(log_file, "Termine.", 4, 4)
+              out
+            }, error = function(e) NULL)
+          }
+
+          if (!is.null(bp_res) && is.data.frame(bp_res)) {
+            return(bp_res)
+          }
+
           write_mirai_log(log_file, "Chargement du sketch...", 1, 4)
           sk <- readRDS(sketch_path)
           
@@ -2207,6 +2225,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         sketch_path = sketch_path,
         roi_ids = roi_ids,
         log_file = log_file,
+        bpcells_dir = bpcells_dir,
         .timeout = MIRAI_TASK_TIMEOUT_MS
       )
     })
@@ -2218,7 +2237,12 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       reset_log(roi_log_file)
       tmp <- tempfile(fileext = ".rds")
       saveRDS(global_data$spatial_obj$sketch, tmp)
-      roi_markers_task$invoke(sketch_path = tmp, roi_ids = ids, log_file = roi_log_file)
+      roi_markers_task$invoke(
+        sketch_path = tmp,
+        roi_ids = ids,
+        log_file = roi_log_file,
+        bpcells_dir = global_data$spatial_obj$bpcells_dir
+      )
     })
     
     roi_markers_res <- reactiveVal(NULL)

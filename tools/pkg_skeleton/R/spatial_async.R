@@ -185,6 +185,9 @@ APP_DAEMON_SOURCE_FILES <- c(
   "tools/pkg_skeleton/R/spatial_deconv_prep.R",
   "tools/pkg_skeleton/R/spatial_deconv_tasks.R",
   "tools/pkg_skeleton/R/spatial_stats.R",
+  "tools/pkg_skeleton/R/spatial_banksy.R",
+  "tools/pkg_skeleton/R/spatial_roi_de.R",
+  "tools/pkg_skeleton/R/spatial_milo.R",
   # --- SC : abondance differentielle Milo (4E-4) — ORDRE : config, core, domaine ---
   # D2 M5 lot 1 : les 3 fournisseurs demenagent dans l'arbre du paquet — les
   # chemins du preload daemon suivent (ordre interne inchangé).
@@ -777,4 +780,29 @@ safe_pass_idx <- function(pass_idx, dataset_name, n_total) {
   if (!is.null(n_total) && is.finite(n_total) &&
       (max(pass_idx, na.rm = TRUE) > n_total || min(pass_idx, na.rm = TRUE) < 1)) return(NULL)
   pass_idx
+}
+
+#' Safely request cancellation of an active mirai asynchronous handle
+#'
+#' Shiny 1.14 `ExtendedTask` exposes `invoke`, `status`, and `result` without
+#' `$cancel()` / `$reset()`. This helper wraps `mirai::stop_mirai()` safely so
+#' UI modules can cancel underlying mirai handles without throwing on non-mirai
+#' objects or already-completed tasks.
+#'
+#' @param m A `mirai` handle object (or `NULL`).
+#' @return Logical scalar: `TRUE` if cancellation was dispatched, `FALSE`
+#'   otherwise.
+#' @export
+ts_async_cancel_mirai <- function(m) {
+  if (is.null(m) || !requireNamespace("mirai", quietly = TRUE)) {
+    return(FALSE)
+  }
+  is_m <- isTRUE(tryCatch(mirai::is_mirai(m), error = function(e) FALSE))
+  if (!is_m) {
+    return(FALSE)
+  }
+  isTRUE(tryCatch({
+    mirai::stop_mirai(m)
+    TRUE
+  }, error = function(e) FALSE))
 }
