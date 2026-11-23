@@ -256,3 +256,127 @@ summarize_dtu_gene <- function(dtu_res, gene_id) {
   rownames(sub) <- NULL
   sub
 }
+
+#' Build a transcript-to-gene (tx2gene) mapping table in-app
+#'
+#' @param counts Transcript count matrix/data.frame (uses `rownames(counts)`)
+#'   or a character vector of transcript IDs.
+#' @param source Character scalar: `"txdb"` (installed TxDb/AnnotationDbi package)
+#'   or `"gtf"` (uploaded GTF/GFF file).
+#' @param txdb_pkg Character scalar TxDb package name (default
+#'   `"TxDb.Hsapiens.UCSC.hg19.knownGene"`).
+#' @param gtf_path Optional path to a GTF/GFF file when `source == "gtf"`.
+#' @return Named list with `table` (`data.frame(transcript_id, gene_id)`),
+#'   `n_input`, `n_mapped`, `n_unmapped`, `unmapped_ids`, and `source`.
+#' @export
+build_tx2gene <- function(counts,
+                          source = c("txdb", "gtf"),
+                          txdb_pkg = "TxDb.Hsapiens.UCSC.hg19.knownGene",
+                          gtf_path = NULL) {
+  .stop <- function(msg) errorCondition(msg, class = "bulk_dtu_error")
+  source <- match.arg(source)
+
+  tx_ids <- if (is.character(counts)) {
+    counts
+  } else if (is.matrix(counts) || is.data.frame(counts) || methods::is(counts, "Matrix")) {
+    rownames(counts)
+  } else {
+    NULL
+  }
+  tx_ids <- unique(trimws(as.character(tx_ids)))
+  tx_ids <- tx_ids[!is.na(tx_ids) & nzchar(tx_ids)]
+  if (length(tx_ids) == 0L) {
+    stop(.stop("counts must provide non-empty transcript IDs (rownames or character vector)."))
+  }
+
+  if (identical(source, "txdb")) {
+    if (!requireNamespace("AnnotationDbi", quietly = TRUE)) {
+      stop(.stop("Package 'AnnotationDbi' is required for source = 'txdb'."))
+    }
+    if (!is.character(txdb_pkg) || length(txdb_pkg) != 1L || !nzchar(txdb_pkg) ||
+        !requireNamespace(txdb_pkg, quietly = TRUE)) {
+      stop(.stop(sprintf("Annotation package '%s' is not installed.", as.character(txdb_pkg))))
+    }
+    txdb <- getExportedValue(txdb_pkg, txdb_pkg)
+    sel <- tryCatch(
+      suppressMessages(AnnotationDbi::select(
+        txdb, keys = tx_ids, keytype = "TXNAME", columns = c("TXNAME", "GENEID")
+      )),
+      error = function(e) NULL
+    )
+    if (is.null(sel) || nrow(sel) == 0L) {
+      stripped <- sub("\\.[0-9]+$", "", tx_ids)
+      sel <- tryCatch(
+        suppressMessages(AnnotationDbi::select(
+          txdb, keys = unique(stripped), keytype = "TXNAME", columns = c("TXNAME", "GENEID")
+        )),
+        error = function(e) NULL
+      )
+      if (!is.null(sel) && nrow(sel) > 0L) {
+        idx <- match(sel$TXNAME, stripped)
+        sel$TXNAME[!is.na(idx)] <- tx_ids[idx[!is.na(idx)]]
+      }
+    }
+    if (is.null(sel) || nrow(sel) == 0L) {
+      tbl <- data.frame(transcript_id = character(0L), gene_id = character(0L), stringsAsFactors = FALSE)
+    } else {
+      tbl <- data.frame(
+        transcript_id = as.character(sel$TXNAME),
+        gene_id = as.character(sel$GENEID),
+        stringsAsFactors = FALSE
+      )
+    }
+  } else {
+    if (is.null(gtf_path) || !is.character(gtf_path) || length(gtf_path) != 1L ||
+        !nzchar(gtf_path) || !file.exists(gtf_path)) {
+      stop(.stop("gtf_path must point to an existing GTF/GFF file."))
+    }
+    tbl <- NULL
+    if (requireNamespace("rtracklayer", quietly = TRUE)) {
+      gr <- tryCatch(rtracklayer::import(gtf_path), error = function(e) NULL)
+      if (!is.null(gr)) {
+        mc <- as.data.frame(S4Vectors::mcols(gr), stringsAsFactors = FALSE)
+        if (all(c("transcript_id", "gene_id") %in% colnames(mc))) {
+          tbl <- data.frame(
+            transcript_id = as.character(mc$transcript_id),
+            gene_id = as.character(mc$gene_id),
+            stringsAsFactors = FALSE
+          )
+        }
+      }
+    }
+    if (is.null(tbl)) {
+      lines <- readLines(gtf_path, warn = FALSE)
+      lines <- lines[!grepl("^#", lines) & nzchar(trimws(lines))]
+      tx_m <- regmatches(lines, regexpr('transcript_id\\s+"[^"]+"', lines, perl = TRUE))
+      gn_m <- regmatches(lines, regexpr('gene_id\\s+"[^"]+"', lines, perl = TRUE))
+      has_both <- grepl('transcript_id\\s+"[^"]+"', lines, perl = TRUE) &
+                  grepl('gene_id\\s+"[^"]+"', lines, perl = TRUE)
+      if (any(has_both)) {
+        sub_l <- lines[has_both]
+        tx_v <- sub('^.*transcript_id\\s+"([^"]+)".*$', "\\1", sub_l, perl = TRUE)
+        gn_v <- sub('^.*gene_id\\s+"([^"]+)".*$', "\\1", sub_l, perl = TRUE)
+        tbl <- data.frame(transcript_id = tx_v, gene_id = gn_v, stringsAsFactors = FALSE)
+      } else {
+        tbl <- data.frame(transcript_id = character(0L), gene_id = character(0L), stringsAsFactors = FALSE)
+      }
+    }
+    tbl <- tbl[tbl$transcript_id %in% tx_ids, , drop = FALSE]
+  }
+
+  keep <- !is.na(tbl$transcript_id) & nzchar(tbl$transcript_id) &
+          !is.na(tbl$gene_id) & nzchar(tbl$gene_id)
+  tbl <- tbl[keep, , drop = FALSE]
+  tbl <- tbl[!duplicated(tbl$transcript_id), , drop = FALSE]
+  rownames(tbl) <- NULL
+
+  unmapped <- setdiff(tx_ids, tbl$transcript_id)
+  list(
+    table = tbl,
+    n_input = length(tx_ids),
+    n_mapped = nrow(tbl),
+    n_unmapped = length(unmapped),
+    unmapped_ids = unmapped,
+    source = source
+  )
+}

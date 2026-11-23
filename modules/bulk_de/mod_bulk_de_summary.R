@@ -84,6 +84,43 @@
   }
 
   dtu_res_rv <- reactiveVal(NULL)
+  tx2gene_preview_rv <- reactiveVal(NULL)
+
+  observeEvent(input$btn_build_tx2gene, {
+    global_data$language
+    counts <- shared_rv$filtered_counts %||% global_data$bulk_obj$counts
+    if (is.null(counts)) {
+      showNotification(.tr("Chargez des comptages de transcrits avant de g\u00e9n\u00e9rer tx2gene."),
+                       type = "error", duration = 8)
+      return()
+    }
+    src <- input$dtu_tx2gene_source %||% "txdb"
+    gtf_p <- if (!is.null(input$dtu_gtf_file)) input$dtu_gtf_file$datapath else NULL
+    res <- tryCatch(
+      build_tx2gene(counts = counts, source = src, gtf_path = gtf_p),
+      error = function(e) e
+    )
+    if (inherits(res, "error")) {
+      showNotification(sprintf(.tr("G\u00e9n\u00e9ration tx2gene impossible : %s"), conditionMessage(res)),
+                       type = "error", duration = 10)
+      return()
+    }
+    global_data$bulk_obj$tx2gene <- res$table
+    tx2gene_preview_rv(res)
+    showNotification(
+      sprintf(.tr("\u2713 Table tx2gene g\u00e9n\u00e9r\u00e9e (%d / %d transcrits mapp\u00e9s)."),
+              res$n_mapped, res$n_input),
+      type = "message", duration = 5
+    )
+  })
+
+  output$dtu_tx2gene_preview <- renderText({
+    global_data$language
+    p <- tx2gene_preview_rv()
+    if (is.null(p)) return("")
+    sprintf(.tr("tx2gene (%s) : %d / %d transcrits mapp\u00e9s (%d non mapp\u00e9s)"),
+            p$source, p$n_mapped, p$n_input, p$n_unmapped)
+  })
 
   observeEvent(input$run_dtu, {
     global_data$language

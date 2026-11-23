@@ -14772,6 +14772,38 @@
     {
       "fr": "Aucune (natif)",
       "en": "None (native)"
+    },
+    {
+      "fr": "Source tx2gene intégrée",
+      "en": "Built-in tx2gene source"
+    },
+    {
+      "fr": "Paquet TxDb installé (hors-ligne)",
+      "en": "Installed TxDb package (offline)"
+    },
+    {
+      "fr": "Fichier GTF/GFF",
+      "en": "GTF/GFF file"
+    },
+    {
+      "fr": "Générer la table tx2gene",
+      "en": "Generate tx2gene table"
+    },
+    {
+      "fr": "Chargez des comptages de transcrits avant de générer tx2gene.",
+      "en": "Load transcript counts before generating tx2gene."
+    },
+    {
+      "fr": "Génération tx2gene impossible : %s",
+      "en": "tx2gene generation failed: %s"
+    },
+    {
+      "fr": "✓ Table tx2gene générée (%d / %d transcrits mappés).",
+      "en": "✓ tx2gene table generated (%d / %d transcripts mapped)."
+    },
+    {
+      "fr": "tx2gene (%s) : %d / %d transcrits mappés (%d non mappés)",
+      "en": "tx2gene (%s): %d / %d transcripts mapped (%d unmapped)"
     }
   ]
 }

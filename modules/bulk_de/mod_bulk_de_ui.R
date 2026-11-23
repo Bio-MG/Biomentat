@@ -383,6 +383,28 @@ mod_bulk_de_dtu_ui <- function(id) {
                     actionButton(ns("run_dtu"), i18n$t("Lancer l'analyse DTU"),
                                  icon = icon("dna"), class = "btn-primary w-100")))
     ),
+    fluidRow(
+      class = "mt-2 align-items-center",
+      column(5, radioButtons(
+        ns("dtu_tx2gene_source"), i18n$t("Source tx2gene int\u00e9gr\u00e9e"),
+        choices = stats::setNames(
+          c("txdb", "gtf"),
+          c(.tr_plain("Paquet TxDb install\u00e9 (hors-ligne)"),
+            .tr_plain("Fichier GTF/GFF"))
+        ),
+        selected = "txdb", inline = TRUE
+      )),
+      column(4, conditionalPanel(
+        condition = sprintf("input['%s'] == 'gtf'", ns("dtu_tx2gene_source")),
+        fileInput(ns("dtu_gtf_file"), i18n$t("Fichier GTF/GFF"),
+                  accept = c(".gtf", ".gff", ".gff3", ".gz"))
+      )),
+      column(3, actionButton(
+        ns("btn_build_tx2gene"), i18n$t("G\u00e9n\u00e9rer la table tx2gene"),
+        icon = icon("wand-magic-sparkles"), class = "btn-outline-primary btn-sm w-100"
+      ))
+    ),
+    verbatimTextOutput(ns("dtu_tx2gene_preview"), placeholder = TRUE),
     verbatimTextOutput(ns("dtu_status"), placeholder = TRUE),
     navset_tab(
       nav_panel(i18n$t("G\u00e8nes DTU"), DTOutput(ns("dtu_gene_table"))),
