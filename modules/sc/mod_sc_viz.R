@@ -837,8 +837,11 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
                         error=function(e) plotly_empty()))
       }
 
-      tryCatch(suppressWarnings(ggplotly(p_gg, tooltip="text")),
-               error = function(e) plotly_empty())
+      tryCatch({
+        pl <- suppressWarnings(ggplotly(p_gg, tooltip = "text"))
+        if (ncol(obj) > 2000L) pl <- plotly::toWebGL(pl)
+        pl
+      }, error = function(e) plotly_empty())
     })
 
     output$plot_3d <- renderPlotly({

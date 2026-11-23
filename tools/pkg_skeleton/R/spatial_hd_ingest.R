@@ -326,3 +326,132 @@ apply_visium_hd_bin_pooling <- function(seurat_obj, bin_factor = 1L) {
   attr(obj, "ts_hd_pool_factor") <- pooled$bin_factor
   obj
 }
+
+#' Read OME-NGFF (Zarr v0.4 / v0.5) multiscale pyramid metadata (BK-09)
+#'
+#' @param zarr_dir Path to an OME-NGFF Zarr group directory containing `.zattrs`
+#'   (v0.4) or `zarr.json` (v0.5).
+#' @return A `biomentat_ome_ngff` list with `path`, `version`, `name`, `axes`,
+#'   `n_levels`, and `levels` (`data.frame(level, path, scale_y, scale_x)`).
+#' @export
+read_ome_ngff_metadata <- function(zarr_dir) {
+  if (is.null(zarr_dir) || !is.character(zarr_dir) || length(zarr_dir) != 1L ||
+      is.na(zarr_dir) || !nzchar(trimws(zarr_dir)) || !dir.exists(zarr_dir)) {
+    stop(.spatial_hd_stop("'zarr_dir' must point to an existing OME-NGFF directory."))
+  }
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop(.spatial_hd_stop("Package 'jsonlite' is required for read_ome_ngff_metadata()."))
+  }
+  dir_norm <- normalizePath(zarr_dir, winslash = "/", mustWork = FALSE)
+  zattrs_p <- file.path(dir_norm, ".zattrs")
+  zarr_p   <- file.path(dir_norm, "zarr.json")
+
+  if (file.exists(zattrs_p)) {
+    meta <- jsonlite::fromJSON(zattrs_p, simplifyVector = FALSE)
+    ms <- meta$multiscales
+  } else if (file.exists(zarr_p)) {
+    meta <- jsonlite::fromJSON(zarr_p, simplifyVector = FALSE)
+    ms <- meta$attributes$ome$multiscales %||% meta$attributes$multiscales %||% meta$multiscales
+  } else {
+    stop(.spatial_hd_stop("OME-NGFF directory must contain '.zattrs' or 'zarr.json'."))
+  }
+
+  if (is.null(ms) || !is.list(ms) || length(ms) < 1L) {
+    stop(.spatial_hd_stop("No 'multiscales' metadata found in OME-NGFF attributes."))
+  }
+  ms1 <- ms[[1L]]
+  datasets <- ms1$datasets
+  if (is.null(datasets) || length(datasets) < 1L) {
+    stop(.spatial_hd_stop("OME-NGFF 'multiscales[[1]]$datasets' must contain at least 1 level."))
+  }
+
+  axes_names <- vapply(ms1$axes %||% list(), function(a) {
+    if (is.list(a) && !is.null(a$name)) as.character(a$name)[1L] else as.character(a)[1L]
+  }, character(1L))
+
+  lvl_rows <- lapply(seq_along(datasets), function(i) {
+    ds <- datasets[[i]]
+    sx <- 1; sy <- 1
+    cts <- ds$coordinateTransformations %||% list()
+    for (ct in cts) {
+      if (is.list(ct) && identical(ct$type, "scale") && is.list(ct$scale)) {
+        sc <- as.numeric(unlist(ct$scale))
+        if (length(sc) >= 2L) {
+          sy <- sc[length(sc) - 1L]
+          sx <- sc[length(sc)]
+        }
+      }
+    }
+    data.frame(
+      level = i - 1L,
+      path = as.character(ds$path %||% as.character(i - 1L))[1L],
+      scale_y = sy,
+      scale_x = sx,
+      stringsAsFactors = FALSE
+    )
+  })
+  lvl_df <- do.call(rbind, lvl_rows)
+
+  structure(
+    list(
+      path = dir_norm,
+      version = as.character(ms1$version %||% "0.4")[1L],
+      name = as.character(ms1$name %||% basename(dir_norm))[1L],
+      axes = axes_names,
+      n_levels = nrow(lvl_df),
+      levels = lvl_df
+    ),
+    class = c("biomentat_ome_ngff", "list")
+  )
+}
+
+#' Build an OpenSeadragon-compatible pyramidal tile configuration from OME-NGFF
+#'
+#' @param ngff_meta Object returned by `read_ome_ngff_metadata()`.
+#' @param base_url Character base URL or local route prefix for Zarr chunks.
+#' @param tile_size Integer tile size in pixels (default `256L`).
+#' @param base_width Integer level-0 full image width in pixels.
+#' @param base_height Integer level-0 full image height in pixels.
+#' @return Named list describing an OpenSeadragon `"ome-ngff-pyramid"` tile source.
+#' @export
+build_openseadragon_tile_config <- function(ngff_meta,
+                                            base_url = "",
+                                            tile_size = 256L,
+                                            base_width = 4096L,
+                                            base_height = 4096L) {
+  if (!is.list(ngff_meta) || is.null(ngff_meta$levels) || !is.data.frame(ngff_meta$levels) ||
+      nrow(ngff_meta$levels) < 1L) {
+    stop(.spatial_hd_stop("'ngff_meta' must be a valid object from read_ome_ngff_metadata()."))
+  }
+  lvls <- ngff_meta$levels
+  ref_sx <- lvls$scale_x[1L]
+  ref_sy <- lvls$scale_y[1L]
+  if (!is.finite(ref_sx) || ref_sx <= 0) ref_sx <- 1
+  if (!is.finite(ref_sy) || ref_sy <= 0) ref_sy <- 1
+
+  base_clean <- sub("/+$", "", as.character(base_url %||% ""))
+  lvl_cfg <- lapply(seq_len(nrow(lvls)), function(i) {
+    ratio_x <- lvls$scale_x[i] / ref_sx
+    ratio_y <- lvls$scale_y[i] / ref_sy
+    w_i <- max(1L, as.integer(round(base_width / ratio_x)))
+    h_i <- max(1L, as.integer(round(base_height / ratio_y)))
+    p_i <- lvls$path[i]
+    list(
+      level = lvls$level[i],
+      path = p_i,
+      width = w_i,
+      height = h_i,
+      url = if (nzchar(base_clean)) paste0(base_clean, "/", p_i) else p_i
+    )
+  })
+
+  list(
+    type = "ome-ngff-pyramid",
+    tileSize = as.integer(tile_size),
+    minLevel = 0L,
+    maxLevel = as.integer(nrow(lvls) - 1L),
+    width = as.integer(base_width),
+    height = as.integer(base_height),
+    levels = lvl_cfg
+  )
+}
