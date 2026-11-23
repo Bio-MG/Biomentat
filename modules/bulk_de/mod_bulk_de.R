@@ -68,6 +68,7 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
     .de_summary_server(    input, output, session, ns, global_data, shared_rv)
     .de_venn_server(       input, output, session, ns, global_data, shared_rv)
     .de_multimethod_server(input, output, session, ns, global_data, shared_rv, helpers)
+    .de_dtu_server(        input, output, session, ns, global_data, shared_rv)
 
     # S2b: publish THIS module's drive export route. Published as a closure over
     # this module's own `shared_rv`, and published at all rather than bound to a

@@ -29,7 +29,7 @@ suppressPackageStartupMessages(library(shiny))
     "mod_bulk_merge_ui", "mod_bulk_de_contrast_bar_ui",
     "mod_bulk_filter_pca_ui", "mod_bulk_filter_qc_ui", "mod_bulk_filter_batch_ui",
     "mod_bulk_de_volcano_ui", "mod_bulk_de_ma_ui", "mod_bulk_de_heatmap_ui",
-    "mod_bulk_de_table_ui", "mod_bulk_de_summary_ui",
+    "mod_bulk_de_table_ui", "mod_bulk_de_summary_ui", "mod_bulk_de_dtu_ui",
     "mod_bulk_de_multimethod_ui", "mod_bulk_de_venn_ui",
     "mod_bulk_pathways_output_ui", "mod_bulk_signatures_output_ui",
     "mod_bulk_wgcna_output_ui", "mod_bulk_pattern_output_ui",

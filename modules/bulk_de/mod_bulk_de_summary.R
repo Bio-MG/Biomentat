@@ -73,3 +73,83 @@
   # redessine à l'activation via les hooks de redimensionnement bslib).
   outputOptions(output, "table_updown", suspendWhenHidden = FALSE)
 }
+
+
+# ── Server: DTU (Differential Transcript Usage via bulk_dtu.R) ────────────────
+.de_dtu_server <- function(input, output, session, ns, global_data, shared_rv) {
+  .tr <- function(key) {
+    tr <- global_data$i18n
+    if (is.null(tr)) return(key)
+    tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+  }
+
+  dtu_res_rv <- reactiveVal(NULL)
+
+  observeEvent(input$run_dtu, {
+    global_data$language
+    counts <- shared_rv$filtered_counts %||% global_data$bulk_obj$counts
+    meta   <- global_data$bulk_obj$metadata
+    cond   <- input$condition_col %||% shared_rv$active_condition_col
+    if (is.null(counts) || is.null(meta) || is.null(cond) || !cond %in% colnames(meta)) {
+      showNotification(.tr("Chargez des comptages de transcrits et s\u00e9lectionnez une colonne de condition avant de lancer DTU."),
+                       type = "error", duration = 8)
+      return()
+    }
+    tx2gene <- global_data$bulk_obj$tx2gene
+    f_info <- input$dtu_tx2gene_file
+    if (!is.null(f_info) && !is.null(f_info$datapath) && file.exists(f_info$datapath)) {
+      sep <- if (grepl("\\.(tsv|txt)$", f_info$name %||% "", ignore.case = TRUE)) "\t" else ","
+      tx2gene <- tryCatch(
+        utils::read.delim(f_info$datapath, sep = sep, stringsAsFactors = FALSE, check.names = FALSE),
+        error = function(e) NULL
+      )
+    }
+    if (is.null(tx2gene) || !is.data.frame(tx2gene)) {
+      showNotification(.tr("Fournissez une table tx2gene (CSV/TSV avec colonnes transcript_id et gene_id)."),
+                       type = "error", duration = 8)
+      return()
+    }
+    groups <- factor(as.character(meta[[cond]]))
+    res <- tryCatch(
+      run_bulk_dtu(
+        counts = counts,
+        tx2gene = tx2gene,
+        design_or_groups = groups,
+        test_method = input$dtu_test_method %||% "Simes"
+      ),
+      error = function(e) e
+    )
+    if (inherits(res, "error")) {
+      showNotification(sprintf(.tr("Analyse DTU impossible : %s"), conditionMessage(res)),
+                       type = "error", duration = 10)
+      return()
+    }
+    dtu_res_rv(res)
+    showNotification(
+      sprintf(.tr("\u2713 DTU termin\u00e9 (%d g\u00e8nes, %d transcrits test\u00e9s)."),
+              res$n_genes_tested, res$n_transcripts_tested),
+      type = "message", duration = 5
+    )
+  })
+
+  output$dtu_status <- renderText({
+    global_data$language
+    r <- dtu_res_rv()
+    if (is.null(r)) {
+      return(.tr("En attente \u2014 importez une table tx2gene et cliquez sur \u00ab Lancer l'analyse DTU \u00bb."))
+    }
+    n_sig <- if ("FDR" %in% colnames(r$gene_table)) sum(r$gene_table$FDR < 0.05, na.rm = TRUE) else 0L
+    sprintf(.tr("DTU (%s) : %d g\u00e8nes test\u00e9s (%d FDR < 0.05) | %d transcrits test\u00e9s"),
+            r$test_method, r$n_genes_tested, n_sig, r$n_transcripts_tested)
+  })
+
+  output$dtu_gene_table <- renderDT({
+    r <- req(dtu_res_rv())
+    ts_datatable(r$gene_table, page_length = 15L, filename_base = "bulk_dtu_genes")
+  })
+
+  output$dtu_tx_table <- renderDT({
+    r <- req(dtu_res_rv())
+    ts_datatable(r$transcript_table, page_length = 15L, filename_base = "bulk_dtu_transcripts")
+  })
+}

@@ -12,6 +12,7 @@
   tab_heatmap      = list(step = "2",  panel = "panel_de",         key = "2. Design & Contrastes"),
   tab_table        = list(step = "2",  panel = "panel_de",         key = "2. Design & Contrastes"),
   tab_updown       = list(step = "2",  panel = "panel_de",         key = "2. Design & Contrastes"),
+  tab_dtu          = list(step = "2",  panel = "panel_de",         key = "2. Design & Contrastes"),
   tab_multimethod  = list(step = "3",  panel = "panel_de",         key = "2. Design & Contrastes"),
   tab_venn         = list(step = "3",  panel = "panel_de",         key = "2. Design & Contrastes"),
   tab_pathway      = list(step = "3",  panel = "panel_pathways",   key = "3. Pathway Enrichment"),
@@ -224,7 +225,8 @@ mod_bulk_ui <- function(id) {
           nav_panel("MA-Plot",         value = "tab_ma",          mod_bulk_de_ma_ui(ns("de"))),
           nav_panel("Heatmap",         value = "tab_heatmap",     mod_bulk_de_heatmap_ui(ns("de"))),
           nav_panel(i18n$t("Table DE"), value = "tab_table",      mod_bulk_de_table_ui(ns("de"))),
-          nav_panel(i18n$t("R\u00e9sum\u00e9 Up/Down"), value = "tab_updown", mod_bulk_de_summary_ui(ns("de")))
+          nav_panel(i18n$t("R\u00e9sum\u00e9 Up/Down"), value = "tab_updown", mod_bulk_de_summary_ui(ns("de"))),
+          nav_panel(i18n$t("DTU (Isoformes)"), value = "tab_dtu", mod_bulk_de_dtu_ui(ns("de")))
         ),
         nav_menu(HTML(paste("3 \u00b7", i18n$t("Enrichissement"))),
           nav_panel(i18n$t("Multi-m\u00e9thodes"), value = "tab_multimethod", mod_bulk_de_multimethod_ui(ns("de"))),

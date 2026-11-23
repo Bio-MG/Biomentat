@@ -353,3 +353,40 @@ mod_bulk_de_multimethod_ui <- function(id) {
     )
   )
 }
+
+
+# ── UI: DTU tab (Differential Transcript Usage via edgeR::diffSpliceDGE) ──────
+
+mod_bulk_de_dtu_ui <- function(id) {
+  ns <- NS(id)
+  card(
+    full_screen = TRUE,
+    max_height  = "950px",
+    card_header(i18n$t("DTU \u2014 Usage diff\u00e9rentiel de transcrits (Isoformes)")),
+    div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #18BC9C;",
+        bsicons::bs_icon("info-circle"),
+        " ", i18n$t("D\u00e9tecte les basculements d'isoformes (edgeR::diffSpliceDGE) sur une matrice de comptages au niveau transcrit avec une table de correspondance transcript_id -> gene_id.")),
+    fluidRow(
+      column(5, fileInput(ns("dtu_tx2gene_file"),
+                          i18n$t("Table tx2gene (CSV/TSV : transcript_id, gene_id)"),
+                          accept = c(".csv", ".tsv", ".txt"))),
+      column(4, selectInput(ns("dtu_test_method"),
+                            i18n$t("Test statistique DTU"),
+                            choices = stats::setNames(
+                              c("Simes", "F", "t"),
+                              c(.tr_plain("Simes (g\u00e8ne)"),
+                                .tr_plain("F-test (g\u00e8ne)"),
+                                .tr_plain("t-test (transcrit)"))
+                            ),
+                            selected = "Simes")),
+      column(3, div(style = "margin-top:24px;",
+                    actionButton(ns("run_dtu"), i18n$t("Lancer l'analyse DTU"),
+                                 icon = icon("dna"), class = "btn-primary w-100")))
+    ),
+    verbatimTextOutput(ns("dtu_status"), placeholder = TRUE),
+    navset_tab(
+      nav_panel(i18n$t("G\u00e8nes DTU"), DTOutput(ns("dtu_gene_table"))),
+      nav_panel(i18n$t("Transcrits / Isoformes"), DTOutput(ns("dtu_tx_table")))
+    )
+  )
+}

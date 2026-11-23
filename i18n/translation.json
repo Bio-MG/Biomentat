@@ -14612,6 +14612,74 @@
     {
       "fr": "NEMO (%s) : %d échantillons (union) | %d clusters | Silhouette moyenne = %s",
       "en": "NEMO (%s): %d samples (union) | %d clusters | Mean silhouette = %s"
+    },
+    {
+      "fr": "DTU (Isoformes)",
+      "en": "DTU (Isoforms)"
+    },
+    {
+      "fr": "DTU — Usage différentiel de transcrits (Isoformes)",
+      "en": "DTU — Differential Transcript Usage (Isoforms)"
+    },
+    {
+      "fr": "Détecte les basculements d'isoformes (edgeR::diffSpliceDGE) sur une matrice de comptages au niveau transcrit avec une table de correspondance transcript_id -> gene_id.",
+      "en": "Detects isoform switching (edgeR::diffSpliceDGE) on a transcript-level count matrix with a transcript_id -> gene_id mapping table."
+    },
+    {
+      "fr": "Table tx2gene (CSV/TSV : transcript_id, gene_id)",
+      "en": "tx2gene table (CSV/TSV: transcript_id, gene_id)"
+    },
+    {
+      "fr": "Test statistique DTU",
+      "en": "DTU statistical test"
+    },
+    {
+      "fr": "Simes (gène)",
+      "en": "Simes (gene)"
+    },
+    {
+      "fr": "F-test (gène)",
+      "en": "F-test (gene)"
+    },
+    {
+      "fr": "t-test (transcrit)",
+      "en": "t-test (transcript)"
+    },
+    {
+      "fr": "Lancer l'analyse DTU",
+      "en": "Run DTU analysis"
+    },
+    {
+      "fr": "Gènes DTU",
+      "en": "DTU Genes"
+    },
+    {
+      "fr": "Transcrits / Isoformes",
+      "en": "Transcripts / Isoforms"
+    },
+    {
+      "fr": "Chargez des comptages de transcrits et sélectionnez une colonne de condition avant de lancer DTU.",
+      "en": "Load transcript counts and select a condition column before running DTU."
+    },
+    {
+      "fr": "Fournissez une table tx2gene (CSV/TSV avec colonnes transcript_id et gene_id).",
+      "en": "Provide a tx2gene table (CSV/TSV with transcript_id and gene_id columns)."
+    },
+    {
+      "fr": "Analyse DTU impossible : %s",
+      "en": "DTU analysis failed: %s"
+    },
+    {
+      "fr": "✓ DTU terminé (%d gènes, %d transcrits testés).",
+      "en": "✓ DTU completed (%d genes, %d transcripts tested)."
+    },
+    {
+      "fr": "En attente — importez une table tx2gene et cliquez sur « Lancer l'analyse DTU ».",
+      "en": "Waiting — upload a tx2gene table and click 'Run DTU analysis'."
+    },
+    {
+      "fr": "DTU (%s) : %d gènes testés (%d FDR < 0.05) | %d transcrits testés",
+      "en": "DTU (%s): %d genes tested (%d FDR < 0.05) | %d transcripts tested"
     }
   ]
 }
