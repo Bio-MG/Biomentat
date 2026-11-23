@@ -1,5 +1,5 @@
 # ==============================================================================
-# app.R - SOURCE DEPENDENCY GUARDS (CHRYSALIS PHASE)
+# app.R - SOURCE 
 # ==============================================================================
 
 # 0. ENVIRONNEMENT GUARD (fail-fast) — bye-bye au message cryptique
@@ -252,6 +252,7 @@ source("tools/pkg_skeleton/R/bulk_dtu.R")
 source("tools/pkg_skeleton/R/bulk_meta_analysis.R")
 source("tools/pkg_skeleton/R/bulk_mnar_de.R")
 source("tools/pkg_skeleton/R/bulk_multiblock.R")
+source("tools/pkg_skeleton/R/cohort_attrition.R")
 
 # ── Bloc 07 : R/spatial → paquet (logique pure) ─────────────────────────────
 # D2 M5 lot 4 (2026-10-25) : les 11 fichiers du domaine spatial vivent dans

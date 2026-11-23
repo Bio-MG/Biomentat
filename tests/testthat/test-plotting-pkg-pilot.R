@@ -262,8 +262,8 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           # Wave 3 moteurs bulk (2026-11-22, 9978cd8 / 92a1fef / 73424eb + BK-06) :
                           # DTU (#10), meta-analyse horizontale (BK-07), DE MNAR/MAR (BK-05), multi-blocs (BK-06).
                           "bulk_dtu.R", "bulk_meta_analysis.R", "bulk_mnar_de.R",
-                          "bulk_multiblock.R")),
-                   info = "le perimetre du paquet doit etre exactement 101 fichiers R/ (100 + bulk_multiblock)")
+                          "bulk_multiblock.R", "cohort_attrition.R")),
+                   info = "le perimetre du paquet doit etre exactement 102 fichiers R/ (101 + cohort_attrition)")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────
