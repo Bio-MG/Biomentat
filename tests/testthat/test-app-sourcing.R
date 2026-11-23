@@ -226,7 +226,7 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # PK-1 ; freeze test test-packs-manifest.R, RED mesuré avant
   # implémentation : fail=0 pass=0 err=1 « Fichier projet introuvable »).
   expect_identical(
-    length(.app_explicit(.app_src)), 181L,
+    length(.app_explicit(.app_src)), 182L,
     info = paste("app.R doit porter exactement 176 source() explicites",
                  "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
                  "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29,",

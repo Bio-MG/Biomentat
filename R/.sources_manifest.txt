@@ -79,6 +79,7 @@ tools/pkg_skeleton/R/bulk_meta_analysis.R
 tools/pkg_skeleton/R/bulk_mnar_de.R
 tools/pkg_skeleton/R/bulk_multiblock.R
 tools/pkg_skeleton/R/cohort_attrition.R
+tools/pkg_skeleton/R/spatial_hd_ingest.R
 tools/pkg_skeleton/R/spatial_meta_col_validation.R
 tools/pkg_skeleton/R/spatial_async.R
 tools/pkg_skeleton/R/spatial_io.R
