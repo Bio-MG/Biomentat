@@ -14556,6 +14556,62 @@
     {
       "fr": "PolySTest MNAR/MAR (NAs / protéomique)",
       "en": "PolySTest MNAR/MAR (NAs / proteomics)"
+    },
+    {
+      "fr": "Intégration multi-blocs (BK-06)",
+      "en": "Multi-block integration (BK-06)"
+    },
+    {
+      "fr": "Intégration verticale multi-blocs sur les datasets sélectionnés : NEMO (non-supervisé, tolère les blocs partiels) ou DIABLO (supervisé sur échantillons communs).",
+      "en": "Vertical multi-block integration across selected datasets: NEMO (unsupervised, tolerates partial blocks) or DIABLO (supervised on common samples)."
+    },
+    {
+      "fr": "Méthode multi-blocs",
+      "en": "Multi-block method"
+    },
+    {
+      "fr": "NEMO (non-supervisé, blocs partiels)",
+      "en": "NEMO (unsupervised, partial blocks)"
+    },
+    {
+      "fr": "DIABLO (supervisé, échantillons communs)",
+      "en": "DIABLO (supervised, common samples)"
+    },
+    {
+      "fr": "Variable cible (DIABLO)",
+      "en": "Target variable (DIABLO)"
+    },
+    {
+      "fr": "Intégrer",
+      "en": "Integrate"
+    },
+    {
+      "fr": "Sélectionnez au moins 2 datasets (blocs) pour l'intégration multi-blocs.",
+      "en": "Select at least 2 datasets (blocks) for multi-block integration."
+    },
+    {
+      "fr": "Au moins 2 datasets valides sont requis.",
+      "en": "At least 2 valid datasets are required."
+    },
+    {
+      "fr": "Intégration multi-blocs impossible : %s",
+      "en": "Multi-block integration failed: %s"
+    },
+    {
+      "fr": "✓ Intégration multi-blocs (BK-06) terminée.",
+      "en": "✓ Multi-block integration (BK-06) completed."
+    },
+    {
+      "fr": "Sélectionnez >= 2 datasets puis cliquez sur « Intégrer » (NEMO ou DIABLO).",
+      "en": "Select >= 2 datasets then click 'Integrate' (NEMO or DIABLO)."
+    },
+    {
+      "fr": "DIABLO (%s) : %d échantillons communs | %d composante(s) | Exactitude CV = %s | Exactitude équilibrée = %s",
+      "en": "DIABLO (%s): %d common samples | %d component(s) | CV Accuracy = %s | Balanced Accuracy = %s"
+    },
+    {
+      "fr": "NEMO (%s) : %d échantillons (union) | %d clusters | Silhouette moyenne = %s",
+      "en": "NEMO (%s): %d samples (union) | %d clusters | Mean silhouette = %s"
     }
   ]
 }

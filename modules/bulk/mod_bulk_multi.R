@@ -60,7 +60,29 @@ mod_bulk_multi_ui <- function(id) {
                 div(class = "alert alert-light", style = "font-size:0.8rem;",
                     i18n$t("Combinaison horizontale inter-études sans fusion des matrices brutes (Stouffer / Fisher / maxP / minP).")),
                 verbatimTextOutput(ns("meta_summary"), placeholder = TRUE),
-                DTOutput(ns("meta_table")))
+                DTOutput(ns("meta_table"))),
+      nav_panel(i18n$t("Intégration multi-blocs (BK-06)"), value = "tab_multiblock",
+                div(class = "alert alert-light", style = "font-size:0.8rem;",
+                    i18n$t("Intégration verticale multi-blocs sur les datasets sélectionnés : NEMO (non-supervisé, tolère les blocs partiels) ou DIABLO (supervisé sur échantillons communs).")),
+                fluidRow(
+                  column(6, radioButtons(
+                    ns("multiblock_mode"), i18n$t("Méthode multi-blocs"),
+                    choices = stats::setNames(
+                      c("nemo", "diablo"),
+                      c(.tr_plain("NEMO (non-supervisé, blocs partiels)"),
+                        .tr_plain("DIABLO (supervisé, échantillons communs)"))
+                    ),
+                    selected = "nemo", inline = TRUE)),
+                  column(4, selectInput(ns("multiblock_y_col"),
+                                        i18n$t("Variable cible (DIABLO)"),
+                                        choices = NULL)),
+                  column(2, div(style = "margin-top:24px;",
+                                actionButton(ns("run_multiblock"), i18n$t("Intégrer"),
+                                             icon = icon("diagram-project"),
+                                             class = "btn-secondary w-100")))
+                ),
+                verbatimTextOutput(ns("multiblock_summary"), placeholder = TRUE),
+                DTOutput(ns("multiblock_table")))
     )
   )
 }
@@ -110,9 +132,18 @@ mod_bulk_multi_server <- function(id, global_data) {
     # (predictable: re-applied on every selection change, adjustable after).
     observeEvent(input$datasets, {
       ds <- global_data$bulk_datasets
-      first <- input$datasets[1L]
-      if (is.na(first) || is.null(first) || !first %in% names(ds)) return()
+      sel <- intersect(input$datasets %||% character(0), names(ds))
+      if (length(sel) == 0L) {
+        updateSelectInput(session, "multiblock_y_col", choices = character(0))
+        return()
+      }
+      first <- sel[1L]
+      meta <- ds[[first]]$obj$metadata
+      cols <- if (is.data.frame(meta)) colnames(meta) else character(0)
       pipe <- ds[[first]]$pipeline
+      pref <- if (!is.null(pipe)) pipe$active_condition_col else NULL
+      sel_col <- if (!is.null(pref) && pref %in% cols) pref else if (length(cols) > 0L) cols[1L] else character(0)
+      updateSelectInput(session, "multiblock_y_col", choices = cols, selected = sel_col)
       if (is.null(pipe)) return()
       if (is.numeric(pipe$lfc_thresh) && length(pipe$lfc_thresh) == 1L) {
         updateNumericInput(session, "lfc_thresh", value = pipe$lfc_thresh)
@@ -273,6 +304,104 @@ mod_bulk_multi_server <- function(id, global_data) {
       m <- req(meta_result())
       ts_datatable(m$table, page_length = 15L,
                    filename_base = "bulk_multi_meta_analysis")
+    })
+
+    # ── BK-06 Multi-Block Integration (DIABLO / NEMO) ─────────────────────
+    multiblock_result <- reactiveVal(NULL)
+
+    observeEvent(input$run_multiblock, {
+      global_data$language
+      sel <- input$datasets %||% character(0)
+      if (length(sel) < 2L) {
+        showNotification(.tr("Sélectionnez au moins 2 datasets (blocs) pour l'intégration multi-blocs."), type = "error", duration = 8)
+        return()
+      }
+      ds <- global_data$bulk_datasets
+      entries <- ds[sel]
+      entries <- entries[!vapply(entries, is.null, logical(1))]
+      if (length(entries) < 2L) {
+        showNotification(.tr("Au moins 2 datasets valides sont requis."), type = "error", duration = 8)
+        return()
+      }
+      blocks <- stats::setNames(lapply(entries, function(e) {
+        mat <- e$pipeline$vst_mat %||% e$pipeline$filtered_counts %||% e$obj$counts
+        as.matrix(mat)
+      }), names(entries))
+
+      mode <- input$multiblock_mode %||% "nemo"
+      res_mb <- tryCatch({
+        if (identical(mode, "diablo")) {
+          y_col <- input$multiblock_y_col
+          meta1 <- entries[[1L]]$obj$metadata
+          if (is.null(meta1) || is.null(y_col) || !y_col %in% colnames(meta1)) {
+            stop(errorCondition("Variable cible (DIABLO) absente des métadonnées.", class = "bulk_multiblock_error"))
+          }
+          y_vec <- stats::setNames(as.character(meta1[[y_col]]), rownames(meta1))
+          run_multiblock_diablo(blocks = blocks, y = y_vec, ncomp = 2L)
+        } else {
+          run_multiblock_nemo(blocks = blocks)
+        }
+      }, error = function(e) e)
+
+      if (inherits(res_mb, "error")) {
+        showNotification(sprintf(.tr("Intégration multi-blocs impossible : %s"), conditionMessage(res_mb)),
+                         type = "error", duration = 10)
+        return()
+      }
+      multiblock_result(list(mode = mode, res = res_mb))
+      showNotification(.tr("✓ Intégration multi-blocs (BK-06) terminée."), type = "message", duration = 5)
+    })
+
+    output$multiblock_summary <- renderText({
+      global_data$language
+      mb <- multiblock_result()
+      if (is.null(mb)) {
+        return(.tr("Sélectionnez >= 2 datasets puis cliquez sur « Intégrer » (NEMO ou DIABLO)."))
+      }
+      r <- mb$res
+      if (identical(mb$mode, "diablo")) {
+        sprintf(.tr("DIABLO (%s) : %d échantillons communs | %d composante(s) | Exactitude CV = %s | Exactitude équilibrée = %s"),
+                r$method_used, length(r$common_samples), r$ncomp,
+                format(round(r$cv_accuracy, 3), nsmall = 3),
+                format(round(r$cv_balanced_accuracy, 3), nsmall = 3))
+      } else {
+        sprintf(.tr("NEMO (%s) : %d échantillons (union) | %d clusters | Silhouette moyenne = %s"),
+                r$method_used, length(r$union_samples), r$n_clusters,
+                format(round(r$silhouette_mean, 3), nsmall = 3))
+      }
+    })
+
+    output$multiblock_table <- renderDT({
+      global_data$language
+      mb <- req(multiblock_result())
+      r <- mb$res
+      tbl <- if (identical(mb$mode, "diablo")) {
+        rows <- lapply(names(r$selected_features), function(bn) {
+          feats <- r$selected_features[[bn]]
+          if (length(feats) == 0L) return(NULL)
+          ld <- r$loadings[[bn]][feats, 1L]
+          data.frame(
+            block = bn,
+            feature = feats,
+            loading_comp1 = round(as.numeric(ld), 4),
+            stringsAsFactors = FALSE
+          )
+        })
+        out <- do.call(rbind, Filter(Negate(is.null), rows))
+        if (is.null(out)) data.frame(block = character(0), feature = character(0), loading_comp1 = numeric(0)) else out
+      } else {
+        cov_df <- as.data.frame(r$block_coverage, stringsAsFactors = FALSE)
+        data.frame(
+          sample = names(r$clusters),
+          cluster = as.integer(r$clusters),
+          n_blocks = rowSums(r$block_coverage),
+          cov_df,
+          row.names = NULL,
+          stringsAsFactors = FALSE
+        )
+      }
+      ts_datatable(tbl, page_length = 15L,
+                   filename_base = paste0("bulk_multiblock_", mb$mode))
     })
 
     output$status <- renderText({
