@@ -421,3 +421,149 @@ run_bulk_mnar_de <- function(mat,
     )
   )
 }
+
+#' Assign proteins to subcellular organelles from fractionation profiles (BK-14)
+#'
+#' @param profile_mat Numeric 2D matrix (proteins x fractions/samples) with
+#'   non-empty `rownames(profile_mat)` and at least 2 columns.
+#' @param markers Either a `data.frame` with columns `protein` and `organelle`,
+#'   or a named character vector where names are protein IDs and values are
+#'   organelle labels.
+#' @param min_score Minimum cosine similarity (`0..1`) required to assign an
+#'   organelle; profiles below `min_score` are labeled `"Unassigned"`.
+#' @return Named list with `assignments`, `centroids`, `n_proteins`,
+#'   `n_assigned`, and `n_organelles`.
+#' @export
+assign_subcellular_localization <- function(profile_mat, markers, min_score = 0.5) {
+  if (is.null(profile_mat) || length(dim(profile_mat)) != 2L ||
+      nrow(profile_mat) < 2L || ncol(profile_mat) < 2L || is.null(rownames(profile_mat))) {
+    stop(.bulk_mnar_stop("'profile_mat' must be a 2D numeric matrix with rownames and >= 2 columns."))
+  }
+  mat <- as.matrix(profile_mat)
+  storage.mode(mat) <- "double"
+  mat[!is.finite(mat)] <- 0
+
+  if (is.data.frame(markers)) {
+    if (!all(c("protein", "organelle") %in% colnames(markers))) {
+      stop(.bulk_mnar_stop("'markers' data.frame must contain columns 'protein' and 'organelle'."))
+    }
+    m_prot <- as.character(markers$protein)
+    m_org  <- as.character(markers$organelle)
+  } else if (is.character(markers) && !is.null(names(markers))) {
+    m_prot <- names(markers)
+    m_org  <- as.character(markers)
+  } else {
+    stop(.bulk_mnar_stop("'markers' must be a data.frame(protein, organelle) or named character vector."))
+  }
+
+  keep_m <- !is.na(m_prot) & nzchar(trimws(m_prot)) & !is.na(m_org) & nzchar(trimws(m_org))
+  m_prot <- trimws(m_prot[keep_m])
+  m_org  <- trimws(m_org[keep_m])
+  in_mat <- m_prot %in% rownames(mat)
+  m_prot <- m_prot[in_mat]
+  m_org  <- m_org[in_mat]
+
+  org_levels <- sort(unique(m_org))
+  if (length(org_levels) < 2L) {
+    stop(.bulk_mnar_stop("At least 2 distinct organelles with matched marker proteins are required."))
+  }
+
+  # L1 simplex normalization per protein
+  row_sums <- rowSums(abs(mat))
+  norm_mat <- mat
+  pos <- row_sums > 0
+  norm_mat[pos, ] <- mat[pos, , drop = FALSE] / row_sums[pos]
+  norm_mat[!pos, ] <- 0
+
+  # Organelle centroids
+  centroids <- do.call(rbind, lapply(org_levels, function(org) {
+    prots <- unique(m_prot[m_org == org])
+    colMeans(norm_mat[prots, , drop = FALSE])
+  }))
+  rownames(centroids) <- org_levels
+  colnames(centroids) <- colnames(mat)
+
+  # Cosine similarity: proteins x organelles
+  p_norm <- sqrt(rowSums(norm_mat^2))
+  c_norm <- sqrt(rowSums(centroids^2))
+  denom <- outer(p_norm, c_norm)
+  sim <- norm_mat %*% t(centroids)
+  sim <- ifelse(denom > 0, sim / denom, 0)
+
+  top_idx <- max.col(sim, ties.method = "first")
+  top_org <- org_levels[top_idx]
+  top_sc  <- sim[cbind(seq_len(nrow(sim)), top_idx)]
+  sec_sc  <- apply(sim, 1L, function(r) {
+    sr <- sort(r, decreasing = TRUE)
+    if (length(sr) >= 2L) sr[2L] else 0
+  })
+
+  marker_map <- stats::setNames(m_org, m_prot)
+  is_m <- rownames(mat) %in% names(marker_map)
+  assigned <- ifelse(top_sc >= as.numeric(min_score), top_org, "Unassigned")
+
+  assign_df <- data.frame(
+    protein = rownames(mat),
+    top_organelle = top_org,
+    score = round(as.numeric(top_sc), 4),
+    second_score = round(as.numeric(sec_sc), 4),
+    margin = round(as.numeric(top_sc - sec_sc), 4),
+    assigned_organelle = assigned,
+    is_marker = is_m,
+    stringsAsFactors = FALSE
+  )
+  rownames(assign_df) <- rownames(mat)
+
+  list(
+    assignments = assign_df,
+    centroids = centroids,
+    norm_profiles = norm_mat,
+    n_proteins = as.integer(nrow(assign_df)),
+    n_assigned = as.integer(sum(assign_df$assigned_organelle != "Unassigned")),
+    n_organelles = as.integer(length(org_levels))
+  )
+}
+
+#' Detect subcellular translocation events between two conditions (BK-14)
+#'
+#' @param profile_ctrl Control condition protein-by-fraction matrix.
+#' @param profile_treat Treated condition protein-by-fraction matrix.
+#' @param markers Marker `data.frame(protein, organelle)` or named vector.
+#' @param min_score Minimum cosine similarity threshold (default `0.5`).
+#' @return Named list with `table`, `n_common`, and `n_translocated`.
+#' @export
+test_subcellular_translocation <- function(profile_ctrl, profile_treat, markers, min_score = 0.5) {
+  common <- intersect(rownames(profile_ctrl), rownames(profile_treat))
+  if (length(common) < 2L) {
+    stop(.bulk_mnar_stop("At least 2 common proteins are required between control and treated profiles."))
+  }
+  res_c <- assign_subcellular_localization(profile_ctrl[common, , drop = FALSE], markers, min_score = min_score)
+  res_t <- assign_subcellular_localization(profile_treat[common, , drop = FALSE], markers, min_score = min_score)
+
+  ac <- res_c$assignments[common, , drop = FALSE]
+  at <- res_t$assignments[common, , drop = FALSE]
+  diff_mat <- res_t$norm_profiles[common, , drop = FALSE] - res_c$norm_profiles[common, , drop = FALSE]
+  shift_dist <- sqrt(rowSums(diff_mat^2))
+  transloc <- (ac$assigned_organelle != at$assigned_organelle) &
+              (ac$assigned_organelle != "Unassigned") &
+              (at$assigned_organelle != "Unassigned")
+
+  tbl <- data.frame(
+    protein = common,
+    organelle_ctrl = ac$assigned_organelle,
+    score_ctrl = ac$score,
+    organelle_treat = at$assigned_organelle,
+    score_treat = at$score,
+    shift_distance = round(as.numeric(shift_dist), 4),
+    translocated = transloc,
+    stringsAsFactors = FALSE
+  )
+  tbl <- tbl[order(-as.integer(tbl$translocated), -tbl$shift_distance), , drop = FALSE]
+  rownames(tbl) <- NULL
+
+  list(
+    table = tbl,
+    n_common = as.integer(nrow(tbl)),
+    n_translocated = as.integer(sum(tbl$translocated))
+  )
+}

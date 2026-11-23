@@ -14804,6 +14804,50 @@
     {
       "fr": "tx2gene (%s) : %d / %d transcrits mappés (%d non mappés)",
       "en": "tx2gene (%s): %d / %d transcripts mapped (%d unmapped)"
+    },
+    {
+      "fr": "Protéomique subcellulaire (BK-14)",
+      "en": "Subcellular Proteomics (BK-14)"
+    },
+    {
+      "fr": "Assignation d'organites par similarité cosinus sur profils de fractionnement (protéomique subcellulaire).",
+      "en": "Organelle assignment via cosine similarity on fractionation profiles (subcellular proteomics)."
+    },
+    {
+      "fr": "Marqueurs d'organites (CSV/TSV : protein, organelle)",
+      "en": "Organelle markers (CSV/TSV: protein, organelle)"
+    },
+    {
+      "fr": "Score cosinus min.",
+      "en": "Min cosine score"
+    },
+    {
+      "fr": "Assigner les organites",
+      "en": "Assign organelles"
+    },
+    {
+      "fr": "Chargez un fichier de marqueurs d'organites (CSV/TSV : protein, organelle).",
+      "en": "Upload an organelle marker file (CSV/TSV: protein, organelle)."
+    },
+    {
+      "fr": "Aucune matrice de profils protéiques disponible.",
+      "en": "No protein profile matrix available."
+    },
+    {
+      "fr": "Assignation subcellulaire impossible : %s",
+      "en": "Subcellular assignment failed: %s"
+    },
+    {
+      "fr": "✓ %d / %d protéines assignées (%d organites).",
+      "en": "✓ %d / %d proteins assigned (%d organelles)."
+    },
+    {
+      "fr": "En attente — importez les marqueurs d'organites et cliquez sur « Assigner les organites ».",
+      "en": "Waiting — upload organelle markers and click 'Assign organelles'."
+    },
+    {
+      "fr": "BK-14 : %d / %d protéines assignées sur %d organites",
+      "en": "BK-14: %d / %d proteins assigned across %d organelles"
     }
   ]
 }

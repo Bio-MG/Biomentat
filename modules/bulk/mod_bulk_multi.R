@@ -82,7 +82,24 @@ mod_bulk_multi_ui <- function(id) {
                                              class = "btn-secondary w-100")))
                 ),
                 verbatimTextOutput(ns("multiblock_summary"), placeholder = TRUE),
-                DTOutput(ns("multiblock_table")))
+                DTOutput(ns("multiblock_table"))),
+      nav_panel(i18n$t("Protéomique subcellulaire (BK-14)"), value = "tab_subcellular",
+                div(class = "alert alert-light", style = "font-size:0.8rem;",
+                    i18n$t("Assignation d'organites par similarité cosinus sur profils de fractionnement (protéomique subcellulaire).")),
+                fluidRow(
+                  column(6, fileInput(ns("subcell_markers_file"),
+                                      i18n$t("Marqueurs d'organites (CSV/TSV : protein, organelle)"),
+                                      accept = c(".csv", ".tsv", ".txt"))),
+                  column(3, numericInput(ns("subcell_min_score"),
+                                         i18n$t("Score cosinus min."),
+                                         value = 0.5, min = 0, max = 1, step = 0.05)),
+                  column(3, div(style = "margin-top:24px;",
+                                actionButton(ns("run_subcell"), i18n$t("Assigner les organites"),
+                                             icon = icon("microscope"),
+                                             class = "btn-secondary w-100")))
+                ),
+                verbatimTextOutput(ns("subcell_summary"), placeholder = TRUE),
+                DTOutput(ns("subcell_table")))
     )
   )
 }
@@ -410,6 +427,68 @@ mod_bulk_multi_server <- function(id, global_data) {
       sprintf(.tr("✓ %s — %d datasets : %s"),
               res$contrast, length(res$datasets),
               paste(res$datasets, collapse = ", "))
+    })
+
+    # ── BK-14 : Protéomique subcellulaire ──────────────────────────────────
+    subcell_result <- reactiveVal(NULL)
+
+    observeEvent(input$run_subcell, {
+      global_data$language
+      f_info <- input$subcell_markers_file
+      if (is.null(f_info) || is.null(f_info$datapath) || !file.exists(f_info$datapath)) {
+        showNotification(.tr("Chargez un fichier de marqueurs d'organites (CSV/TSV : protein, organelle)."),
+                         type = "error", duration = 8)
+        return()
+      }
+      ds_map <- global_data$bulk_datasets %||% list()
+      picked <- input$datasets %||% names(ds_map)
+      prof_mat <- NULL
+      if (length(picked) >= 1L && !is.null(ds_map[[picked[1L]]]$counts)) {
+        prof_mat <- ds_map[[picked[1L]]]$counts
+      } else if (!is.null(global_data$bulk_obj$counts)) {
+        prof_mat <- global_data$bulk_obj$counts
+      }
+      if (is.null(prof_mat)) {
+        showNotification(.tr("Aucune matrice de profils protéiques disponible."), type = "error", duration = 8)
+        return()
+      }
+      sep <- if (grepl("\\.(tsv|txt)$", f_info$name %||% "", ignore.case = TRUE)) "\t" else ","
+      markers_df <- tryCatch(
+        utils::read.delim(f_info$datapath, sep = sep, stringsAsFactors = FALSE, check.names = FALSE),
+        error = function(e) NULL
+      )
+      res <- tryCatch(
+        assign_subcellular_localization(
+          profile_mat = prof_mat,
+          markers = markers_df,
+          min_score = as.numeric(input$subcell_min_score %||% 0.5)
+        ),
+        error = function(e) e
+      )
+      if (inherits(res, "error")) {
+        showNotification(sprintf(.tr("Assignation subcellulaire impossible : %s"), conditionMessage(res)),
+                         type = "error", duration = 10)
+        return()
+      }
+      subcell_result(res)
+      showNotification(
+        sprintf(.tr("✓ %d / %d protéines assignées (%d organites)."),
+                res$n_assigned, res$n_proteins, res$n_organelles),
+        type = "message", duration = 5
+      )
+    })
+
+    output$subcell_summary <- renderText({
+      global_data$language
+      r <- subcell_result()
+      if (is.null(r)) return(.tr("En attente — importez les marqueurs d'organites et cliquez sur « Assigner les organites »."))
+      sprintf(.tr("BK-14 : %d / %d protéines assignées sur %d organites"),
+              r$n_assigned, r$n_proteins, r$n_organelles)
+    })
+
+    output$subcell_table <- renderDT({
+      r <- req(subcell_result())
+      ts_datatable(r$assignments, page_length = 15L, filename_base = "bulk_subcellular_localization")
     })
   })
 }
