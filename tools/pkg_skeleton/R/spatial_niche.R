@@ -155,3 +155,166 @@ dominant_group_labels <- function(deconv_props) {
   idx <- max.col(mat, ties.method = "first")
   stats::setNames(cols[idx], deconv_props$id)
 }
+
+#' Compute spatial niches using a Bayesian Potts Markov Random Field (BK-10)
+#'
+#' Extends neighborhood-composition niche segmentation with a spatial Potts MRF
+#' prior (mean-field EM / soft-ICM) over the physical k-NN graph, smoothing
+#' isolated noisy assignments in high-resolution spatial data (e.g. Visium HD,
+#' MERSCOPE/MERFISH) while preserving sharp domain boundaries.
+#'
+#' @param coords data.frame(id, x, y, ...) — spatial coordinates.
+#' @param group_labels Named character/factor vector matching `coords$id`
+#'   (>= 2 distinct non-NA categories).
+#' @param k_neighbors Integer k-NN size (default `30`).
+#' @param n_niches Integer number of niches K (default `5`).
+#' @param beta Non-negative spatial Potts smoothing weight (`>= 0`, default `1.5`).
+#'   `0` reduces to non-spatial Multinomial mixture; larger values enforce stronger
+#'   spatial coherence.
+#' @param max_iter Integer maximum MRF EM iterations (`>= 1`, default `30L`).
+#' @param tol Positive convergence tolerance on max responsibility delta (default `1e-3`).
+#' @param log_file Optional path for `write_mirai_log()` progress lines.
+#' @return Named list with `assignments`, `niche_composition`, `method = "bayesian_mrf"`,
+#'   `beta`, `iterations`, `converged`, `spatial_coherence`, and `posterior_entropy`.
+#' @export
+compute_spatial_niches_mrf <- function(coords,
+                                       group_labels,
+                                       k_neighbors = 30,
+                                       n_niches = 5,
+                                       beta = 1.5,
+                                       max_iter = 30L,
+                                       tol = 1e-3,
+                                       log_file = NULL) {
+  .log <- function(msg, step, total) {
+    if (!is.null(log_file)) write_mirai_log(log_file, msg, step, total)
+  }
+  if (!requireNamespace("RANN", quietly = TRUE)) {
+    stop(errorCondition("Package 'RANN' requis (install.packages('RANN')).", class = "spatial_niche_error"))
+  }
+  if (!is.numeric(beta) || length(beta) != 1L || !is.finite(beta) || beta < 0) {
+    stop(errorCondition("'beta' doit etre un scalaire numerique fini >= 0.", class = "spatial_niche_error"))
+  }
+  max_iter_i <- suppressWarnings(as.integer(max_iter))
+  if (length(max_iter_i) != 1L || is.na(max_iter_i) || max_iter_i < 1L) {
+    stop(errorCondition("'max_iter' doit etre un entier >= 1.", class = "spatial_niche_error"))
+  }
+  if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol <= 0) {
+    stop(errorCondition("'tol' doit etre un scalaire numerique fini > 0.", class = "spatial_niche_error"))
+  }
+
+  .log("Alignement coordonnees / labels (MRF)...", 1, 4)
+  group_labels <- group_labels[!is.na(group_labels) & nzchar(as.character(group_labels))]
+  common_ids <- intersect(coords$id, names(group_labels))
+  if (length(common_ids) < 10L) {
+    stop(errorCondition("Moins de 10 elements communs entre les coordonnees et le regroupement choisi.", class = "spatial_niche_error"))
+  }
+
+  cd <- coords[match(common_ids, coords$id), c("id", "x", "y")]
+  cd <- cd[stats::complete.cases(cd[, c("x", "y")]), , drop = FALSE]
+  grp <- as.character(group_labels[cd$id])
+  lv <- sort(unique(grp))
+  if (length(lv) < 2L) {
+    stop(errorCondition("Le regroupement choisi n'a qu'une seule categorie — MRF impossible.", class = "spatial_niche_error"))
+  }
+
+  n <- nrow(cd)
+  k_eff <- max(2L, min(as.integer(k_neighbors), n - 1L))
+  .log(sprintf("Graphe k-NN spatial MRF (k=%d, beta=%.2f)...", k_eff, as.numeric(beta)), 2, 4)
+  nn <- RANN::nn2(as.matrix(cd[, c("x", "y")]), k = min(k_eff + 1L, n))
+  nb_idx <- nn$nn.idx[, -1L, drop = FALSE]
+
+  onehot <- vapply(lv, function(l) as.numeric(grp == l), numeric(n))
+  colnames(onehot) <- lv
+  kk <- ncol(nb_idx)
+  W <- Matrix::sparseMatrix(
+    i = rep(seq_len(n), each = kk),
+    j = as.vector(t(nb_idx)),
+    x = 1 / kk,
+    dims = c(n, n)
+  )
+  composition <- as.matrix(W %*% onehot)
+  dimnames(composition) <- list(cd$id, lv)
+
+  n_niches_eff <- max(2L, min(as.integer(n_niches), n - 1L))
+  .log(sprintf("Initialisation k-means + Potts MRF (K=%d)...", n_niches_eff), 3, 4)
+  km <- tryCatch(
+    stats::kmeans(composition, centers = n_niches_eff, nstart = 10L, iter.max = 100L),
+    error = function(e) {
+      stop(errorCondition(
+        paste0("k-means initial MRF a echoue (", conditionMessage(e), ")."),
+        class = "spatial_niche_error"
+      ))
+    }
+  )
+
+  # Mean-field Potts MRF EM over k-NN graph
+  Z <- matrix(0, nrow = n, ncol = n_niches_eff)
+  Z[cbind(seq_len(n), km$cluster)] <- 1
+  n_groups <- ncol(composition)
+  alpha <- 1e-3
+  converged <- FALSE
+  iter_done <- 0L
+  beta_num <- as.numeric(beta)
+
+  for (it in seq_len(max_iter_i)) {
+    iter_done <- it
+    # M-step: smoothed Multinomial emission profile per niche
+    nk <- colSums(Z)
+    theta <- (t(Z) %*% composition + alpha) / (nk + n_groups * alpha)
+    log_theta <- log(pmax(theta, 1e-12))
+
+    # E-step: log-likelihood + spatial Potts neighbor field
+    log_post <- composition %*% t(log_theta)
+    if (beta_num > 0) {
+      log_post <- log_post + beta_num * as.matrix(W %*% Z)
+    }
+    row_max <- apply(log_post, 1L, max)
+    exp_post <- exp(log_post - row_max)
+    Z_new <- exp_post / rowSums(exp_post)
+
+    delta <- max(abs(Z_new - Z))
+    Z <- Z_new
+    if (is.finite(delta) && delta < tol) {
+      converged <- TRUE
+      break
+    }
+  }
+
+  .log("Finalisation des niches MRF et metriques de coherence...", 4, 4)
+  cluster_id <- max.col(Z, ties.method = "first")
+  niche_vec <- paste0("N", cluster_id)
+
+  niche_sums <- rowsum(composition, group = niche_vec, reorder = TRUE)
+  niche_counts <- as.numeric(table(niche_vec)[rownames(niche_sums)])
+  niche_means <- niche_sums / niche_counts
+
+  H <- Matrix::sparseMatrix(
+    i = seq_len(n),
+    j = cluster_id,
+    x = 1,
+    dims = c(n, n_niches_eff)
+  )
+  spatial_coherence <- mean(Matrix::rowSums(H * (W %*% H)))
+  posterior_entropy <- mean(-rowSums(Z * log(pmax(Z, 1e-12))))
+
+  list(
+    assignments = data.frame(
+      id = cd$id,
+      niche = niche_vec,
+      row.names = NULL,
+      stringsAsFactors = FALSE
+    ),
+    niche_composition = data.frame(
+      niche = rownames(niche_means),
+      niche_means,
+      check.names = FALSE,
+      row.names = NULL
+    ),
+    method = "bayesian_mrf",
+    beta = beta_num,
+    iterations = as.integer(iter_done),
+    converged = isTRUE(converged),
+    spatial_coherence = as.numeric(spatial_coherence),
+    posterior_entropy = as.numeric(posterior_entropy)
+  )
+}

@@ -71,6 +71,19 @@ mod_spatial_niche_controls_ui <- function(id) {
 
       numericInput(ns("k_neighbors"), i18n$t("Voisins spatiaux (neighbors.k)"), 30, min = 5, max = 200, step = 5),
       numericInput(ns("n_niches"), i18n$t("Nombre de niches (niches.k)"), 5, min = 2, max = 20, step = 1),
+      selectInput(
+        ns("niche_method"),
+        i18n$t("Méthode de segmentation des niches"),
+        choices = c(
+          "k-means (BuildNicheAssay)" = "kmeans",
+          "MRF Bayésien (Potts / Visium HD)" = "mrf"
+        ),
+        selected = "kmeans"
+      ),
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'mrf'", ns("niche_method")),
+        numericInput(ns("mrf_beta"), i18n$t("Lissage spatial MRF (beta)"), value = 1.5, min = 0, max = 5, step = 0.25)
+      ),
 
       bslib::input_task_button(ns("btn_niches"), i18n$t("Calculer les niches"),
                                 icon = icon("diagram-project")),
@@ -168,6 +181,10 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
                          label = .tr("Voisins spatiaux (neighbors.k)"))
       updateNumericInput(session, "n_niches",
                          label = .tr("Nombre de niches (niches.k)"))
+      updateSelectInput(session, "niche_method",
+                        label = .tr("Méthode de segmentation des niches"))
+      updateNumericInput(session, "mrf_beta",
+                         label = .tr("Lissage spatial MRF (beta)"))
       updateNumericInput(session, "k_neighbors_enrich",
                          label = .tr("Voisins spatiaux (k)"))
       updateNumericInput(session, "n_perm_enrich",
@@ -197,15 +214,23 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
       selectInput(ns("group_by"), .tr("Regroupement de base"), choices = choices)
     })
 
-    niche_task <- ExtendedTask$new(function(coords, group_labels, k_neighbors, n_niches, log_file) {
+    niche_task <- ExtendedTask$new(function(coords, group_labels, k_neighbors, n_niches,
+                                            method = "kmeans", mrf_beta = 1.5, log_file = NULL) {
       mirai::mirai(
         {
-          compute_spatial_niches(coords = coords, group_labels = group_labels,
-                                  k_neighbors = k_neighbors, n_niches = n_niches,
-                                  log_file = log_file)
+          if (identical(method, "mrf")) {
+            compute_spatial_niches_mrf(coords = coords, group_labels = group_labels,
+                                       k_neighbors = k_neighbors, n_niches = n_niches,
+                                       beta = mrf_beta, log_file = log_file)
+          } else {
+            compute_spatial_niches(coords = coords, group_labels = group_labels,
+                                   k_neighbors = k_neighbors, n_niches = n_niches,
+                                   log_file = log_file)
+          }
         },
         coords = coords, group_labels = group_labels, k_neighbors = k_neighbors,
-        n_niches = n_niches, log_file = log_file, .timeout = MIRAI_TASK_TIMEOUT_MS
+        n_niches = n_niches, method = method, mrf_beta = mrf_beta,
+        log_file = log_file, .timeout = MIRAI_TASK_TIMEOUT_MS
       )
     })
     bslib::bind_task_button(niche_task, "btn_niches")
@@ -221,16 +246,25 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
         dominant_group_labels(shared_rv$deconv_props)
       }
 
+      method <- input$niche_method %||% "kmeans"
+      mrf_beta <- input$mrf_beta %||% 1.5
       reset_log(log_file)
       # v2 (export/script reproductible) : miroir des parametres UTILISES,
       # lu uniquement par mod_spatial_export.R -- purement additif.
-      shared_rv$niche_params <- list(group_by = input$group_by, k_neighbors = input$k_neighbors,
-                                     n_niches = input$n_niches)
+      shared_rv$niche_params <- list(
+        group_by = input$group_by,
+        k_neighbors = input$k_neighbors,
+        n_niches = input$n_niches,
+        method = method,
+        mrf_beta = mrf_beta
+      )
       niche_task$invoke(
         coords       = global_data$spatial_obj$coords,
         group_labels = group_labels,
         k_neighbors  = input$k_neighbors,
         n_niches     = input$n_niches,
+        method       = method,
+        mrf_beta     = mrf_beta,
         log_file     = log_file
       )
     })
@@ -240,10 +274,13 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
         res <- niche_task$result()
         shared_rv$niche_labels      <- stats::setNames(res$assignments$niche, res$assignments$id)
         shared_rv$niche_composition <- res$niche_composition
-        showNotification(.t_fmt(.tr("Niches calculées : {n} niches sur {total} elements."),
-                                  n = length(unique(shared_rv$niche_labels)),
-                                  total = length(shared_rv$niche_labels)),
-                          type = "message", duration = 5)
+        msg <- .t_fmt(.tr("Niches calculées : {n} niches sur {total} elements."),
+                      n = length(unique(shared_rv$niche_labels)),
+                      total = length(shared_rv$niche_labels))
+        if (identical(res$method, "bayesian_mrf") && !is.null(res$spatial_coherence)) {
+          msg <- paste0(msg, sprintf(" (MRF coherence=%.3f)", res$spatial_coherence))
+        }
+        showNotification(msg, type = "message", duration = 5)
       } else if (niche_task$status() == "error") {
         showNotification(
           .tr("Erreur pendant le calcul des niches — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez."),

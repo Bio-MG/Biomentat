@@ -14848,6 +14848,14 @@
     {
       "fr": "BK-14 : %d / %d protéines assignées sur %d organites",
       "en": "BK-14: %d / %d proteins assigned across %d organelles"
+    },
+    {
+      "fr": "Méthode de segmentation des niches",
+      "en": "Niche segmentation method"
+    },
+    {
+      "fr": "Lissage spatial MRF (beta)",
+      "en": "MRF spatial smoothing (beta)"
     }
   ]
 }
