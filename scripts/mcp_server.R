@@ -283,7 +283,7 @@ ts_drive_boot(.project_root)
 #' F3 (2026-10-06) — the ONE-IN-FLIGHT guard, called before EVERY scenario
 #' write.
 #'
-#' MEASURED (real-world cycle, docs/mcp_realworld_test.md F3): scenario.json is
+#' MEASURED (real-world cycle, docs/archive/mcp_m0_m4_2026-09-24/mcp_realworld_test.md F3): scenario.json is
 #' ONE slot, consumed one per poller beat; the tools only validated
 #' `seq > last_seq`, so a fast agent writing seq 14, 15, 16 in ~100 ms lost 14
 #' and 15 SILENTLY — never acked, never refused. This guard makes the tools'
@@ -3442,441 +3442,830 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
 }
 
 # --- 8. Tool registry and dispatch -----------------------------------------
+# BK-12: Formal Declarative MCP Semantic Tool Schema Registration.
+# Closed vocabularies for semantic classification, MCP 2025-06-18 annotations,
+# and machine-readable intent/modality/side-effect discovery.
+
+TS_MCP_SEMANTIC_CATEGORIES <- c(
+  "observation", "session_control", "data_ingestion",
+  "configuration", "execution", "export"
+)
+TS_MCP_SEMANTIC_MODALITIES <- c("bulk", "sc", "spatial", "session")
+TS_MCP_SEMANTIC_SIDE_EFFECTS <- c("none", "writes_arm_json", "writes_scenario_json")
+
+.ts_tool_registry <- new.env(parent = emptyenv())
+.ts_tool_order <- character(0L)
+
+#' Register an MCP tool with formal schema, annotations, and semantic metadata
+#'
+#' @param name Character scalar tool name.
+#' @param description Character scalar tool description.
+#' @param inputSchema List representing JSON Schema (`type = "object"`).
+#' @param handler Function implementing the tool handler.
+#' @param annotations List with `title`, `readOnlyHint`, `destructiveHint`,
+#'   `idempotentHint`, `openWorldHint`.
+#' @param semantic List with `category`, `modalities`, `intents`, `side_effects`,
+#'   `requires_armed`, `requires_session`.
+#' @return Invisibly returns the registered tool specification.
+.ts_register_tool <- function(name, description, inputSchema, handler,
+                              annotations, semantic) {
+  if (!is.character(name) || length(name) != 1L || is.na(name) || !nzchar(trimws(name))) {
+    stop("mcp_server: tool 'name' must be a non-empty scalar string.", call. = FALSE)
+  }
+  if (!is.character(description) || length(description) != 1L || is.na(description) || !nzchar(trimws(description))) {
+    stop(sprintf("mcp_server: tool '%s' description must be a non-empty scalar string.", name), call. = FALSE)
+  }
+  if (!is.list(inputSchema) || !identical(inputSchema$type, "object")) {
+    stop(sprintf("mcp_server: tool '%s' inputSchema must be an object schema.", name), call. = FALSE)
+  }
+  if (!is.function(handler)) {
+    stop(sprintf("mcp_server: tool '%s' handler must be a function.", name), call. = FALSE)
+  }
+  req_ann <- c("title", "readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")
+  if (!is.list(annotations) || !all(req_ann %in% names(annotations))) {
+    stop(sprintf("mcp_server: tool '%s' annotations missing required fields.", name), call. = FALSE)
+  }
+  req_sem <- c("category", "modalities", "intents", "side_effects", "requires_armed", "requires_session")
+  if (!is.list(semantic) || !all(req_sem %in% names(semantic))) {
+    stop(sprintf("mcp_server: tool '%s' semantic metadata missing required fields.", name), call. = FALSE)
+  }
+  if (!is.character(semantic$category) || length(semantic$category) != 1L ||
+      !semantic$category %in% TS_MCP_SEMANTIC_CATEGORIES) {
+    stop(sprintf("mcp_server: tool '%s' invalid semantic category.", name), call. = FALSE)
+  }
+  if (!is.character(semantic$modalities) || length(semantic$modalities) == 0L ||
+      !all(semantic$modalities %in% TS_MCP_SEMANTIC_MODALITIES)) {
+    stop(sprintf("mcp_server: tool '%s' invalid semantic modalities.", name), call. = FALSE)
+  }
+  if (!is.character(semantic$intents) || length(semantic$intents) == 0L ||
+      any(!nzchar(trimws(semantic$intents)))) {
+    stop(sprintf("mcp_server: tool '%s' semantic intents must be non-empty.", name), call. = FALSE)
+  }
+  if (!is.character(semantic$side_effects) || length(semantic$side_effects) != 1L ||
+      !semantic$side_effects %in% TS_MCP_SEMANTIC_SIDE_EFFECTS) {
+    stop(sprintf("mcp_server: tool '%s' invalid semantic side_effects.", name), call. = FALSE)
+  }
+  ro_hint <- isTRUE(annotations$readOnlyHint)
+  no_side <- identical(semantic$side_effects, "none")
+  if (!identical(ro_hint, no_side)) {
+    stop(sprintf(
+      "mcp_server: tool '%s' readOnlyHint (%s) contradicts side_effects ('%s').",
+      name, ro_hint, semantic$side_effects
+    ), call. = FALSE)
+  }
+
+  spec <- list(
+    name = name,
+    description = description,
+    inputSchema = inputSchema,
+    annotations = annotations,
+    x_semantic = list(
+      schema_version = "1.0.0",
+      category = semantic$category,
+      modalities = as.list(semantic$modalities),
+      intents = as.list(semantic$intents),
+      side_effects = semantic$side_effects,
+      requires_armed = isTRUE(semantic$requires_armed),
+      requires_session = isTRUE(semantic$requires_session)
+    ),
+    handler = handler
+  )
+  assign(name, spec, envir = .ts_tool_registry)
+  if (!name %in% .ts_tool_order) {
+    .ts_tool_order <<- c(.ts_tool_order, name)
+  }
+  invisible(spec)
+}
+
+.ts_init_tool_registry <- function() {
+  rm(list = ls(envir = .ts_tool_registry, all.names = TRUE), envir = .ts_tool_registry)
+  .ts_tool_order <<- character(0L)
+  empty_obj <- stats::setNames(list(), character(0))
+
+  # 1. transcripto_drive_export (S2/S2b)
+  .ts_register_tool(
+    name = "transcripto_drive_export",
+    description = paste0(
+      "Export the artefact of ONE declared export route by writing ONE ",
+      "scenario.json with action=export_result, then stop. The caller names ",
+      "only WHICH closed route (`module`: ",
+      paste(names(TS_DRIVE_EXPORT_ROUTES), collapse = ", "),
+      ") - the app then chooses the handler, the outputId, the destination, ",
+      "the filename and the format, writes into an application-controlled ",
+      "bounded temporary directory, and returns a redacted descriptor ",
+      "(format, file basename, bytes, n_rows, n_cols, column names). No ",
+      "sample name, no contrast label, no absolute path and no row data. ",
+      "Column contracts (the app's declared schema; the wire sanitises ",
+      "8+-character alphanumeric names to <redacted> with positions ",
+      "preserved, so map hidden names by position): ",
+      .ts_export_contract_text(),
+      ". Refuses a session with no result (INVALID), and refuses any field ",
+      "beyond `seq`, `module` and `expect`."),
+    inputSchema = list(
+      type = "object",
+      properties = list(
+        seq = list(
+          type = "integer",
+          minimum = 1,
+          description = paste0(
+            "Protocol counter, must be greater than the session's last_seq. ",
+            "Required. It is a sequence number, not a choice about the file.")),
+        module = list(
+          type = "string", enum = as.list(names(TS_DRIVE_EXPORT_ROUTES)),
+          description = paste0(
+            "WHICH declared route to export. Required since S2b: a choice ",
+            "among the app's closed route table, never about the artefact.")),
+        expect = list(
+          type = "object",
+          description = paste0(
+            "Required pin. Each field provided must match the live session ",
+            "EXACTLY, otherwise SESSION_MISMATCH. An export writes into the ",
+            "live session's own temporary directory, so it must name it."),
+          properties = list(
+            pid = list(type = "integer"),
+            started_at = list(type = "string"),
+            session_token = list(type = "string"),
+            session_id = list(type = "string")),
+          additionalProperties = FALSE)),
+      required = c("seq", "module", "expect"),
+      additionalProperties = FALSE),
+    handler = .ts_tool_export,
+    annotations = list(
+      title = "Export Declared Route Artefact",
+      readOnlyHint = FALSE,
+      destructiveHint = FALSE,
+      idempotentHint = FALSE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "export",
+      modalities = c("bulk", "sc", "spatial"),
+      intents = c("export_analysis_table", "trigger_declared_export"),
+      side_effects = "writes_scenario_json",
+      requires_armed = TRUE,
+      requires_session = TRUE
+    )
+  )
+
+  # 2. transcripto_drive_read (R1)
+  .ts_register_tool(
+    name = "transcripto_drive_read",
+    description = paste0(
+      "BOUNDED READ of the current exported artefact by writing ONE ",
+      "scenario.json with action=read_export, then stop. The caller names ",
+      "NOTHING about the file — no route, no handle, no path: the read ",
+      "targets the current export verdict (one read per completed export; ",
+      "export again to read again). The APP resolves the file from its own ",
+      "verdict, streams it (header + first K data lines, never a full ",
+      "load), clamps the preview to max_rows (default 20, ceiling 200) and ",
+      "to a 256 KiB serialized block measured AFTER projection, and writes ",
+      "a bounded verdict: preview rows plus a per-column summary ",
+      "(name, class, n_missing_in_preview only — no min/max/n_distinct/",
+      "top values). Preview CELL VALUES travel verbatim under the declared ",
+      "D1 policy: max 200 chars; '..', '/', '\\', '~' and control ",
+      "characters are refused; a failing cell is replaced by <over-200-chars> ",
+      "or <guarded> and counted — cells containing '/' (ORA geneID lists) ",
+      "therefore do NOT travel verbatim. Every structural field (file, ",
+      "route, handle, columns, module, action, error codes) stays ",
+      "sanitised: 8+-character alphanumeric runs arrive as <redacted> with ",
+      "positions preserved, so map column names by position with the ",
+      "declared contracts: ",
+      .ts_export_contract_text(),
+      ". Refuses NO_EXPORT_TARGET when there is no completed export to ",
+      "read (derived statelessly from result.json), and refuses any field ",
+      "beyond `seq`, `max_rows` and `expect`."),
+    inputSchema = list(
+      type = "object",
+      properties = list(
+        seq = list(
+          type = "integer",
+          minimum = 1,
+          description = paste0(
+            "Protocol counter, must be greater than the session's last_seq. ",
+            "Required. It is a sequence number, not a choice about the file.")),
+        max_rows = list(
+          type = "integer",
+          minimum = 1L,
+          maximum = 200L,
+          description = paste0(
+            "Bounded preview height. Absent = 20. The app clamps again: ",
+            "the app is the authority on what it streams.")),
+        expect = list(
+          type = "object",
+          description = paste0(
+            "Required pin, mirroring the export assertion exactly: ",
+            "session_id is MANDATORY (SESSION_ASSERTION_REQUIRED), the ",
+            "wildcard '*' is never accepted (AMBIGUOUS_SESSION), and the ",
+            "raw session_token is deliberately NOT a field. A read ",
+            "triggers an app-side action, so it must name the live, ARMED ",
+            "session. A wrong pin fails closed as SESSION_MISMATCH."),
+          properties = list(
+            pid = list(type = "integer"),
+            started_at = list(type = "string"),
+            session_id = list(type = "string")),
+          additionalProperties = FALSE)),
+      required = c("seq", "expect"),
+      additionalProperties = FALSE),
+    handler = .ts_tool_read,
+    annotations = list(
+      title = "Read Bounded Export Preview",
+      readOnlyHint = FALSE,
+      destructiveHint = FALSE,
+      idempotentHint = FALSE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "export",
+      modalities = c("bulk", "sc", "spatial"),
+      intents = c("read_export_preview", "inspect_exported_columns"),
+      side_effects = "writes_scenario_json",
+      requires_armed = TRUE,
+      requires_session = TRUE
+    )
+  )
+
+  # 3. transcripto_drive_import (S3)
+  .ts_register_tool(
+    name = "transcripto_drive_import",
+    description = paste0(
+      "CONTROLLED WRITE. Import data for ONE importer module by writing ONE ",
+      "tools/_drive/scenario.json, then stop. The action follows the module: ",
+      "import_path for the path-driven importers (import_velocity: path ",
+      "required, optional name — points at a CONFINED file, loom/h5ad/rds, ",
+      "feeding a fileInput pathway the browser agent cannot drive), ",
+      "import_file for the others (import_bulk: counts_path required; ",
+      "optional metadata_path, mode merged_matrix|per_sample; import_spatial: ",
+      "dir_path required; optional sample_name, technology ",
+      "visium|xenium|cosmx|slideseq; import_sc: dir_path + sample_name ",
+      "required). Values are validated HERE (key set, required keys, enums, ",
+      "text bounds, no `..` component) BEFORE the write. Root confinement, ",
+      "existence, extension allowlist and loader kind are the APP's verdict: ",
+      "its refusal arrives as an `invalid` verdict in result.json, not as a ",
+      "tool error. Requires a live, ARMED session and a non-wildcard ",
+      "`expect.session_id`. Never reads a file, never loads data, never ",
+      "waits, never echoes a path back. Refusals: NO_SESSION, ",
+      "STALE_SESSION, INVALID_PROTOCOL, READ_FAILED, AMBIGUOUS_SESSION, ",
+      "SESSION_MISMATCH, SESSION_ASSERTION_REQUIRED, SESSION_NOT_ARMED, ",
+      "MODULE_NOT_ALLOWED, PAYLOAD_REFUSED, PAYLOAD_TOO_LARGE, SEQ_STALE, ",
+      "SCENARIO_WRITE_FAILED."),
+    inputSchema = list(
+      type = "object",
+      properties = list(
+        seq = list(
+          type = "integer", minimum = 1L,
+          description = paste0(
+            "Monotonic scenario sequence. MUST be greater than the session's ",
+            "last_seq, otherwise SEQ_STALE.")),
+        module = list(
+          type = "string", enum = as.list(names(TS_MCP_IMPORT_SCHEMA)),
+          description = "The importer the block belongs to."),
+        import = list(
+          type = "object",
+          description = paste0(
+            "The importer's block: inputId -> value. Every key must belong ",
+            "to the named importer; values are validated against the S3 ",
+            "schema. Paths are never echoed back.")),
+        expect = list(
+          type = "object",
+          description = paste0(
+            "REQUIRED. A write must NAME its session: `session_id` (the ",
+            "DERIVED id published by transcripto_drive_status) is mandatory ",
+            "and the wildcard '*' is never accepted."),
+          properties = list(
+            session_id = list(type = "string"),
+            pid = list(type = "integer"),
+            started_at = list(type = "string")),
+          required = list("session_id"),
+          additionalProperties = FALSE)),
+      required = list("seq", "module", "import", "expect"),
+      additionalProperties = FALSE),
+    handler = .ts_tool_import,
+    annotations = list(
+      title = "Import Dataset Into Live Session",
+      readOnlyHint = FALSE,
+      destructiveHint = FALSE,
+      idempotentHint = FALSE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "data_ingestion",
+      modalities = c("bulk", "sc", "spatial"),
+      intents = c("import_dataset", "load_counts_matrix", "load_spatial_directory"),
+      side_effects = "writes_scenario_json",
+      requires_armed = TRUE,
+      requires_session = TRUE
+    )
+  )
+
+  # 4. transcripto_drive_status
+  .ts_register_tool(
+    name = "transcripto_drive_status",
+    description = paste0(
+      "Read-only. Report the live Biomentat drive session: protocol, ",
+      "viewer mode, pid, started_at, heartbeat freshness and job state. ",
+      "Returns a domain error code (NO_SESSION, STALE_SESSION, ",
+      "INVALID_PROTOCOL, READ_FAILED) in structuredContent when the session ",
+      "is absent, stale or untrustworthy. Never writes and never runs code."),
+    inputSchema = list(type = "object", properties = empty_obj,
+                       additionalProperties = FALSE),
+    handler = .ts_tool_status,
+    annotations = list(
+      title = "Read Live Session Status",
+      readOnlyHint = TRUE,
+      destructiveHint = FALSE,
+      idempotentHint = TRUE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "observation",
+      modalities = c("session"),
+      intents = c("check_session_health", "get_session_id", "check_heartbeat"),
+      side_effects = "none",
+      requires_armed = FALSE,
+      requires_session = FALSE
+    )
+  )
+
+  # 5. transcripto_drive_read_result
+  .ts_register_tool(
+    name = "transcripto_drive_read_result",
+    description = paste0(
+      "Read-only. Read the drive verdict (tools/_drive/result.json) of the ",
+      "live session: status, ack_seq, applied_at, active_module, errors, ",
+      "warnings and the object snapshot. The verdict is only trusted when ",
+      "its session identity matches the live session; a leftover verdict ",
+      "yields RESULT_SESSION_MISMATCH. Never writes and never runs code."),
+    inputSchema = list(type = "object", properties = empty_obj,
+                       additionalProperties = FALSE),
+    handler = .ts_tool_read_result,
+    annotations = list(
+      title = "Read Drive Verdict",
+      readOnlyHint = TRUE,
+      destructiveHint = FALSE,
+      idempotentHint = TRUE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "observation",
+      modalities = c("session", "bulk", "sc", "spatial"),
+      intents = c("read_last_verdict", "inspect_module_vocabulary"),
+      side_effects = "none",
+      requires_armed = FALSE,
+      requires_session = TRUE
+    )
+  )
+
+  # 6. transcripto_drive_snapshot
+  .ts_register_tool(
+    name = "transcripto_drive_snapshot",
+    description = paste0(
+      "Read-only and PASSIVE. Report the object snapshot published by the live ",
+      "session's LAST verdict (tools/_drive/result.json), through a closed, ",
+      "bounded projection: has_data, object_class, n_genes, n_samples, ",
+      "error_state and per-module counters. Sample names, gene names, matrices, ",
+      "absolute paths, the session token and raw logs are NEVER published. ",
+      "Protocol state is reported separately from business state; the answer ",
+      "marks whether the observation is stale and NEVER claims an analysis ",
+      "finished. This tool issues no scenario and does not wait: it observes ",
+      "what the app already published. Refusals: NO_SESSION, STALE_SESSION, ",
+      "INVALID_PROTOCOL, READ_FAILED, RESULT_SESSION_MISMATCH, SESSION_MISMATCH."),
+    inputSchema = list(
+      type = "object",
+      properties = list(
+        expect = list(
+          type = "object",
+          description = paste0(
+            "Optional pin. If `session_id` is given it must match the live ",
+            "session's DERIVED id exactly, otherwise SESSION_MISMATCH. Use it to ",
+            "observe the session you inspected and fail loudly if another has ",
+            "taken over."),
+          properties = list(session_id = list(type = "string")),
+          additionalProperties = FALSE)),
+      additionalProperties = FALSE),
+    handler = .ts_tool_snapshot,
+    annotations = list(
+      title = "Read Passive Object Snapshot",
+      readOnlyHint = TRUE,
+      destructiveHint = FALSE,
+      idempotentHint = TRUE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "observation",
+      modalities = c("session", "bulk", "sc", "spatial"),
+      intents = c("inspect_loaded_data_summary", "check_module_counters"),
+      side_effects = "none",
+      requires_armed = FALSE,
+      requires_session = TRUE
+    )
+  )
+
+  # 7. transcripto_drive_set_inputs (M3b)
+  .ts_register_tool(
+    name = "transcripto_drive_set_inputs",
+    description = paste0(
+      "CONTROLLED WRITE. Set allowlisted Shiny inputs for ONE module by writing ",
+      "ONE tools/_drive/scenario.json with action=set_inputs, then stop. Values ",
+      "are validated HERE (type, enum, bounds, length, payload size) BEFORE the ",
+      "write, because the app accepts an out-of-range select value silently. ",
+      "Five session-derived selects (condition_col, covariates, group_ref, ",
+      "group_target, scores_source) are addressed BY INDEX: the wire value is ",
+      "{index, vocab_rev} — a position in the app's PUBLISHED vocabulary ",
+      "(transcripto_drive_read_result -> snapshot.modules.<module>.vocabulary) ",
+      "and the revision pinned from that observation; the app resolves the ",
+      "index into its own choices at apply time. ",
+      "Requires a live, ARMED session and a non-wildcard `expect.session_token`. ",
+      "Refuses unknown modules and inputs, module/input mismatches, stale or ",
+      "replayed seq, an oversized payload, and for indexed inputs a missing or ",
+      "empty vocabulary (INPUT_NOT_READY), a superseded revision (VOCAB_STALE), ",
+      "an out-of-range index (INDEX_OUT_OF_RANGE), or ref == target ",
+      "(PAYLOAD_REFUSED). Never clicks a button, never runs an action, never ",
+      "waits, never touches a Shiny input directly, and never echoes a value ",
+      "back. Refusals: NO_SESSION, STALE_SESSION, INVALID_PROTOCOL, ",
+      "READ_FAILED, AMBIGUOUS_SESSION, SESSION_MISMATCH, ",
+      "SESSION_ASSERTION_REQUIRED, SESSION_NOT_ARMED, MODULE_NOT_ALLOWED, ",
+      "INPUT_NOT_ALLOWED, INPUT_MODULE_MISMATCH, VALUE_REFUSED, PAYLOAD_REFUSED, ",
+      "PAYLOAD_TOO_LARGE, SEQ_STALE, INPUT_NOT_READY, VOCAB_STALE, ",
+      "INDEX_OUT_OF_RANGE, SCENARIO_WRITE_FAILED."),
+    inputSchema = list(
+      type = "object",
+      properties = list(
+        seq = list(
+          type = "integer", minimum = 1L,
+          description = paste0(
+            "Monotonic scenario sequence. MUST be greater than the session's ",
+            "last_seq, otherwise SEQ_STALE.")),
+        module = list(
+           type = "string", enum = as.list(TS_MCP_SET_INPUT_MODULES),
+           description = "The one module every input must belong to."),
+        inputs = list(
+          type = "object",
+          description = paste0(
+            "inputId -> value. Every id must be exposed by M3b and owned by ",
+            "`module`; values are validated against a server-side schema. ",
+            "Session-derived selects take {index, vocab_rev} — an index into ",
+            "the app's published vocabulary, never the raw name.")),
+        preserve_data = list(
+          type = "boolean",
+          description = "Defaults to true. False is refused by design in this grade."),
+        expect = list(
+          type = "object",
+          description = paste0(
+            "REQUIRED. A write must NAME its session: `session_id` (the DERIVED ",
+            "id published by transcripto_drive_status) is mandatory and the ",
+            "wildcard '*' is never accepted. The raw token is never published."),
+          properties = list(
+            session_id = list(type = "string"),
+            pid = list(type = "integer"),
+            started_at = list(type = "string")),
+          required = list("session_id"),
+          additionalProperties = FALSE)),
+      required = list("seq", "module", "inputs", "expect"),
+      additionalProperties = FALSE),
+    handler = .ts_tool_set_inputs,
+    annotations = list(
+      title = "Set Module Analysis Parameters",
+      readOnlyHint = FALSE,
+      destructiveHint = FALSE,
+      idempotentHint = FALSE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "configuration",
+      modalities = c("bulk", "spatial"),
+      intents = c("configure_analysis_parameters", "set_contrast_or_threshold"),
+      side_effects = "writes_scenario_json",
+      requires_armed = TRUE,
+      requires_session = TRUE
+    )
+  )
+
+  # 8. transcripto_drive_run (M3c)
+  .ts_register_tool(
+    name = "transcripto_drive_run",
+    description = paste0(
+      "CONTROLLED WRITE. Start ONE allowlisted run action for ONE module by ",
+      "writing ONE tools/_drive/scenario.json with action=run_pipeline, then ",
+      "stop. Requires a live, ARMED session and a non-wildcard ",
+      "`expect.session_id`. Refuses an unknown or ambiguous action, a button ",
+      "belonging to another module, a busy session (Contract B, read from the ",
+      "published verdict), a stale or replayed seq, and a non-monotonic seq. ",
+      "Reports `accepted` and NOTHING more: the run's own state ",
+      "(applied|running|done|error|invalid) is published later in result.json. ",
+      "Never clicks a button, never evaluates R, never calls Shiny/Seurat/DESeq2 ",
+      "or a pathway function, never waits. Refusals: NO_SESSION, STALE_SESSION, ",
+      "INVALID_PROTOCOL, READ_FAILED, AMBIGUOUS_SESSION, SESSION_MISMATCH, ",
+      "SESSION_ASSERTION_REQUIRED, SESSION_NOT_ARMED, MODULE_NOT_ALLOWED, ",
+      "ACTION_NOT_ALLOWED, ACTION_AMBIGUOUS, BUTTON_MODULE_MISMATCH, ",
+      "JOB_ALREADY_RUNNING, PAYLOAD_REFUSED, PAYLOAD_TOO_LARGE, SEQ_STALE, ",
+      "SCENARIO_WRITE_FAILED."),
+    inputSchema = list(
+      type = "object",
+      properties = list(
+        seq = list(
+          type = "integer", minimum = 1L,
+          description = paste0(
+            "Monotonic scenario sequence. MUST be greater than the session's ",
+            "last_seq, otherwise SEQ_STALE.")),
+        module = list(
+          type = "string", enum = as.list(TS_DRIVE_MODULES),
+          description = "The one module the run action belongs to."),
+        button = list(
+          type = "string",
+          enum = as.list(unique(unlist(TS_MCP_RUN_BUTTONS))),
+          description = paste0(
+            "The run action to fire. OPTIONAL only when the module exposes ",
+            "exactly one; with several, omitting it yields ACTION_AMBIGUOUS.")),
+        preserve_data = list(type = "boolean"),
+        expect = list(
+          type = "object",
+          description = paste0(
+            "REQUIRED. A write must NAME its session: `session_id` (the DERIVED ",
+            "id published by transcripto_drive_status) is mandatory and the ",
+            "wildcard '*' is never accepted. The raw token is never published."),
+          properties = list(
+            session_id = list(type = "string"),
+            pid = list(type = "integer"),
+            started_at = list(type = "string")),
+          required = list("session_id"),
+          additionalProperties = FALSE)),
+      required = list("seq", "module", "expect"),
+      additionalProperties = FALSE),
+    handler = .ts_tool_run,
+    annotations = list(
+      title = "Trigger Module Compute Pipeline",
+      readOnlyHint = FALSE,
+      destructiveHint = FALSE,
+      idempotentHint = FALSE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "execution",
+      modalities = c("bulk", "sc", "spatial"),
+      intents = c("run_analysis_pipeline", "execute_module_action"),
+      side_effects = "writes_scenario_json",
+      requires_armed = TRUE,
+      requires_session = TRUE
+    )
+  )
+
+  # 9. transcripto_drive_wait (M4)
+  .ts_register_tool(
+    name = "transcripto_drive_wait",
+    description = paste0(
+      "Bounded observation of ONE already-authorised run_pipeline seq. Polls ",
+      "tools/_drive/result.json until ack_seq == seq reaches a TERMINAL status, ",
+      "or timeout_s elapses. An UNCHANGED verdict is classified as stalled, ",
+      "never as progress; during a long SYNCHRONOUS job the verdict is static ",
+      "and the heartbeat stalls BY DESIGN, which never aborts the wait. ",
+      "`timeout` means only that THIS CALL ended: never that the job failed or ",
+      "finished. Requires a non-wildcard `expect.session_id`. With ",
+      "observe=true, and ONLY after a terminal verdict, it writes exactly ONE ",
+      "snapshot scenario and returns the module's published state; it never ",
+      "writes while a run is in flight. `business_state.completion_verified` is ",
+      "always false: no application-level completion contract exists. Refusals: ",
+      "NO_SESSION, INVALID_PROTOCOL, READ_FAILED, SESSION_MISMATCH, ",
+      "SESSION_ASSERTION_REQUIRED, SESSION_LOST, SEQ_STALE, SCENARIO_WRITE_FAILED, ",
+      "OBSERVE_FAILED, OBSERVE_SKIPPED_NO_TERMINAL."),
+    inputSchema = list(
+      type = "object",
+      properties = list(
+        seq = list(type = "integer", minimum = 1L,
+                   description = "The seq of the run_pipeline scenario to track."),
+        module = list(type = "string", enum = as.list(TS_DRIVE_MODULES),
+                      description = "The module the run action belonged to."),
+        timeout_s = list(type = "integer", minimum = 1L,
+                         maximum = TS_MCP_WAIT_MAX_S,
+                         description = "Wall-clock bound for THIS call. Default 120."),
+        poll_ms = list(type = "integer", minimum = TS_MCP_WAIT_MIN_MS,
+                       maximum = TS_MCP_WAIT_MAX_MS,
+                       description = "Poll interval; backs off while stalled. Default 500."),
+        observe = list(type = "boolean",
+                       description = paste0(
+                         "Take exactly ONE fresh snapshot AFTER a terminal verdict and ",
+                         "return the module's published state. Never during a running job.")),
+        expect = list(
+          type = "object",
+          description = paste0(
+            "REQUIRED. `session_id` (the DERIVED id published by ",
+            "transcripto_drive_status) is mandatory; the wildcard '*' is never ",
+            "accepted and the raw token is never published."),
+          properties = list(
+            session_id = list(type = "string"),
+            pid = list(type = "integer"),
+            started_at = list(type = "string")),
+          required = list("session_id"),
+          additionalProperties = FALSE)),
+      required = list("seq", "module", "expect"),
+      additionalProperties = FALSE),
+    handler = .ts_tool_wait,
+    annotations = list(
+      title = "Wait For Running Job Verdict",
+      readOnlyHint = FALSE,
+      destructiveHint = FALSE,
+      idempotentHint = TRUE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "observation",
+      modalities = c("session", "bulk", "sc", "spatial"),
+      intents = c("wait_for_job_completion", "poll_protocol_verdict"),
+      side_effects = "writes_scenario_json",
+      requires_armed = FALSE,
+      requires_session = TRUE
+    )
+  )
+
+  # 10. transcripto_drive_set_armed (M2)
+  .ts_register_tool(
+    name = "transcripto_drive_set_armed",
+    description = paste0(
+      "Controlled arm/disarm of the LIVE drive poller. Writes ONLY ",
+      "tools/_drive/arm.json, atomically, using the live session's own token. ",
+      "Validates protocol, session identity (pid, started_at, session_token), ",
+      "heartbeat freshness and selected-session metadata before writing, and ",
+      "refuses stale, mismatched, malformed or ambiguous sessions ",
+      "(NO_SESSION, STALE_SESSION, INVALID_PROTOCOL, READ_FAILED, ",
+      "AMBIGUOUS_SESSION, SESSION_MISMATCH, ARM_WRITE_FAILED). THE ARMING ",
+      "BOOTSTRAP: because the poller beats only while ARMED, an unarmed ",
+      "session's handshake goes stale within the heartbeat timeout; this is ",
+      "the ONE tool that may act on a stale handshake, and only when the ",
+      "caller pins the session identity (session_id, or pid + started_at) ",
+      "and the pinned pid is alive — reported as rescued_stale = true. A ",
+      "wrong pin still fails closed (SESSION_MISMATCH). Never accepts the ",
+      "wildcard token, never waits, never mutates Shiny inputs, never runs ",
+      "code."),
+    inputSchema = list(
+      type = "object",
+      properties = list(
+        armed = list(
+          type = "boolean",
+          description = "true = arm the poller, false = disarm it. Required."),
+        expect = list(
+          type = "object",
+          description = paste0(
+            "Optional pin. Each field provided must match the live session ",
+            "EXACTLY, otherwise SESSION_MISMATCH. Use it to arm the session you ",
+            "inspected and fail loudly if another has taken over."),
+          properties = list(
+            pid = list(type = "integer"),
+            started_at = list(type = "string"),
+            session_token = list(type = "string")),
+          additionalProperties = FALSE)),
+      required = list("armed"),
+      additionalProperties = FALSE),
+    handler = .ts_tool_set_armed,
+    annotations = list(
+      title = "Arm Or Disarm Drive Poller",
+      readOnlyHint = FALSE,
+      destructiveHint = FALSE,
+      idempotentHint = TRUE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "session_control",
+      modalities = c("session"),
+      intents = c("arm_drive_poller", "disarm_drive_poller", "rescue_stale_session"),
+      side_effects = "writes_arm_json",
+      requires_armed = FALSE,
+      requires_session = TRUE
+    )
+  )
+
+  # 11. transcripto_drive_state (M2)
+  .ts_register_tool(
+    name = "transcripto_drive_state",
+    description = paste0(
+      "Read the passive observation channel state digest emitted by the live ",
+      "Biomentat session. Returns the latest state.json (session token, active module, ",
+      "pipeline status, recent error count, and state hash). Differs from ",
+      "transcripto_drive_status in that it provides a lightweight reactive ",
+      "fingerprint without triggering an active drive read."),
+    inputSchema = list(
+      type = "object",
+      properties = empty_obj,
+      additionalProperties = FALSE),
+    handler = .ts_tool_state,
+    annotations = list(
+      title = "Read Passive State Digest",
+      readOnlyHint = TRUE,
+      destructiveHint = FALSE,
+      idempotentHint = TRUE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "observation",
+      modalities = c("session"),
+      intents = c("read_reactive_state_digest", "check_active_module"),
+      side_effects = "none",
+      requires_armed = FALSE,
+      requires_session = TRUE
+    )
+  )
+
+  # 12. transcripto_drive_datasets (P2)
+  .ts_register_tool(
+    name = "transcripto_drive_datasets",
+    description = paste0(
+      "List the datasets deposited in the Biomentat datasets root ",
+      "(biomentat-exchange/v1 drops; PoC dataset directory, fiche 2026-11-02 ",
+      "section 3.4). PASSIVE and READ-ONLY, and SESSION-FREE unlike ",
+      "transcripto_drive_state: a filesystem listing answers before the app ",
+      "is started. The root is resolved by the engine (TRANSCRIPTO_DATASETS_DIR ",
+      "-> TRANSCRIPTO_DRIVE_DATA_DIR/datasets -> <project root>/data_sc/datasets) ",
+      "and confined by the SAME allowlisted-roots rule as every import path ",
+      "(OUTSIDE_ALLOWLIST refusal, never widened). Light listing: manifest ",
+      "summary (dataset_id, species, matrix_type), directory and mtime per ",
+      "dataset — NO validation verdicts (validate=FALSE); the app-side scan ",
+      "(Bulk import > Datasets decouverts) validates and loads."),
+    inputSchema = list(
+      type = "object",
+      properties = empty_obj,
+      additionalProperties = FALSE),
+    handler = .ts_tool_datasets,
+    annotations = list(
+      title = "List Discovered Datasets",
+      readOnlyHint = TRUE,
+      destructiveHint = FALSE,
+      idempotentHint = TRUE,
+      openWorldHint = FALSE
+    ),
+    semantic = list(
+      category = "data_ingestion",
+      modalities = c("bulk", "sc", "spatial"),
+      intents = c("list_available_datasets", "discover_local_drops"),
+      side_effects = "none",
+      requires_armed = FALSE,
+      requires_session = FALSE
+    )
+  )
+
+  invisible(.ts_tool_order)
+}
+
+.ts_init_tool_registry()
 
 .ts_tools <- function() {
-  empty_obj <- stats::setNames(list(), character(0))
-  list(
-    # S2 — deliberately the SHORTEST tool description in the inventory, because
-    # the tool's whole contract is that there is nothing to choose. Every extra
-    # parameter here would be a decision handed to a remote caller, and the
-    # artefact is written by the app into a directory the app controls.
-    list(name = "transcripto_drive_export",
-         description = paste0(
-           "Export the artefact of ONE declared export route by writing ONE ",
-           "scenario.json with action=export_result, then stop. The caller names ",
-           "only WHICH closed route (`module`: ",
-           paste(names(TS_DRIVE_EXPORT_ROUTES), collapse = ", "),
-           ") - the app then chooses the handler, the outputId, the destination, ",
-           "the filename and the format, writes into an application-controlled ",
-           "bounded temporary directory, and returns a redacted descriptor ",
-           "(format, file basename, bytes, n_rows, n_cols, column names). No ",
-           "sample name, no contrast label, no absolute path and no row data. ",
-           "Column contracts (the app's declared schema; the wire sanitises ",
-           "8+-character alphanumeric names to <redacted> with positions ",
-           "preserved, so map hidden names by position): ",
-           .ts_export_contract_text(),
-           ". Refuses a session with no result (INVALID), and refuses any field ",
-           "beyond `seq`, `module` and `expect`."),
-         inputSchema = list(
-           type = "object",
-           properties = list(
-             seq = list(
-               type = "integer",
-               minimum = 1,
-               description = paste0(
-                 "Protocol counter, must be greater than the session's last_seq. ",
-                 "Required. It is a sequence number, not a choice about the file.")),
-             module = list(
-               type = "string", enum = as.list(names(TS_DRIVE_EXPORT_ROUTES)),
-               description = paste0(
-                 "WHICH declared route to export. Required since S2b: a choice ",
-                 "among the app's closed route table, never about the artefact.")),
-             expect = list(
-               type = "object",
-               description = paste0(
-                 "Required pin. Each field provided must match the live session ",
-                 "EXACTLY, otherwise SESSION_MISMATCH. An export writes into the ",
-                 "live session's own temporary directory, so it must name it."),
-               properties = list(
-                 pid = list(type = "integer"),
-                 started_at = list(type = "string"),
-                 session_token = list(type = "string"),
-                 session_id = list(type = "string")),
-               additionalProperties = FALSE)),
-           required = c("seq", "module", "expect"),
-           additionalProperties = FALSE)),
-    # R1 — the ONE bounded read. Deliberately THREE arguments: a counter, a
-    # height, a pin. No route, no handle: the stems carry 8+-character runs the
-    # sanitiser redacts (bulk_pathways_enrichment, spatial_qc_hotspots, ...),
-    # so a caller could not echo a valid handle back — the tool reads THE
-    # current export verdict, one read per completed export. `expect` mirrors
-    # the export assertion exactly (session_id mandatory, wildcard refused)
-    # WITHOUT session_token: the raw token is never published, the assertion
-    # derives the id from the live heartbeat.
-    list(name = "transcripto_drive_read",
-         description = paste0(
-           "BOUNDED READ of the current exported artefact by writing ONE ",
-           "scenario.json with action=read_export, then stop. The caller names ",
-           "NOTHING about the file — no route, no handle, no path: the read ",
-           "targets the current export verdict (one read per completed export; ",
-           "export again to read again). The APP resolves the file from its own ",
-           "verdict, streams it (header + first K data lines, never a full ",
-           "load), clamps the preview to max_rows (default 20, ceiling 200) and ",
-           "to a 256 KiB serialized block measured AFTER projection, and writes ",
-           "a bounded verdict: preview rows plus a per-column summary ",
-           "(name, class, n_missing_in_preview only — no min/max/n_distinct/",
-           "top values). Preview CELL VALUES travel verbatim under the declared ",
-           "D1 policy: max 200 chars; '..', '/', '\\', '~' and control ",
-           "characters are refused; a failing cell is replaced by <over-200-chars> ",
-           "or <guarded> and counted — cells containing '/' (ORA geneID lists) ",
-           "therefore do NOT travel verbatim. Every structural field (file, ",
-           "route, handle, columns, module, action, error codes) stays ",
-           "sanitised: 8+-character alphanumeric runs arrive as <redacted> with ",
-           "positions preserved, so map column names by position with the ",
-           "declared contracts: ",
-           .ts_export_contract_text(),
-           ". Refuses NO_EXPORT_TARGET when there is no completed export to ",
-           "read (derived statelessly from result.json), and refuses any field ",
-           "beyond `seq`, `max_rows` and `expect`."),
-         inputSchema = list(
-           type = "object",
-           properties = list(
-             seq = list(
-               type = "integer",
-               minimum = 1,
-               description = paste0(
-                 "Protocol counter, must be greater than the session's last_seq. ",
-                 "Required. It is a sequence number, not a choice about the file.")),
-             max_rows = list(
-               type = "integer",
-               minimum = 1L,
-               maximum = 200L,
-               description = paste0(
-                 "Bounded preview height. Absent = 20. The app clamps again: ",
-                 "the app is the authority on what it streams.")),
-             expect = list(
-               type = "object",
-               description = paste0(
-                 "Required pin, mirroring the export assertion exactly: ",
-                 "session_id is MANDATORY (SESSION_ASSERTION_REQUIRED), the ",
-                 "wildcard '*' is never accepted (AMBIGUOUS_SESSION), and the ",
-                 "raw session_token is deliberately NOT a field. A read ",
-                 "triggers an app-side action, so it must name the live, ARMED ",
-                 "session. A wrong pin fails closed as SESSION_MISMATCH."),
-               properties = list(
-                 pid = list(type = "integer"),
-                 started_at = list(type = "string"),
-                 session_id = list(type = "string")),
-               additionalProperties = FALSE)),
-           required = c("seq", "expect"),
-           additionalProperties = FALSE)),
-    list(name = "transcripto_drive_import",
-         description = paste0(
-           "CONTROLLED WRITE. Import data for ONE importer module by writing ONE ",
-           "tools/_drive/scenario.json, then stop. The action follows the module: ",
-           "import_path for the path-driven importers (import_velocity: path ",
-           "required, optional name — points at a CONFINED file, loom/h5ad/rds, ",
-           "feeding a fileInput pathway the browser agent cannot drive), ",
-           "import_file for the others (import_bulk: counts_path required; ",
-           "optional metadata_path, mode merged_matrix|per_sample; import_spatial: ",
-           "dir_path required; optional sample_name, technology ",
-           "visium|xenium|cosmx|slideseq; import_sc: dir_path + sample_name ",
-           "required). Values are validated HERE (key set, required keys, enums, ",
-           "text bounds, no `..` component) BEFORE the write. Root confinement, ",
-           "existence, extension allowlist and loader kind are the APP's verdict: ",
-           "its refusal arrives as an `invalid` verdict in result.json, not as a ",
-           "tool error. Requires a live, ARMED session and a non-wildcard ",
-           "`expect.session_id`. Never reads a file, never loads data, never ",
-           "waits, never echoes a path back. Refusals: NO_SESSION, ",
-           "STALE_SESSION, INVALID_PROTOCOL, READ_FAILED, AMBIGUOUS_SESSION, ",
-           "SESSION_MISMATCH, SESSION_ASSERTION_REQUIRED, SESSION_NOT_ARMED, ",
-           "MODULE_NOT_ALLOWED, PAYLOAD_REFUSED, PAYLOAD_TOO_LARGE, SEQ_STALE, ",
-           "SCENARIO_WRITE_FAILED."),
-         inputSchema = list(
-           type = "object",
-           properties = list(
-             seq = list(
-               type = "integer", minimum = 1L,
-               description = paste0(
-                 "Monotonic scenario sequence. MUST be greater than the session's ",
-                 "last_seq, otherwise SEQ_STALE.")),
-             module = list(
-               type = "string", enum = as.list(names(TS_MCP_IMPORT_SCHEMA)),
-               description = "The importer the block belongs to."),
-             import = list(
-               type = "object",
-               description = paste0(
-                 "The importer's block: inputId -> value. Every key must belong ",
-                 "to the named importer; values are validated against the S3 ",
-                 "schema. Paths are never echoed back.")),
-             expect = list(
-               type = "object",
-               description = paste0(
-                 "REQUIRED. A write must NAME its session: `session_id` (the ",
-                 "DERIVED id published by transcripto_drive_status) is mandatory ",
-                 "and the wildcard '*' is never accepted."),
-               properties = list(
-                 session_id = list(type = "string"),
-                 pid = list(type = "integer"),
-                 started_at = list(type = "string")),
-               required = list("session_id"),
-               additionalProperties = FALSE)),
-           required = list("seq", "module", "import", "expect"),
-           additionalProperties = FALSE)),
-    list(name = "transcripto_drive_status",
-         description = paste0(
-           "Read-only. Report the live Biomentat drive session: protocol, ",
-           "viewer mode, pid, started_at, heartbeat freshness and job state. ",
-           "Returns a domain error code (NO_SESSION, STALE_SESSION, ",
-           "INVALID_PROTOCOL, READ_FAILED) in structuredContent when the session ",
-           "is absent, stale or untrustworthy. Never writes and never runs code."),
-         inputSchema = list(type = "object", properties = empty_obj,
-                            additionalProperties = FALSE)),
-    list(name = "transcripto_drive_read_result",
-         description = paste0(
-           "Read-only. Read the drive verdict (tools/_drive/result.json) of the ",
-           "live session: status, ack_seq, applied_at, active_module, errors, ",
-           "warnings and the object snapshot. The verdict is only trusted when ",
-           "its session identity matches the live session; a leftover verdict ",
-           "yields RESULT_SESSION_MISMATCH. Never writes and never runs code."),
-         inputSchema = list(type = "object", properties = empty_obj,
-                            additionalProperties = FALSE)),
-    list(name = "transcripto_drive_snapshot",
-         description = paste0(
-           "Read-only and PASSIVE. Report the object snapshot published by the live ",
-           "session's LAST verdict (tools/_drive/result.json), through a closed, ",
-           "bounded projection: has_data, object_class, n_genes, n_samples, ",
-           "error_state and per-module counters. Sample names, gene names, matrices, ",
-           "absolute paths, the session token and raw logs are NEVER published. ",
-           "Protocol state is reported separately from business state; the answer ",
-           "marks whether the observation is stale and NEVER claims an analysis ",
-           "finished. This tool issues no scenario and does not wait: it observes ",
-           "what the app already published. Refusals: NO_SESSION, STALE_SESSION, ",
-           "INVALID_PROTOCOL, READ_FAILED, RESULT_SESSION_MISMATCH, SESSION_MISMATCH."),
-         inputSchema = list(
-           type = "object",
-           properties = list(
-             expect = list(
-               type = "object",
-               description = paste0(
-                 "Optional pin. If `session_id` is given it must match the live ",
-                 "session's DERIVED id exactly, otherwise SESSION_MISMATCH. Use it to ",
-                 "observe the session you inspected and fail loudly if another has ",
-                 "taken over."),
-               properties = list(session_id = list(type = "string")),
-               additionalProperties = FALSE)),
-           additionalProperties = FALSE)),
-    list(name = "transcripto_drive_set_inputs",
-         description = paste0(
-           "CONTROLLED WRITE. Set allowlisted Shiny inputs for ONE module by writing ",
-           "ONE tools/_drive/scenario.json with action=set_inputs, then stop. Values ",
-           "are validated HERE (type, enum, bounds, length, payload size) BEFORE the ",
-           "write, because the app accepts an out-of-range select value silently. ",
-           "Five session-derived selects (condition_col, covariates, group_ref, ",
-           "group_target, scores_source) are addressed BY INDEX: the wire value is ",
-           "{index, vocab_rev} — a position in the app's PUBLISHED vocabulary ",
-           "(transcripto_drive_read_result -> snapshot.modules.<module>.vocabulary) ",
-           "and the revision pinned from that observation; the app resolves the ",
-           "index into its own choices at apply time. ",
-           "Requires a live, ARMED session and a non-wildcard `expect.session_token`. ",
-           "Refuses unknown modules and inputs, module/input mismatches, stale or ",
-           "replayed seq, an oversized payload, and for indexed inputs a missing or ",
-           "empty vocabulary (INPUT_NOT_READY), a superseded revision (VOCAB_STALE), ",
-           "an out-of-range index (INDEX_OUT_OF_RANGE), or ref == target ",
-           "(PAYLOAD_REFUSED). Never clicks a button, never runs an action, never ",
-           "waits, never touches a Shiny input directly, and never echoes a value ",
-           "back. Refusals: NO_SESSION, STALE_SESSION, INVALID_PROTOCOL, ",
-           "READ_FAILED, AMBIGUOUS_SESSION, SESSION_MISMATCH, ",
-           "SESSION_ASSERTION_REQUIRED, SESSION_NOT_ARMED, MODULE_NOT_ALLOWED, ",
-           "INPUT_NOT_ALLOWED, INPUT_MODULE_MISMATCH, VALUE_REFUSED, PAYLOAD_REFUSED, ",
-           "PAYLOAD_TOO_LARGE, SEQ_STALE, INPUT_NOT_READY, VOCAB_STALE, ",
-           "INDEX_OUT_OF_RANGE, SCENARIO_WRITE_FAILED."),
-         inputSchema = list(
-           type = "object",
-           properties = list(
-             seq = list(
-               type = "integer", minimum = 1L,
-               description = paste0(
-                 "Monotonic scenario sequence. MUST be greater than the session's ",
-                 "last_seq, otherwise SEQ_STALE.")),
-             module = list(
-                type = "string", enum = as.list(TS_MCP_SET_INPUT_MODULES),
-                description = "The one module every input must belong to."),
-             inputs = list(
-               type = "object",
-               description = paste0(
-                 "inputId -> value. Every id must be exposed by M3b and owned by ",
-                 "`module`; values are validated against a server-side schema. ",
-                 "Session-derived selects take {index, vocab_rev} — an index into ",
-                 "the app's published vocabulary, never the raw name.")),
-             preserve_data = list(
-               type = "boolean",
-               description = "Defaults to true. False is refused by design in this grade."),
-             expect = list(
-               type = "object",
-               description = paste0(
-                 "REQUIRED. A write must NAME its session: `session_id` (the DERIVED ",
-                 "id published by transcripto_drive_status) is mandatory and the ",
-                 "wildcard '*' is never accepted. The raw token is never published."),
-               properties = list(
-                 session_id = list(type = "string"),
-                 pid = list(type = "integer"),
-                 started_at = list(type = "string")),
-               required = list("session_id"),
-               additionalProperties = FALSE)),
-           required = list("seq", "module", "inputs", "expect"),
-           additionalProperties = FALSE)),
-    list(name = "transcripto_drive_run",
-         description = paste0(
-           "CONTROLLED WRITE. Start ONE allowlisted run action for ONE module by ",
-           "writing ONE tools/_drive/scenario.json with action=run_pipeline, then ",
-           "stop. Requires a live, ARMED session and a non-wildcard ",
-           "`expect.session_id`. Refuses an unknown or ambiguous action, a button ",
-           "belonging to another module, a busy session (Contract B, read from the ",
-           "published verdict), a stale or replayed seq, and a non-monotonic seq. ",
-           "Reports `accepted` and NOTHING more: the run's own state ",
-           "(applied|running|done|error|invalid) is published later in result.json. ",
-           "Never clicks a button, never evaluates R, never calls Shiny/Seurat/DESeq2 ",
-           "or a pathway function, never waits. Refusals: NO_SESSION, STALE_SESSION, ",
-           "INVALID_PROTOCOL, READ_FAILED, AMBIGUOUS_SESSION, SESSION_MISMATCH, ",
-           "SESSION_ASSERTION_REQUIRED, SESSION_NOT_ARMED, MODULE_NOT_ALLOWED, ",
-           "ACTION_NOT_ALLOWED, ACTION_AMBIGUOUS, BUTTON_MODULE_MISMATCH, ",
-           "JOB_ALREADY_RUNNING, PAYLOAD_REFUSED, PAYLOAD_TOO_LARGE, SEQ_STALE, ",
-           "SCENARIO_WRITE_FAILED."),
-         inputSchema = list(
-           type = "object",
-           properties = list(
-             seq = list(
-               type = "integer", minimum = 1L,
-               description = paste0(
-                 "Monotonic scenario sequence. MUST be greater than the session's ",
-                 "last_seq, otherwise SEQ_STALE.")),
-             module = list(
-               type = "string", enum = as.list(TS_DRIVE_MODULES),
-               description = "The one module the run action belongs to."),
-             button = list(
-               type = "string",
-               enum = as.list(unique(unlist(TS_MCP_RUN_BUTTONS))),
-               description = paste0(
-                 "The run action to fire. OPTIONAL only when the module exposes ",
-                 "exactly one; with several, omitting it yields ACTION_AMBIGUOUS.")),
-             preserve_data = list(type = "boolean"),
-             expect = list(
-               type = "object",
-               description = paste0(
-                 "REQUIRED. A write must NAME its session: `session_id` (the DERIVED ",
-                 "id published by transcripto_drive_status) is mandatory and the ",
-                 "wildcard '*' is never accepted. The raw token is never published."),
-               properties = list(
-                 session_id = list(type = "string"),
-                 pid = list(type = "integer"),
-                 started_at = list(type = "string")),
-               required = list("session_id"),
-               additionalProperties = FALSE)),
-           required = list("seq", "module", "expect"),
-           additionalProperties = FALSE)),
-    list(name = "transcripto_drive_wait",
-         description = paste0(
-           "Bounded observation of ONE already-authorised run_pipeline seq. Polls ",
-           "tools/_drive/result.json until ack_seq == seq reaches a TERMINAL status, ",
-           "or timeout_s elapses. An UNCHANGED verdict is classified as stalled, ",
-           "never as progress; during a long SYNCHRONOUS job the verdict is static ",
-           "and the heartbeat stalls BY DESIGN, which never aborts the wait. ",
-           "`timeout` means only that THIS CALL ended: never that the job failed or ",
-           "finished. Requires a non-wildcard `expect.session_id`. With ",
-           "observe=true, and ONLY after a terminal verdict, it writes exactly ONE ",
-           "snapshot scenario and returns the module's published state; it never ",
-           "writes while a run is in flight. `business_state.completion_verified` is ",
-           "always false: no application-level completion contract exists. Refusals: ",
-           "NO_SESSION, INVALID_PROTOCOL, READ_FAILED, SESSION_MISMATCH, ",
-           "SESSION_ASSERTION_REQUIRED, SESSION_LOST, SEQ_STALE, SCENARIO_WRITE_FAILED, ",
-           "OBSERVE_FAILED, OBSERVE_SKIPPED_NO_TERMINAL."),
-         inputSchema = list(
-           type = "object",
-           properties = list(
-             seq = list(type = "integer", minimum = 1L,
-                        description = "The seq of the run_pipeline scenario to track."),
-             module = list(type = "string", enum = as.list(TS_DRIVE_MODULES),
-                           description = "The module the run action belonged to."),
-             timeout_s = list(type = "integer", minimum = 1L,
-                              maximum = TS_MCP_WAIT_MAX_S,
-                              description = "Wall-clock bound for THIS call. Default 120."),
-             poll_ms = list(type = "integer", minimum = TS_MCP_WAIT_MIN_MS,
-                            maximum = TS_MCP_WAIT_MAX_MS,
-                            description = "Poll interval; backs off while stalled. Default 500."),
-             observe = list(type = "boolean",
-                            description = paste0(
-                              "Take exactly ONE fresh snapshot AFTER a terminal verdict and ",
-                              "return the module's published state. Never during a running job.")),
-             expect = list(
-               type = "object",
-               description = paste0(
-                 "REQUIRED. `session_id` (the DERIVED id published by ",
-                 "transcripto_drive_status) is mandatory; the wildcard '*' is never ",
-                 "accepted and the raw token is never published."),
-               properties = list(
-                 session_id = list(type = "string"),
-                 pid = list(type = "integer"),
-                 started_at = list(type = "string")),
-               required = list("session_id"),
-               additionalProperties = FALSE)),
-           required = list("seq", "module", "expect"),
-           additionalProperties = FALSE)),
-    list(name = "transcripto_drive_set_armed",
-         description = paste0(
-           "Controlled arm/disarm of the LIVE drive poller. Writes ONLY ",
-           "tools/_drive/arm.json, atomically, using the live session's own token. ",
-           "Validates protocol, session identity (pid, started_at, session_token), ",
-           "heartbeat freshness and selected-session metadata before writing, and ",
-           "refuses stale, mismatched, malformed or ambiguous sessions ",
-           "(NO_SESSION, STALE_SESSION, INVALID_PROTOCOL, READ_FAILED, ",
-           "AMBIGUOUS_SESSION, SESSION_MISMATCH, ARM_WRITE_FAILED). THE ARMING ",
-           "BOOTSTRAP: because the poller beats only while ARMED, an unarmed ",
-           "session's handshake goes stale within the heartbeat timeout; this is ",
-           "the ONE tool that may act on a stale handshake, and only when the ",
-           "caller pins the session identity (session_id, or pid + started_at) ",
-           "and the pinned pid is alive — reported as rescued_stale = true. A ",
-           "wrong pin still fails closed (SESSION_MISMATCH). Never accepts the ",
-           "wildcard token, never waits, never mutates Shiny inputs, never runs ",
-           "code."),
-         inputSchema = list(
-           type = "object",
-           properties = list(
-             armed = list(
-               type = "boolean",
-               description = "true = arm the poller, false = disarm it. Required."),
-             expect = list(
-               type = "object",
-               description = paste0(
-                 "Optional pin. Each field provided must match the live session ",
-                 "EXACTLY, otherwise SESSION_MISMATCH. Use it to arm the session you ",
-                 "inspected and fail loudly if another has taken over."),
-               properties = list(
-                 pid = list(type = "integer"),
-                 started_at = list(type = "string"),
-                 session_token = list(type = "string")),
-               additionalProperties = FALSE)),
-           required = list("armed"),
-           additionalProperties = FALSE)),
-    list(name = "transcripto_drive_state",
-         description = paste0(
-           "Read the passive observation channel state digest emitted by the live ",
-           "Biomentat session. Returns the latest state.json (session token, active module, ",
-           "pipeline status, recent error count, and state hash). Differs from ",
-           "transcripto_drive_status in that it provides a lightweight reactive ",
-           "fingerprint without triggering an active drive read."),
-         inputSchema = list(
-           type = "object",
-           properties = list(),
-           additionalProperties = FALSE)),
-    list(name = "transcripto_drive_datasets",
-         description = paste0(
-           "List the datasets deposited in the Biomentat datasets root ",
-           "(biomentat-exchange/v1 drops; PoC dataset directory, fiche 2026-11-02 ",
-           "section 3.4). PASSIVE and READ-ONLY, and SESSION-FREE unlike ",
-           "transcripto_drive_state: a filesystem listing answers before the app ",
-           "is started. The root is resolved by the engine (TRANSCRIPTO_DATASETS_DIR ",
-           "-> TRANSCRIPTO_DRIVE_DATA_DIR/datasets -> <project root>/data_sc/datasets) ",
-           "and confined by the SAME allowlisted-roots rule as every import path ",
-           "(OUTSIDE_ALLOWLIST refusal, never widened). Light listing: manifest ",
-           "summary (dataset_id, species, matrix_type), directory and mtime per ",
-           "dataset — NO validation verdicts (validate=FALSE); the app-side scan ",
-           "(Bulk import > Datasets decouverts) validates and loads."),
-         inputSchema = list(
-           type = "object",
-           properties = list(),
-           additionalProperties = FALSE))
-  )
+  lapply(.ts_tool_order, function(nm) {
+    spec <- get(nm, envir = .ts_tool_registry, inherits = FALSE)
+    list(
+      name = spec$name,
+      description = spec$description,
+      inputSchema = spec$inputSchema,
+      annotations = spec$annotations,
+      x_semantic = spec$x_semantic
+    )
+  })
+}
+
+#' Query registered MCP tools by semantic intent, category, modality, or read-only hint
+.ts_resolve_semantic_tools <- function(intent = NULL, category = NULL,
+                                       modality = NULL, read_only = NULL) {
+  out <- list()
+  for (nm in .ts_tool_order) {
+    spec <- get(nm, envir = .ts_tool_registry, inherits = FALSE)
+    sem <- spec$x_semantic
+    if (!is.null(category) && !identical(sem$category, category)) next
+    if (!is.null(modality) && !modality %in% unlist(sem$modalities)) next
+    if (!is.null(intent) && !intent %in% unlist(sem$intents)) next
+    if (!is.null(read_only) && !identical(isTRUE(spec$annotations$readOnlyHint), isTRUE(read_only))) next
+    out[[length(out) + 1L]] <- spec
+  }
+  out
+}
+
+#' Audit semantic tool registry completeness and consistency
+.ts_mcp_semantic_problems <- function() {
+  problems <- character(0L)
+  if (length(.ts_tool_order) != 12L) {
+    problems <- c(problems, sprintf("expected 12 registered tools, got %d", length(.ts_tool_order)))
+  }
+  for (nm in .ts_tool_order) {
+    if (!exists(nm, envir = .ts_tool_registry, inherits = FALSE)) {
+      problems <- c(problems, sprintf("missing registry entry for '%s'", nm))
+      next
+    }
+    spec <- get(nm, envir = .ts_tool_registry, inherits = FALSE)
+    if (!is.function(spec$handler)) {
+      problems <- c(problems, sprintf("tool '%s' has non-function handler", nm))
+    }
+    if (!identical(spec$inputSchema$type, "object")) {
+      problems <- c(problems, sprintf("tool '%s' inputSchema$type != 'object'", nm))
+    }
+    sem <- spec$x_semantic
+    if (is.null(sem) || !sem$category %in% TS_MCP_SEMANTIC_CATEGORIES) {
+      problems <- c(problems, sprintf("tool '%s' has invalid semantic category", nm))
+    }
+    if (is.null(sem) || length(sem$intents) == 0L) {
+      problems <- c(problems, sprintf("tool '%s' has empty semantic intents", nm))
+    }
+    ro_hint <- isTRUE(spec$annotations$readOnlyHint)
+    no_side <- identical(sem$side_effects, "none")
+    if (!identical(ro_hint, no_side)) {
+      problems <- c(problems, sprintf("tool '%s' readOnlyHint vs side_effects mismatch", nm))
+    }
+  }
+  problems
 }
 
 .ts_supported_versions <- c("2024-11-05", "2025-06-18")
@@ -4296,10 +4685,19 @@ if ("--check" %in% .args) {
              } else {
                "OK (the read keep-set, markers and bounds match the app's declared table)"
              })
+  .ts_semantic_problems <- .ts_mcp_semantic_problems()
+  .ts_stderr("  semantic check: ",
+             if (length(.ts_semantic_problems)) {
+               paste0(length(.ts_semantic_problems), " PROBLEM(S): ",
+                      paste(.ts_semantic_problems, collapse = "; "))
+             } else {
+               sprintf("OK (%d tools registered with annotations + x_semantic metadata)",
+                       length(.ts_tool_order))
+             })
   quit(status = if (.ts_have_jsonlite && drive_ok && !length(.ts_schema_problems) &&
                     !length(.ts_run_problems) && !length(.ts_import_problems) &&
                     !length(.ts_export_problems) && !length(.ts_read_problems) &&
-                    !length(.ts_vocab_problems)) 0L else 1L,
+                    !length(.ts_vocab_problems) && !length(.ts_semantic_problems)) 0L else 1L,
        save = "no")
 }
 
