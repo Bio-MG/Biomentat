@@ -34,6 +34,79 @@
   s
 }
 
+# ── Fallback reader for legacy CSC/CSR .h5ad via hdf5r (W2.4 §2.7) ─────────
+.read_legacy_h5ad_hdf5r <- function(path) {
+  if (!requireNamespace("hdf5r", quietly = TRUE)) {
+    stop(errorCondition("Package 'hdf5r' requis pour le lecteur .h5ad legacy.", class = "sc_import_error"))
+  }
+  f <- hdf5r::H5File$new(path, mode = "r")
+  on.exit(try(f$close_all(), silent = TRUE), add = TRUE)
+
+  if (!f$exists("X")) {
+    stop(errorCondition("Groupe/dataset 'X' introuvable dans le fichier .h5ad.", class = "sc_import_error"))
+  }
+  x_obj <- f[["X"]]
+  if (!inherits(x_obj, "H5Group")) {
+    mat_dense <- x_obj$read()
+    if (length(dim(mat_dense)) != 2L) {
+      stop(errorCondition("'X' dense n'est pas une matrice 2D.", class = "sc_import_error"))
+    }
+    return(methods::as(Matrix::Matrix(t(mat_dense), sparse = TRUE), "dgCMatrix"))
+  }
+
+  read_attr <- function(obj, nm) {
+    if (!obj$attr_exists(nm)) return(NULL)
+    tryCatch(obj$attr_open(nm)$read(), error = function(e) NULL)
+  }
+  read_index_vec <- function(grp_name, prefix, n_expected) {
+    if (f$exists(grp_name)) {
+      grp <- f[[grp_name]]
+      if (inherits(grp, "H5Group")) {
+        for (cand in c("_index", "index", "id")) {
+          if (grp$exists(cand)) return(as.character(grp[[cand]]$read()))
+        }
+      } else if (inherits(grp, "H5D")) {
+        df <- tryCatch(grp$read(), error = function(e) NULL)
+        if (is.data.frame(df) && ncol(df) >= 1L) {
+          col <- intersect(c("_index", "index", "id"), names(df))
+          return(as.character(if (length(col)) df[[col[1L]]] else df[[1L]]))
+        }
+      }
+    }
+    paste0(prefix, seq_len(n_expected))
+  }
+
+  data_v <- as.numeric(x_obj[["data"]]$read())
+  idx_v  <- as.integer(x_obj[["indices"]]$read()) + 1L
+  ptr_v  <- as.integer(x_obj[["indptr"]]$read())
+  enc_t  <- as.character(read_attr(x_obj, "encoding-type") %||%
+                         read_attr(x_obj, "h5sparse_format") %||% "csc_matrix")[1L]
+  shp    <- suppressWarnings(as.integer(read_attr(x_obj, "shape")))
+
+  n_cells <- if (length(shp) == 2L && is.finite(shp[1L])) shp[1L] else {
+    if (grepl("csr", enc_t, ignore.case = TRUE)) length(ptr_v) - 1L else max(idx_v, 0L)
+  }
+  n_genes <- if (length(shp) == 2L && is.finite(shp[2L])) shp[2L] else {
+    if (grepl("csc", enc_t, ignore.case = TRUE)) length(ptr_v) - 1L else max(idx_v, 0L)
+  }
+
+  # AnnData X is cells x genes; Seurat expects genes x cells.
+  if (grepl("csr", enc_t, ignore.case = TRUE)) {
+    mat <- Matrix::sparseMatrix(i = idx_v, p = ptr_v, x = data_v,
+                                dims = c(n_genes, n_cells), repr = "C")
+  } else {
+    mat_cxg <- Matrix::sparseMatrix(i = idx_v, p = ptr_v, x = data_v,
+                                    dims = c(n_cells, n_genes), repr = "C")
+    mat <- methods::as(Matrix::t(mat_cxg), "dgCMatrix")
+  }
+
+  cell_ids <- read_index_vec("obs", "Cell_", n_cells)
+  gene_ids <- read_index_vec("var", "Gene_", n_genes)
+  if (length(gene_ids) == nrow(mat)) rownames(mat) <- make.unique(gene_ids)
+  if (length(cell_ids) == ncol(mat)) colnames(mat) <- make.unique(cell_ids)
+  mat
+}
+
 # ── Helper: CellRanger v2 / single-column compat ────────────────────────────────────────────
 # Seurat::Read10X prefers genes.tsv whenever it exists (pre_ver_3 <- file.exists(genes.tsv))
 # and then evaluates feature.names[, gene.column] with gene.column = 2 — a 1-column
@@ -1359,6 +1432,18 @@ mod_import_sc_server <- function(id, global_data) {
                   h5ad_errs <<- c(h5ad_errs, paste0("sceasy : ", em))
                   log(paste("  ⚠ sceasy h5ad :", em))
                   NULL })
+        }
+        if (requireNamespace("hdf5r", quietly=TRUE)) {
+          tryCatch({
+            mat <- .read_legacy_h5ad_hdf5r(path)
+            log("  ✓ .h5ad legacy (CSC/CSR) chargé via hdf5r")
+            return(mat)
+          }, error = function(e) {
+            em <- .sc_utf8(conditionMessage(e))
+            h5ad_errs <<- c(h5ad_errs, paste0("hdf5r_legacy : ", em))
+            log(paste("  ⚠ hdf5r legacy h5ad :", em))
+            NULL
+          })
         }
         stop(errorCondition(paste0(
           "Impossible de charger .h5ad.",
