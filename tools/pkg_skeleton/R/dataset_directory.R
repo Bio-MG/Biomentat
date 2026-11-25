@@ -202,6 +202,34 @@ ts_remove_dataset_dir <- function(path,
 #' @param modality Target modality (`"sc"`, `"bulk"`, `"spatial"`).
 #' @param config_path Optional explicit config file path.
 #' @return Character vector of normalized root paths.
+.ts_unified_datasets_candidates <- function(modality = c("sc", "bulk", "spatial"),
+                                            project_root = .sc_project_root()) {
+  modality <- match.arg(modality)
+  data_folder <- switch(modality,
+    sc      = "data_sc",
+    bulk    = "data_bulk",
+    spatial = "data_spatial"
+  )
+  cands <- character(0)
+  if (!is.null(project_root) && length(project_root) == 1L && nzchar(trimws(project_root))) {
+    cands <- c(
+      cands,
+      file.path(project_root, "datasets", data_folder),
+      file.path(project_root, "datasets", data_folder, "datasets")
+    )
+  }
+  env_root <- trimws(Sys.getenv("TRANSCRIPTO_DATASETS_DIR", ""))
+  if (nzchar(env_root)) {
+    cands <- c(
+      cands,
+      file.path(env_root, data_folder),
+      file.path(env_root, data_folder, "datasets")
+    )
+  }
+  cands <- unique(normalizePath(cands, winslash = "/", mustWork = FALSE))
+  cands[dir.exists(cands)]
+}
+
 ts_datasets_dirs <- function(dir = NULL,
                              modality = c("sc", "bulk", "spatial"),
                              config_path = NULL) {
@@ -215,6 +243,7 @@ ts_datasets_dirs <- function(dir = NULL,
   }
   unique(c(
     ts_datasets_dir(modality = modality),
+    .ts_unified_datasets_candidates(modality = modality),
     ts_saved_dataset_dirs(modality = modality, config_path = config_path)
   ))
 }
