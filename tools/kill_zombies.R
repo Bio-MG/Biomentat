@@ -13,6 +13,7 @@
 
 parse_zombie_cli_args <- function(args = character(0)) {
   kill <- "--kill" %in% args
+  include_workrsock <- "--include-workrsock" %in% args
   protect_ports <- integer(0)
   protect_pids <- integer(0)
   help <- any(args %in% c("-h", "--help"))
@@ -32,6 +33,7 @@ parse_zombie_cli_args <- function(args = character(0)) {
   list(
     dry_run = !kill,
     kill = kill,
+    include_workrsock = include_workrsock,
     protect_ports = protect_ports,
     protect_pids = protect_pids,
     help = help
@@ -42,7 +44,8 @@ classify_zombie_processes <- function(procs,
                                       live_pids,
                                       listening_pids = integer(0),
                                       protect_pids = integer(0),
-                                      self_pid = Sys.getpid()) {
+                                      self_pid = Sys.getpid(),
+                                      include_workrsock = FALSE) {
   if (!is.data.frame(procs) || nrow(procs) == 0L) {
     return(data.frame(
       pid = integer(0),
@@ -107,10 +110,14 @@ classify_zombie_processes <- function(procs,
     }
 
     is_r <- grepl("^R(script)?(\\.exe)?$", nm, ignore.case = TRUE)
+    is_workrsock <- is_r && grepl("workRSOCK", cmd, ignore.case = TRUE)
     is_browser <- grepl("chrome|chromedriver", nm, ignore.case = TRUE) &&
       grepl("headless|chromedriver|remote-debugging-port", paste(nm, cmd), ignore.case = TRUE)
 
-    if (is_r && grepl("mirai", cmd, ignore.case = TRUE)) {
+    if (is_workrsock && !isTRUE(include_workrsock)) {
+      status[[i]] <- "PROTECTED"
+      reason[[i]] <- "workrsock_protected"
+    } else if (is_r && grepl("mirai", cmd, ignore.case = TRUE)) {
       status[[i]] <- "ZOMBIE"
       reason[[i]] <- "mirai_orphan"
     } else if (is_r && grepl("Sys\\.getpid\\(|port", cmd, ignore.case = TRUE)) {
@@ -226,7 +233,8 @@ main_kill_zombies <- function(args = commandArgs(trailingOnly = TRUE)) {
     live_pids = snap$live_pids,
     listening_pids = listening_pids,
     protect_pids = opts$protect_pids,
-    self_pid = Sys.getpid()
+    self_pid = Sys.getpid(),
+    include_workrsock = opts$include_workrsock
   )
   summary <- summarize_zombie_candidates(classified)
 

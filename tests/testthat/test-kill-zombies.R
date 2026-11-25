@@ -69,5 +69,27 @@ test_that("parse_zombie_cli_args defaults to dry_run = TRUE and parses --kill an
   k <- parse_zombie_cli_args(c("--kill", "--protect-ports=6573,8100"))
   expect_false(k$dry_run)
   expect_true(k$kill)
+  expect_false(k$include_workrsock)
   expect_identical(k$protect_ports, c(6573L, 8100L))
+
+  w <- parse_zombie_cli_args(c("--include-workrsock"))
+  expect_true(w$include_workrsock)
+})
+
+test_that("classify_zombie_processes protects workRSOCK workers by default", {
+  procs <- data.frame(
+    pid = c(500L),
+    ppid = c(9999L),
+    name = c("Rscript.exe"),
+    cmdline = c("Rscript -e parallel:::.slaveRSOCK() workRSOCK"),
+    rss_bytes = c(2e6),
+    stringsAsFactors = FALSE
+  )
+  res_def <- classify_zombie_processes(procs, live_pids = integer(0), self_pid = 1L)
+  expect_identical(res_def$status[[1L]], "PROTECTED")
+  expect_identical(res_def$reason[[1L]], "workrsock_protected")
+
+  res_inc <- classify_zombie_processes(procs, live_pids = integer(0), self_pid = 1L,
+                                       include_workrsock = TRUE)
+  expect_identical(res_inc$status[[1L]], "ZOMBIE")
 })
