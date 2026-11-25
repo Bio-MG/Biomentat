@@ -79,6 +79,22 @@
 #' @param ns Module namespace function.
 #' @param tr Translator (server `.tr` / identity in tests).
 #' @return Named list of list(row =, button =, checkbox =, loadable =).
+.bulk_format_ds_status_badge <- function(status) {
+  if (is.null(status) || length(status) != 1L || is.na(status)) return("")
+  st <- as.character(status)
+  if (!nzchar(st)) return("")
+  if (identical(st, "valid")) {
+    return(shiny::tags$span(class = "badge bg-success", "\U0001F7E2 valid"))
+  }
+  if (st %in% c("warning", "partial")) {
+    return(shiny::tags$span(class = "badge bg-warning text-dark", paste("\U0001F7E1", st)))
+  }
+  if (identical(st, "empty")) {
+    return(shiny::tags$span(class = "badge bg-secondary", "\u26AA empty"))
+  }
+  shiny::tags$span(class = "badge bg-danger", paste("\U0001F534", st))
+}
+
 .bulk_datasets_table_rows <- function(scan, ns, tr) {
   out <- list()
   for (id in names(scan)) {
@@ -109,7 +125,7 @@
       shiny::tags$td(espece),
       shiny::tags$td(mtype),
       shiny::tags$td(nsamp_txt),
-      shiny::tags$td(if (is.null(e$status) || is.na(e$status)) "" else e$status),
+      shiny::tags$td(.bulk_format_ds_status_badge(e$status)),
       shiny::tags$td(raison),
       shiny::tags$td(btn)
     )

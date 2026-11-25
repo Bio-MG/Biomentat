@@ -1197,8 +1197,18 @@ mod_import_spatial_server <- function(id, global_data) {
         tags$tr(
           tags$td(tags$strong(nm)),
           tags$td(en$format %||% "unknown"),
-          tags$td(tags$span(class = if (identical(en$status, "valid")) "badge bg-success" else "badge bg-secondary",
-                            en$status)),
+          tags$td({
+            st <- as.character(en$status %||% "")
+            if (identical(st, "valid")) {
+              tags$span(class = "badge bg-success", "\U0001F7E2 valid")
+            } else if (st %in% c("warning", "partial")) {
+              tags$span(class = "badge bg-warning text-dark", paste("\U0001F7E1", st))
+            } else if (identical(st, "empty")) {
+              tags$span(class = "badge bg-secondary", "\u26AA empty")
+            } else if (nzchar(st)) {
+              tags$span(class = "badge bg-danger", paste("\U0001F534", st))
+            } else ""
+          }),
           tags$td(if (identical(en$status, "valid") && !is.na(bid)) {
             actionButton(ns(bid), .tr("Charger"), class = "btn-outline-primary btn-sm")
           } else {

@@ -257,6 +257,22 @@
 #' @param ns Module namespace function.
 #' @param tr Translator (server `.tr` / identity in tests).
 #' @return Named list of list(row =, button =, loadable =, btn_id =, id =).
+.sc_format_ds_status_badge <- function(status) {
+  if (is.null(status) || length(status) != 1L || is.na(status)) return("")
+  st <- as.character(status)
+  if (!nzchar(st)) return("")
+  if (identical(st, "valid")) {
+    return(shiny::tags$span(class = "badge bg-success", "\U0001F7E2 valid"))
+  }
+  if (st %in% c("warning", "partial")) {
+    return(shiny::tags$span(class = "badge bg-warning text-dark", paste("\U0001F7E1", st)))
+  }
+  if (identical(st, "empty")) {
+    return(shiny::tags$span(class = "badge bg-secondary", "\u26AA empty"))
+  }
+  shiny::tags$span(class = "badge bg-danger", paste("\U0001F534", st))
+}
+
 .sc_datasets_table_rows <- function(scan, ns, tr) {
   out <- list()
   ids <- names(scan)
@@ -281,7 +297,7 @@
       shiny::tags$td(.sc_utf8(id)),
       shiny::tags$td(fmt_txt),
       shiny::tags$td(nsamp_txt),
-      shiny::tags$td(st_txt),
+      shiny::tags$td(.sc_format_ds_status_badge(st_txt)),
       shiny::tags$td(rsn_txt),
       shiny::tags$td(btn)
     )
