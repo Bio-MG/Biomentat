@@ -14872,6 +14872,26 @@
     {
       "fr": "✅ Démo Spatial chargée : %d spots × %d gènes",
       "en": "✅ Spatial demo loaded: %d spots × %d genes"
+    },
+    {
+      "fr": "Enrichissement par cluster",
+      "en": "Per-cluster enrichment"
+    },
+    {
+      "fr": "Banque de voies",
+      "en": "Gene set collection"
+    },
+    {
+      "fr": "Enrichir les clusters",
+      "en": "Enrich clusters"
+    },
+    {
+      "fr": "Erreur enrichissement :",
+      "en": "Enrichment error:"
+    },
+    {
+      "fr": "Enrichissement : %d voie(s) testée(s) (BH globale PK-3).",
+      "en": "Enrichment: %d pathway(s) tested (global BH PK-3)."
     }
   ]
 }

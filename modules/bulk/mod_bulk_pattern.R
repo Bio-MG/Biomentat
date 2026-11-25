@@ -322,6 +322,57 @@ mod_bulk_pattern_ui <- function(id) {
   )
 }
 
+.bulk_pattern_cluster_ora <- function(clusters_df, gene_sets, universe, min_overlap = 2L) {
+  empty_res <- data.frame(
+    cluster = character(0), pathway = character(0),
+    overlap = integer(0), cluster_size = integer(0), set_size = integer(0),
+    pvalue = numeric(0), padj = numeric(0), genes = character(0),
+    stringsAsFactors = FALSE
+  )
+  if (!is.data.frame(clusters_df) || !all(c("gene", "cluster") %in% names(clusters_df)) ||
+      !nrow(clusters_df) || !is.list(gene_sets) || !length(gene_sets)) {
+    return(empty_res)
+  }
+  univ <- unique(as.character(universe[!is.na(universe) & nzchar(universe)]))
+  N <- length(univ)
+  if (N < 2L) return(empty_res)
+
+  cl_vals <- unique(as.character(clusters_df$cluster))
+  rows <- list()
+  for (cl in cl_vals) {
+    cl_genes <- intersect(unique(as.character(clusters_df$gene[as.character(clusters_df$cluster) == cl])), univ)
+    n <- length(cl_genes)
+    if (n < min_overlap) next
+    for (gs_name in names(gene_sets)) {
+      gs_genes <- intersect(unique(as.character(gene_sets[[gs_name]])), univ)
+      M <- length(gs_genes)
+      if (M < min_overlap) next
+      hits <- intersect(cl_genes, gs_genes)
+      k <- length(hits)
+      if (k < min_overlap) next
+      pv <- stats::phyper(k - 1L, M, N - M, n, lower.tail = FALSE)
+      rows[[length(rows) + 1L]] <- data.frame(
+        cluster = cl,
+        pathway = gs_name,
+        overlap = as.integer(k),
+        cluster_size = as.integer(n),
+        set_size = as.integer(M),
+        pvalue = as.numeric(pv),
+        padj = NA_real_,
+        genes = paste(sort(hits), collapse = ", "),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  if (!length(rows)) return(empty_res)
+  out <- do.call(rbind, rows)
+  rownames(out) <- NULL
+  out$padj <- stats::p.adjust(out$pvalue, method = "BH")
+  out <- out[order(out$cluster, out$padj, out$pvalue), , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
 mod_bulk_pattern_output_ui <- function(id) {
   ns <- NS(id)
   card(
@@ -331,7 +382,22 @@ mod_bulk_pattern_output_ui <- function(id) {
                     downloadButton(ns("dl_pattern"), i18n$t("Export CSV"), class = "btn-sm btn-info"))),
     navset_tab(
       nav_panel(i18n$t("Profils"), plotOutput(ns("pattern_plot"), height = "560px")),
-      nav_panel(i18n$t("Gènes par cluster"), DTOutput(ns("pattern_table")))
+      nav_panel(i18n$t("Gènes par cluster"), DTOutput(ns("pattern_table"))),
+      nav_panel(
+        i18n$t("Enrichissement par cluster"),
+        div(class = "d-flex flex-wrap align-items-end gap-2 my-2",
+            selectInput(ns("enrich_pack"), i18n$t("Banque de voies"),
+                        choices = c("Hallmark (MSigDB)" = "msigdb_hallmark",
+                                    "GO Biological Process" = "msigdb_gobp",
+                                    "TF Regulons (DoRothEA)" = "dorothea"),
+                        width = "220px"),
+            selectInput(ns("enrich_organism"), i18n$t("Organisme"),
+                        choices = c("Human" = "human", "Mouse" = "mouse"),
+                        width = "140px"),
+            actionButton(ns("btn_enrich_clusters"), i18n$t("Enrichir les clusters"),
+                         class = "btn-outline-primary btn-sm mb-3")),
+        DTOutput(ns("pattern_enrich_table"))
+      )
     )
   )
 }
@@ -508,6 +574,34 @@ mod_bulk_pattern_server <- function(id, global_data, shared_rv) {
       req(shared_rv$pattern_result)
       tab <- build_pattern_table_export(shared_rv$pattern_result)
       ts_datatable(tab, page_length = 15L, filename_base = "pattern_clusters")
+    })
+
+    enrich_res_rv <- reactiveVal(NULL)
+    observeEvent(shared_rv$pattern_result, {
+      enrich_res_rv(NULL)
+    }, ignoreNULL = FALSE)
+
+    observeEvent(input$btn_enrich_clusters, {
+      req(shared_rv$pattern_result)
+      pack <- input$enrich_pack %||% "msigdb_hallmark"
+      org  <- input$enrich_organism %||% "human"
+      gs <- tryCatch(bulk_load_gene_sets(source = pack, organism = org), error = function(e) e)
+      if (inherits(gs, "condition")) {
+        showNotification(paste(.tr("Erreur enrichissement :"), conditionMessage(gs)),
+                         type = "error", duration = 8)
+        return(invisible(NULL))
+      }
+      univ <- rownames(shared_rv$vst_mat %||% global_data$bulk_obj$counts)
+      res_ora <- .bulk_pattern_cluster_ora(shared_rv$pattern_result$clusters, gs, universe = univ)
+      enrich_res_rv(res_ora)
+      showNotification(sprintf(.tr("Enrichissement : %d voie(s) test\u00e9e(s) (BH globale PK-3)."),
+                               nrow(res_ora)),
+                       type = "message", duration = 5)
+    })
+
+    output$pattern_enrich_table <- renderDT({
+      req(enrich_res_rv())
+      ts_datatable(enrich_res_rv(), page_length = 15L, filename_base = "pattern_cluster_enrichment")
     })
 
     output$dl_pattern <- downloadHandler(
