@@ -630,15 +630,24 @@ mod_spatial_server <- function(id, global_data) {
       outputOptions(output, .st_nm, suspendWhenHidden = FALSE)
     }
 
+    .ts_wf_last_panel <- shiny::reactiveVal("panel_pipeline")
+    .spatial_sync_guard <- new.env(parent = emptyenv())
+    .spatial_sync_guard$target <- NULL
+    .spatial_sync_guard$until <- 0
+
     .activate_spatial_step <- function(panel, sync_accordion = TRUE, sync_results = TRUE) {
       if (is.null(panel) || !panel %in% .step_order) return(invisible(NULL))
       current_step_rv(panel)
+      .ts_wf_last_panel(panel)
       shared_rv$active_tab <- .step_tab[[panel]] %||% panel
       sel <- .step_results[[panel]]
+      arm_guard <- FALSE
       if (isTRUE(sync_results) && !is.null(sel) && !identical(isolate(input$results), sel)) {
+        arm_guard <- TRUE
         try(nav_select(id = "results", selected = sel, session = session), silent = TRUE)
       }
       if (isTRUE(sync_accordion)) {
+        arm_guard <- TRUE
         # P1-FLICKER FIX (retour opérateur 2026-11-18, mesuré sonde
         # scratch_p1_flicker_replay.R) : accordion_panel_set se comporte en
         # TOGGLE côté client sur ce multiple=FALSE — set(panneau déjà ouverte)
@@ -648,6 +657,10 @@ mod_spatial_server <- function(id, global_data) {
         # panneau déjà ouverte est un no-op, l'oscillateur converge.
         try(bslib::accordion_panel_open(id = "steps", values = panel, session = session), silent = TRUE)
       }
+      if (arm_guard) {
+        .spatial_sync_guard$target <- panel
+        .spatial_sync_guard$until <- proc.time()[["elapsed"]] + 0.6
+      }
       invisible(NULL)
     }
 
@@ -656,9 +669,21 @@ mod_spatial_server <- function(id, global_data) {
       # the LAST one (most recently opened step) so a multiple-open regression
       # can never crash single-value indexing again.
       panels <- input$steps
-      if (is.null(panels) || length(panels) == 0) return(invisible(NULL))
+      now_s <- proc.time()[["elapsed"]]
+      if (is.null(panels) || length(panels) == 0) {
+        if (identical(global_data$workflow_display_mode %||% "specialise", "specialise") &&
+            now_s > .spatial_sync_guard$until) {
+          try(bslib::accordion_panel_open(id = "steps", values = .ts_wf_last_panel(),
+                                          session = session), silent = TRUE)
+        }
+        return(invisible(NULL))
+      }
       panel <- utils::tail(panels, 1)
-      if (length(panel) != 1 || is.na(panel)) return(invisible(NULL))
+      if (length(panel) != 1 || is.na(panel) || !nzchar(panel)) return(invisible(NULL))
+      if (now_s <= .spatial_sync_guard$until && !identical(panel, .spatial_sync_guard$target)) {
+        return(invisible(NULL))
+      }
+      .ts_wf_last_panel(panel)
       # P1-FLICKER FIX : si l'accordéon affiche DÉJÀ l'étape courante, la
       # synchro résultats est déjà faite — ne renvoie AUCUN message client
       # (chaque message redondant est une source de course).
@@ -667,13 +692,17 @@ mod_spatial_server <- function(id, global_data) {
         return(invisible(NULL))
       }
       .activate_spatial_step(panel, sync_accordion = FALSE, sync_results = TRUE)
-    }, ignoreNULL = TRUE)
+    }, ignoreNULL = FALSE)
 
     observeEvent(input$results, {
       res_tab <- input$results
       if (is.null(res_tab) || length(res_tab) != 1L || is.na(res_tab)) return(invisible(NULL))
       panel <- .results_to_step[[res_tab]]
       if (is.null(panel) || identical(panel, isolate(current_step_rv()))) return(invisible(NULL))
+      now_s <- proc.time()[["elapsed"]]
+      if (now_s <= .spatial_sync_guard$until && !identical(panel, .spatial_sync_guard$target)) {
+        return(invisible(NULL))
+      }
       # P1-FLICKER FIX : l'accordéon affiche déjà la cible → ne le touche PAS
       # (le set/open redondant était le déclencheur de l'oscillation).
       open_now <- isolate(input$steps)
@@ -707,21 +736,6 @@ mod_spatial_server <- function(id, global_data) {
     # garantit la navigation. COMPLET = style vide (statu quo option A).
     # Si TOUTES les étapes sont refermées, la dernière connue est
     # rouverte en Spécialisé — une étape est TOUJOURS visible.
-    .ts_wf_last_panel <- shiny::reactiveVal("panel_pipeline")
-    observeEvent(input$steps, {
-      panels <- input$steps
-      if (!is.null(panels) && length(panels) > 0) {
-        p <- utils::tail(panels, 1)
-        if (length(p) == 1L && !is.na(p) && nzchar(p)) .ts_wf_last_panel(p)
-      } else if (identical(global_data$workflow_display_mode %||% "specialise", "specialise")) {
-        # P1-FLICKER FIX : open() (idempotent) et NON set() — le set sur la
-        # panneau déjà ouverte la FERMETTAIT (toggle), et le couple
-        # rouvreur↔sync oscillait en boucle infinie (mesuré 2026-11-18).
-        try(bslib::accordion_panel_open(id = "steps", values = .ts_wf_last_panel(),
-                                        session = session), silent = TRUE)
-      }
-      invisible(NULL)
-    }, ignoreNULL = FALSE)
     output$wf_mode_style <- renderUI({
       global_data$wf_mode_version  # re-rendu À CHAQUE émission client du radio (MEASURÉ boot33)
       mode <- global_data$workflow_display_mode %||% "specialise"

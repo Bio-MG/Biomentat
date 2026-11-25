@@ -167,7 +167,7 @@ mod_spatial_viz_controls_ui <- function(id) {
         div(class = "text-muted", style = "font-size:0.8rem;",
             i18n$t("Sauvegarde la vue ACTUELLE (coloration + parametres ci-dessus) pour l'onglet \"7. Export & Rapport\", meme apres avoir change d'onglet ou d'echantillon.")),
         textInput(ns("viz_save_label"), NULL, placeholder = .tr_plain("Nom de cette vue (ex: Cluster 3 vs stroma)")),
-        actionButton(ns("btn_add_to_report"), paste("\u2795", i18n$t("Ajouter cette vue au rapport")),
+        actionButton(ns("btn_add_to_report"), tagList("\u2795 ", i18n$t("Ajouter cette vue au rapport")),
                      class = "btn-sm btn-outline-primary w-100"),
         uiOutput(ns("saved_viz_list_ui"))
       ),

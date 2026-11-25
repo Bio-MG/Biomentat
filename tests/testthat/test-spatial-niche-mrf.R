@@ -86,3 +86,17 @@ test_that("mod_spatial_niche.R wires MRF method selector and beta input", {
   expect_true(grepl("mrf_beta", src, fixed = TRUE))
   expect_true(grepl("compute_spatial_niches_mrf", src, fixed = TRUE))
 })
+
+test_that("mod_spatial_viz.R uses tagList (never paste) around i18n$t on btn_add_to_report", {
+  viz_src <- paste(readLines(file.path(ts_project_root(), "modules/spatial/mod_spatial_viz.R"),
+                             encoding = "UTF-8", warn = FALSE), collapse = "\n")
+  expect_false(grepl("paste\\([^)]*i18n\\$t\\(\"Ajouter cette vue au rapport\"", viz_src))
+  expect_true(grepl("tagList\\([^)]*i18n\\$t\\(\"Ajouter cette vue au rapport\"", viz_src))
+})
+
+test_that("mod_spatial.R updates .ts_wf_last_panel and arms .spatial_sync_guard in .activate_spatial_step", {
+  sp_src <- paste(readLines(file.path(ts_project_root(), "modules/spatial/mod_spatial.R"),
+                            encoding = "UTF-8", warn = FALSE), collapse = "\n")
+  expect_true(grepl("\\.spatial_sync_guard", sp_src))
+  expect_true(grepl("\\.ts_wf_last_panel\\(panel\\)", sp_src))
+})
