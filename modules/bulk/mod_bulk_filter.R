@@ -78,6 +78,70 @@ mod_bulk_filter_ui <- function(id) {
 
 # ── UI: PCA tab ────────────────────────────────────────────────────────────────
 
+.bulk_pca_loadings_enrichment <- function(vst_mat, gene_sets, max_pcs = 5L, min_set_size = 5L) {
+  empty_res <- data.frame(
+    pc = character(0), pathway = character(0), set_size = integer(0),
+    z_score = numeric(0), direction = character(0),
+    pvalue = numeric(0), padj = numeric(0),
+    stringsAsFactors = FALSE
+  )
+  if (is.null(vst_mat) || (!is.matrix(vst_mat) && !is.data.frame(vst_mat)) ||
+      !is.list(gene_sets) || !length(gene_sets)) {
+    return(empty_res)
+  }
+  mat <- as.matrix(vst_mat)
+  if (!is.numeric(mat) || is.null(rownames(mat)) || nrow(mat) < 5L || ncol(mat) < 2L) {
+    return(empty_res)
+  }
+  keep_finite <- apply(mat, 1L, function(r) all(is.finite(r)))
+  mat <- mat[keep_finite, , drop = FALSE]
+  if (nrow(mat) < 5L) return(empty_res)
+  rv <- apply(mat, 1L, stats::var)
+  mat <- mat[is.finite(rv) & rv > 0, , drop = FALSE]
+  if (nrow(mat) < 5L) return(empty_res)
+  if (nrow(mat) > 5000L) {
+    ord <- order(apply(mat, 1L, stats::var), decreasing = TRUE)
+    mat <- mat[ord[seq_len(5000L)], , drop = FALSE]
+  }
+  pca <- tryCatch(stats::prcomp(t(mat), center = TRUE, scale. = FALSE), error = function(e) NULL)
+  if (is.null(pca) || is.null(pca$rotation) || !ncol(pca$rotation)) return(empty_res)
+
+  n_pcs <- min(as.integer(max_pcs), ncol(pca$rotation))
+  genes_univ <- rownames(pca$rotation)
+  rows <- list()
+  for (pc_i in seq_len(n_pcs)) {
+    v <- pca$rotation[, pc_i]
+    mu <- mean(v)
+    sd_v <- stats::sd(v)
+    if (!is.finite(sd_v) || sd_v <= 0) next
+    pc_lbl <- paste0("PC", pc_i)
+    for (gs_name in names(gene_sets)) {
+      hits <- intersect(unique(as.character(gene_sets[[gs_name]])), genes_univ)
+      m <- length(hits)
+      if (m < min_set_size) next
+      z <- (mean(v[hits]) - mu) * sqrt(m) / sd_v
+      pv <- 2 * stats::pnorm(-abs(z))
+      rows[[length(rows) + 1L]] <- data.frame(
+        pc = pc_lbl,
+        pathway = gs_name,
+        set_size = as.integer(m),
+        z_score = round(as.numeric(z), 4),
+        direction = if (z >= 0) "Positive" else "Negative",
+        pvalue = as.numeric(pv),
+        padj = NA_real_,
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  if (!length(rows)) return(empty_res)
+  out <- do.call(rbind, rows)
+  rownames(out) <- NULL
+  out$padj <- stats::p.adjust(out$pvalue, method = "BH")
+  out <- out[order(out$pc, out$padj, out$pvalue), , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
 mod_bulk_filter_pca_ui <- function(id) {
   ns <- NS(id)
   card(
@@ -98,7 +162,22 @@ mod_bulk_filter_pca_ui <- function(id) {
     h6(i18n$t("Scree Plot \u2014 Variance Expliqu\u00e9e"), style = "font-weight:bold;"),
     helpText(i18n$t("Combien de composantes principales faut-il regarder ? Une chute nette (\"coude\") indique o\u00f9 le signal biologique s'arr\u00eate et o\u00f9 le bruit commence.")),
     div(style = "height:400px;overflow-y:auto;", plotOutput(ns("plot_scree"), height = "380px")),
-    downloadButton(ns("dl_scree_png"), i18n$t("Export PNG"), class = "btn-sm btn-secondary mt-2")
+    downloadButton(ns("dl_scree_png"), i18n$t("Export PNG"), class = "btn-sm btn-secondary mt-2"),
+
+    hr(),
+    h6(i18n$t("Enrichissement des axes PCA (Loadings \u2192 Voies)"), style = "font-weight:bold;"),
+    div(class = "d-flex flex-wrap align-items-end gap-2 my-2",
+        selectInput(ns("pca_enrich_pack"), i18n$t("Banque de voies"),
+                    choices = c("Hallmark (MSigDB)" = "msigdb_hallmark",
+                                "GO Biological Process" = "msigdb_gobp",
+                                "TF Regulons (DoRothEA)" = "dorothea"),
+                    width = "220px"),
+        selectInput(ns("pca_enrich_organism"), i18n$t("Organisme"),
+                    choices = c("Human" = "human", "Mouse" = "mouse"),
+                    width = "140px"),
+        actionButton(ns("btn_pca_enrich"), i18n$t("Analyser les axes PCA"),
+                     class = "btn-outline-primary btn-sm mb-3")),
+    DTOutput(ns("pca_enrich_table"))
   )
 }
 
@@ -507,6 +586,36 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       filename = function() paste0("scree_plot_bulk_", Sys.Date(), ".png"),
       content  = function(file) ts_export_plot(file, scree_plot(), width = 7, height = 5, dpi = 300)
     )
+
+    pca_enrich_rv <- reactiveVal(NULL)
+    observeEvent(shared_rv$vst_mat, {
+      pca_enrich_rv(NULL)
+    }, ignoreNULL = FALSE)
+
+    observeEvent(input$btn_pca_enrich, {
+      req(shared_rv$vst_mat)
+      .tr <- .tr_fn(global_data)
+      pack <- input$pca_enrich_pack %||% "msigdb_hallmark"
+      org  <- input$pca_enrich_organism %||% "human"
+      gs <- tryCatch(bulk_load_gene_sets(source = pack, organism = org), error = function(e) e)
+      if (inherits(gs, "condition")) {
+        showNotification(paste(.tr("Erreur enrichissement :"), conditionMessage(gs)),
+                         type = "error", duration = 8)
+        return(invisible(NULL))
+      }
+      res_pca <- .bulk_pca_loadings_enrichment(shared_rv$vst_mat, gs, max_pcs = 5L)
+      pca_enrich_rv(res_pca)
+      showNotification(
+        sprintf(.tr("PCA Loadings : %d voie(s) test\u00e9e(s) sur les axes principaux (BH globale PK-3)."),
+                nrow(res_pca)),
+        type = "message", duration = 5
+      )
+    })
+
+    output$pca_enrich_table <- renderDT({
+      req(pca_enrich_rv())
+      ts_datatable(pca_enrich_rv(), page_length = 15L, filename_base = "pca_loadings_enrichment")
+    })
 
     # =========================================================================
     # QC: Sample correlation heatmap (reuses shared_rv$vst_mat — zero extra

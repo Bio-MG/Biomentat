@@ -14904,6 +14904,18 @@
     {
       "fr": " → Table pré-calculée (%s) : %d gènes importés (DE désactivée)",
       "en": " → Pre-computed table (%s): %d genes imported (DE disabled)"
+    },
+    {
+      "fr": "Enrichissement des axes PCA (Loadings → Voies)",
+      "en": "PCA axes enrichment (Loadings → Pathways)"
+    },
+    {
+      "fr": "Analyser les axes PCA",
+      "en": "Analyze PCA axes"
+    },
+    {
+      "fr": "PCA Loadings : %d voie(s) testée(s) sur les axes principaux (BH globale PK-3).",
+      "en": "PCA Loadings: %d pathway(s) tested across principal axes (global BH PK-3)."
     }
   ]
 }
