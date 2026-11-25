@@ -605,7 +605,9 @@ mod_import_bulk_ui <- function(id) {
         helpText(i18n$t("Déposez des datasets conformes biomentat-exchange/v1 dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.")),
         div(class = "d-flex align-items-center gap-2 mb-2",
             actionButton(ns("btn_scan_datasets_main"), i18n$t("Scanner le répertoire"),
-                         class = "btn-outline-secondary btn-sm")),
+                         class = "btn-outline-secondary btn-sm"),
+            actionButton(ns("btn_load_demo"), i18n$t("\U0001F3AF Charger la d\u00e9mo"),
+                         class = "btn-outline-info btn-sm")),
         uiOutput(ns("datasets_table_ui")),
         uiOutput(ns("dataset_health_ui"))
       )
@@ -1285,6 +1287,43 @@ mod_import_bulk_server <- function(id, global_data) {
         shinyjs::click("btn_scan_datasets")
       }
     }, ignoreInit = TRUE)
+
+    observeEvent(input$btn_load_demo, {
+      fn_load <- if (exists("load_biomentat_demo", mode = "function")) {
+        get("load_biomentat_demo", mode = "function")
+      } else {
+        e <- new.env(parent = globalenv())
+        sys.source("tools/pkg_skeleton/R/demo_loader.R", envir = e)
+        e$load_biomentat_demo
+      }
+      demo <- tryCatch(fn_load("bulk"), error = function(e) e)
+      if (inherits(demo, "condition")) {
+        showNotification(sprintf(.tr("Erreur: %s"), conditionMessage(demo)), type = "error", duration = 8)
+        return(invisible(NULL))
+      }
+      min_c <- shiny::isolate(input$min_counts) %||% 10
+      bulk_obj <- tryCatch(
+        assemble_bulk_obj(demo$counts, demo$metadata, min_c, "Bulk_Demo"),
+        error = function(e) e
+      )
+      if (inherits(bulk_obj, "condition")) {
+        showNotification(sprintf(.tr("Erreur: %s"), conditionMessage(bulk_obj)), type = "error", duration = 8)
+        return(invisible(NULL))
+      }
+      global_data$bulk_obj <- bulk_obj
+      global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L
+      .publish_bulk_business_state(global_data$bulk_obj)
+      temp_data$is_loaded <- TRUE
+      .register_multi_dataset(global_data$bulk_obj)
+      .dataset_health_report(global_data$bulk_obj)
+      add_log(sprintf(.tr("\u2705 D\u00e9mo Bulk charg\u00e9e : %d g\u00e8nes \u00d7 %d \u00e9chantillons"),
+                      nrow(bulk_obj$counts), ncol(bulk_obj$counts)))
+      showNotification(
+        sprintf(.tr("\u2705 D\u00e9mo Bulk charg\u00e9e : %d g\u00e8nes \u00d7 %d \u00e9chantillons"),
+                nrow(bulk_obj$counts), ncol(bulk_obj$counts)),
+        type = "message", duration = 5
+      )
+    })
 
     observeEvent(input$btn_scan_datasets, {
       bulk_dir <- if (exists("ts_datasets_dirs", mode = "function")) {

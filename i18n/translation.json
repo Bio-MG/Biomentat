@@ -14856,6 +14856,14 @@
     {
       "fr": "Lissage spatial MRF (beta)",
       "en": "MRF spatial smoothing (beta)"
+    },
+    {
+      "fr": "🎯 Charger la démo",
+      "en": "🎯 Load demo"
+    },
+    {
+      "fr": "✅ Démo Bulk chargée : %d gènes × %d échantillons",
+      "en": "✅ Bulk demo loaded: %d genes × %d samples"
     }
   ]
 }
