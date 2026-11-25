@@ -477,7 +477,9 @@ mod_import_sc_ui <- function(id) {
         helpText(i18n$t("Déposez des dossiers 10X (matrix.mtx + barcodes.tsv + features/gènes.tsv) ou des fichiers SC (.rds, .h5, .h5ad, .loom) dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.")),
         div(class = "d-flex align-items-center gap-2 mb-2",
             actionButton(ns("btn_scan_datasets_main"), i18n$t("Scanner le répertoire"),
-                         class = "btn-outline-secondary btn-sm")),
+                         class = "btn-outline-secondary btn-sm"),
+            actionButton(ns("btn_load_demo"), i18n$t("\U0001F3AF Charger la d\u00e9mo"),
+                         class = "btn-outline-info btn-sm")),
         uiOutput(ns("datasets_table_ui"))
       )
     )
@@ -1143,6 +1145,44 @@ mod_import_sc_server <- function(id, global_data) {
         shinyjs::click("btn_scan_datasets")
       }
     }, ignoreInit = TRUE)
+
+    observeEvent(input$btn_load_demo, {
+      fn_load <- if (exists("load_biomentat_demo", mode = "function")) {
+        get("load_biomentat_demo", mode = "function")
+      } else {
+        e <- new.env(parent = globalenv())
+        sys.source("tools/pkg_skeleton/R/demo_loader.R", envir = e)
+        e$load_biomentat_demo
+      }
+      demo <- tryCatch(fn_load("sc"), error = function(e) e)
+      if (inherits(demo, "condition")) {
+        .notify_sc(sprintf(.tr("Erreur: %s"), conditionMessage(demo)), type = "error", duration = 8)
+        return(invisible(NULL))
+      }
+      obj <- tryCatch({
+        so <- Seurat::CreateSeuratObject(counts = demo$counts, project = "SC_Demo", meta.data = demo$metadata)
+        so$orig.ident <- demo$metadata$sample_id
+        so
+      }, error = function(e) e)
+      if (inherits(obj, "condition")) {
+        .notify_sc(sprintf(.tr("Erreur: %s"), conditionMessage(obj)), type = "error", duration = 8)
+        return(invisible(NULL))
+      }
+      .commit_sc_loaded(obj)
+      if (exists("ts_drive_feed_business_state", mode = "function")) {
+        global_data$business_state <- ts_drive_feed_business_state(
+          has_data = TRUE,
+          object_class = class(obj)[1L],
+          n_elements = ncol(obj),
+          n_clusters = length(unique(obj$cluster)),
+          deconv_done = FALSE
+        )
+      }
+      msg <- sprintf(.tr("\u2705 D\u00e9mo Single-Cell charg\u00e9e : %d cellules \u00d7 %d g\u00e8nes"),
+                     ncol(obj), nrow(obj))
+      add_log(msg)
+      .notify_sc(msg, type = "message", duration = 5)
+    })
 
     observeEvent(input$btn_scan_datasets, {
       sc_dirs <- tryCatch(

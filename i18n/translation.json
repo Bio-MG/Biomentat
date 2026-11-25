@@ -14864,6 +14864,14 @@
     {
       "fr": "✅ Démo Bulk chargée : %d gènes × %d échantillons",
       "en": "✅ Bulk demo loaded: %d genes × %d samples"
+    },
+    {
+      "fr": "✅ Démo Single-Cell chargée : %d cellules × %d gènes",
+      "en": "✅ Single-Cell demo loaded: %d cells × %d genes"
+    },
+    {
+      "fr": "✅ Démo Spatial chargée : %d spots × %d gènes",
+      "en": "✅ Spatial demo loaded: %d spots × %d genes"
     }
   ]
 }

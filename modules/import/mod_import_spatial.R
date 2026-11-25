@@ -302,6 +302,8 @@ mod_import_spatial_ui <- function(id) {
         div(class = "d-flex align-items-center gap-2 mb-2",
             actionButton(ns("btn_scan_datasets"), i18n$t("Scanner le répertoire"),
                          class = "btn-outline-secondary btn-sm"),
+            actionButton(ns("btn_load_demo"), i18n$t("\U0001F3AF Charger la d\u00e9mo"),
+                         class = "btn-outline-info btn-sm"),
             uiOutput(ns("datasets_dir_txt"))),
         if (exists("dataset_dirs_options_ui", mode = "function")) dataset_dirs_options_ui(ns, i18n),
         uiOutput(ns("datasets_table_ui"))
@@ -1123,6 +1125,62 @@ mod_import_spatial_server <- function(id, global_data) {
       dataset_dirs_options_server(input, output, session, modality = "spatial",
                                   language = reactive(global_data$language))
     }
+
+    observeEvent(input$btn_load_demo, {
+      fn_load <- if (exists("load_biomentat_demo", mode = "function")) {
+        get("load_biomentat_demo", mode = "function")
+      } else {
+        e <- new.env(parent = globalenv())
+        sys.source("tools/pkg_skeleton/R/demo_loader.R", envir = e)
+        e$load_biomentat_demo
+      }
+      demo <- tryCatch(fn_load("spatial"), error = function(e) e)
+      if (inherits(demo, "condition")) {
+        showNotification(sprintf(.tr("Erreur: %s"), conditionMessage(demo)), type = "error", duration = 8)
+        return(invisible(NULL))
+      }
+      spatial_pkg <- tryCatch({
+        sk <- Seurat::CreateSeuratObject(counts = demo$counts, project = "Spatial_Demo", meta.data = demo$metadata)
+        sk <- Seurat::NormalizeData(sk, verbose = FALSE)
+        list(
+          sketch          = sk,
+          bpcells_dir     = NULL,
+          raw_bpcells_dir = NULL,
+          n_raw_total     = NULL,
+          coords          = demo$coords,
+          histology       = NULL,
+          technology      = "visium",
+          n_total         = ncol(sk),
+          images          = character(0),
+          project         = "Spatial_Demo",
+          created_at      = Sys.time()
+        )
+      }, error = function(e) e)
+      if (inherits(spatial_pkg, "condition")) {
+        showNotification(sprintf(.tr("Erreur: %s"), conditionMessage(spatial_pkg)), type = "error", duration = 8)
+        return(invisible(NULL))
+      }
+      sample_name <- "Spatial_Demo"
+      was_already_active <- identical(sample_name, global_data$active_spatial_dataset)
+      global_data$spatial_datasets[[sample_name]] <- spatial_pkg
+      global_data$active_spatial_dataset <- sample_name
+      if (was_already_active) {
+        global_data$spatial_reimport_signal <- list(name = sample_name, at = Sys.time())
+      }
+      if (exists("ts_drive_feed_business_state", mode = "function")) {
+        global_data$business_state <- ts_drive_feed_business_state(
+          has_data = TRUE,
+          object_class = "spatial_pkg",
+          n_elements = ncol(spatial_pkg$sketch),
+          n_clusters = length(unique(demo$metadata$niche)),
+          deconv_done = FALSE
+        )
+      }
+      msg <- sprintf(.tr("\u2705 D\u00e9mo Spatial charg\u00e9e : %d spots \u00d7 %d g\u00e8nes"),
+                     ncol(spatial_pkg$sketch), nrow(spatial_pkg$sketch))
+      add_log(msg)
+      showNotification(msg, type = "message", duration = 5)
+    })
 
     observeEvent(input$btn_scan_datasets, {
       sp_dirs <- tryCatch(
