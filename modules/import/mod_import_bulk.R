@@ -527,12 +527,7 @@ mod_import_bulk_ui <- function(id) {
                              class = "btn-outline-primary btn-sm"),
                 uiOutput(ns("datasets_dir_txt"))
             ),
-            if (exists("dataset_dirs_options_ui", mode = "function")) dataset_dirs_options_ui(ns, i18n),
-            uiOutput(ns("datasets_table_ui")),
-            # N5 dataset-doctor (2026-11-03) : rapport de santé unifié —
-            # bloc additif warn-only (AC2.4 : jamais bloquant), alimenté par
-            # .dataset_health_report() aux sites d'import O16.
-            uiOutput(ns("dataset_health_ui"))
+            if (exists("dataset_dirs_options_ui", mode = "function")) dataset_dirs_options_ui(ns, i18n)
           )
         ),
         uiOutput(ns("import_mode_style")),
@@ -587,6 +582,16 @@ mod_import_bulk_ui <- function(id) {
             verbatimTextOutput(ns("console_log"), placeholder = TRUE)
           )
         )
+      ),
+
+      card(
+        card_header(i18n$t("Datasets découverts")),
+        helpText(i18n$t("Déposez des datasets conformes biomentat-exchange/v1 dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.")),
+        div(class = "d-flex align-items-center gap-2 mb-2",
+            actionButton(ns("btn_scan_datasets_main"), i18n$t("Scanner le répertoire"),
+                         class = "btn-outline-secondary btn-sm")),
+        uiOutput(ns("datasets_table_ui")),
+        uiOutput(ns("dataset_health_ui"))
       )
     )
   )
@@ -1245,6 +1250,12 @@ mod_import_bulk_server <- function(id, global_data) {
       dataset_dirs_options_server(input, output, session, modality = "bulk",
                                   language = reactive(global_data$language))
     }
+
+    observeEvent(input$btn_scan_datasets_main, {
+      if (requireNamespace("shinyjs", quietly = TRUE)) {
+        shinyjs::click("btn_scan_datasets")
+      }
+    }, ignoreInit = TRUE)
 
     observeEvent(input$btn_scan_datasets, {
       bulk_dir <- if (exists("ts_datasets_dirs", mode = "function")) {

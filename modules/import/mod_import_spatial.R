@@ -1162,7 +1162,8 @@ mod_import_spatial_server <- function(id, global_data) {
                 add_log(paste0(.tr("Chargement dataset spatial : "), ds_id))
                 dir_path(target_path)
                 updateTextInput(session, "sample_name", value = ds_id)
-                updateRadioButtons(session, "technology", selected = "visium")
+                tech_sel <- if (identical(entry$format, "merscope_merfish")) "merscope" else "visium"
+                updateRadioButtons(session, "technology", selected = tech_sel)
                 if (requireNamespace("shinyjs", quietly = TRUE)) {
                   shinyjs::click("btn_import")
                 }

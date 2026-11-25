@@ -355,8 +355,7 @@ mod_import_sc_ui <- function(id) {
                 actionButton(ns("btn_scan_datasets"), i18n$t("Scanner le répertoire"),
                              class = "btn-outline-secondary btn-sm"),
                 uiOutput(ns("datasets_dir_txt"))),
-            if (exists("dataset_dirs_options_ui", mode = "function")) dataset_dirs_options_ui(ns, i18n),
-            uiOutput(ns("datasets_table_ui"))
+            if (exists("dataset_dirs_options_ui", mode = "function")) dataset_dirs_options_ui(ns, i18n)
           )
         )
       ),
@@ -382,6 +381,15 @@ mod_import_sc_ui <- function(id) {
         uiOutput(ns("multisample_summary_ui")),
         card_body(h5(i18n$t("Console de Log"), class = "text-muted"),
                   verbatimTextOutput(ns("console_log"), placeholder = TRUE))
+      ),
+
+      card(
+        card_header(i18n$t("Datasets découverts")),
+        helpText(i18n$t("Déposez des dossiers 10X (matrix.mtx + barcodes.tsv + features/gènes.tsv) ou des fichiers SC (.rds, .h5, .h5ad, .loom) dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.")),
+        div(class = "d-flex align-items-center gap-2 mb-2",
+            actionButton(ns("btn_scan_datasets_main"), i18n$t("Scanner le répertoire"),
+                         class = "btn-outline-secondary btn-sm")),
+        uiOutput(ns("datasets_table_ui"))
       )
     )
   )
@@ -1040,6 +1048,12 @@ mod_import_sc_server <- function(id, global_data) {
       dataset_dirs_options_server(input, output, session, modality = "sc",
                                   language = reactive(global_data$language))
     }
+
+    observeEvent(input$btn_scan_datasets_main, {
+      if (requireNamespace("shinyjs", quietly = TRUE)) {
+        shinyjs::click("btn_scan_datasets")
+      }
+    }, ignoreInit = TRUE)
 
     observeEvent(input$btn_scan_datasets, {
       sc_dirs <- tryCatch(
