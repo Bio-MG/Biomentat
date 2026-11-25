@@ -181,6 +181,73 @@
 #' @param mat Numeric matrix or data.frame (features x samples).
 #' @return Named list with `verdict`, `de_allowed`, `is_raw_counts`,
 #'   `has_negative`, `has_fractional`, `is_tpm_like`, `all_zero`, and signature metrics.
+.bulk_parse_fc_pval_table <- function(df) {
+  .stop <- function(msg) {
+    stop(errorCondition(msg, class = "bulk_import_error"))
+  }
+  if (is.null(df) || (!is.data.frame(df) && !is.matrix(df))) {
+    .stop("Table pré-calculée invalide : un data.frame ou une matrice est requis.")
+  }
+  d <- as.data.frame(df, check.names = FALSE, stringsAsFactors = FALSE)
+  if (!nrow(d) || !ncol(d)) {
+    .stop("Table pré-calculée vide.")
+  }
+  genes <- rownames(d)
+  if (is.null(genes) || identical(genes, as.character(seq_len(nrow(d))))) {
+    if (is.character(d[[1L]]) || is.factor(d[[1L]])) {
+      genes <- as.character(d[[1L]])
+      d <- d[, -1L, drop = FALSE]
+    }
+  }
+  genes <- as.character(genes)
+  if (!length(genes) || anyNA(genes) || any(!nzchar(trimws(genes)))) {
+    .stop("Noms de gènes manquants ou vides dans la table pré-calculée.")
+  }
+  for (cc in names(d)) {
+    if (is.character(d[[cc]])) d[[cc]] <- suppressWarnings(as.numeric(d[[cc]]))
+  }
+  num_cols <- names(d)[vapply(d, is.numeric, logical(1))]
+  if (!length(num_cols)) {
+    .stop("Aucune colonne numérique détectée dans la table pré-calculée.")
+  }
+  pick_col <- function(cands) {
+    idx <- match(tolower(cands), tolower(num_cols))
+    idx <- idx[!is.na(idx)]
+    if (length(idx)) num_cols[idx[1L]] else NULL
+  }
+  lfc_col <- pick_col(c("log2FoldChange", "log2FC", "logFC", "lfc", "fold_change", "log2fc"))
+  if (is.null(lfc_col)) lfc_col <- num_cols[1L]
+  pval_col <- pick_col(c("pvalue", "p_val", "pval", "P.Value", "PValue", "p.value"))
+  padj_col <- pick_col(c("padj", "FDR", "qvalue", "adj.P.Val", "p_val_adj", "fdr"))
+
+  lfc <- as.numeric(d[[lfc_col]])
+  keep <- is.finite(lfc)
+  if (sum(keep) < 2L) {
+    .stop("Au moins 2 gènes avec un log2FC fini sont requis.")
+  }
+  genes_k <- make.unique(genes[keep])
+  lfc_k <- lfc[keep]
+  pv_k <- if (!is.null(pval_col)) as.numeric(d[[pval_col]])[keep] else rep(NA_real_, length(lfc_k))
+  pa_k <- if (!is.null(padj_col)) as.numeric(d[[padj_col]])[keep] else rep(NA_real_, length(lfc_k))
+
+  tab <- data.frame(
+    gene = genes_k,
+    log2FoldChange = lfc_k,
+    pvalue = pv_k,
+    padj = pa_k,
+    stringsAsFactors = FALSE
+  )
+  rownames(tab) <- genes_k
+  lfc_mat <- matrix(lfc_k, ncol = 1L, dimnames = list(genes_k, "log2FoldChange"))
+  list(
+    table = tab,
+    lfc_matrix = lfc_mat,
+    lfc_col = lfc_col,
+    pval_col = pval_col,
+    padj_col = padj_col
+  )
+}
+
 .bulk_detect_matrix_scale <- function(mat) {
   invalid <- list(
     verdict = "unknown", de_allowed = FALSE, is_raw_counts = FALSE,
@@ -416,17 +483,22 @@ mod_import_bulk_ui <- function(id) {
                 ns("bulk_data_type"),
                 i18n$t("Type de données"),
                 choices = setNames(
-                  c("rna_counts", "generic_omics"),
+                  c("rna_counts", "generic_omics", "fc_pval"),
                   c(.tr_plain("RNA-seq (counts bruts)"),
-                    .tr_plain("Omics générique (protéomique / métabolomique / ATAC)"))
+                    .tr_plain("Omics générique (protéomique / métabolomique / ATAC)"),
+                    .tr_plain("Table pré-calculée (log2FC / P-value)"))
                 ),
                 selected = "rna_counts"
               ),
               conditionalPanel(
-                condition = sprintf("input['%s'] !== 'generic_omics'", ns("bulk_data_type")),
+                condition = sprintf("input['%s'] === 'rna_counts'", ns("bulk_data_type")),
                 numericInput(ns("min_counts"), i18n$t("Counts minimum par gène (pré-filtre grossier)"),
                              value = 10, min = 0, step = 1),
                 helpText(i18n$t("Les gènes avec moins de counts seront filtrés dès l'import."))
+              ),
+              conditionalPanel(
+                condition = sprintf("input['%s'] === 'fc_pval'", ns("bulk_data_type")),
+                helpText(i18n$t("Mode pré-calculé : les colonnes log2FC et P-value/FDR sont importées sans counts bruts. L'analyse DE est désactivée ; les voies, signatures et réseaux restent disponibles."))
               ),
               conditionalPanel(
                 condition = sprintf("input['%s'] === 'generic_omics'", ns("bulk_data_type")),
@@ -892,6 +964,22 @@ mod_import_bulk_server <- function(id, global_data) {
                                   generic_log_transform = FALSE,
                                   generic_impute = "none",
                                   generic_normalize = "none") {
+      if (identical(data_type, "fc_pval")) {
+        parsed <- .bulk_parse_fc_pval_table(counts)
+        add_log(sprintf(.tr(" → Table pré-calculée (%s) : %d gènes importés (DE désactivée)"),
+                        parsed$lfc_col, nrow(parsed$table)))
+        return(list(
+          counts          = parsed$lfc_matrix,
+          precomputed_de  = parsed$table,
+          metadata        = NULL,
+          project         = project_name,
+          type            = "bulk",
+          data_type       = "fc_pval",
+          is_count_matrix = FALSE,
+          de_allowed      = FALSE,
+          timestamp       = Sys.time()
+        ))
+      }
       add_log(.tr(" → Conversion des valeurs en numérique..."))
       counts <- as.data.frame(counts, check.names = FALSE, stringsAsFactors = FALSE)
       for (col in colnames(counts)) {

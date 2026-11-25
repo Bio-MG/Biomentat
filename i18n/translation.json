@@ -14892,6 +14892,18 @@
     {
       "fr": "Enrichissement : %d voie(s) testée(s) (BH globale PK-3).",
       "en": "Enrichment: %d pathway(s) tested (global BH PK-3)."
+    },
+    {
+      "fr": "Table pré-calculée (log2FC / P-value)",
+      "en": "Pre-computed table (log2FC / P-value)"
+    },
+    {
+      "fr": "Mode pré-calculé : les colonnes log2FC et P-value/FDR sont importées sans counts bruts. L'analyse DE est désactivée ; les voies, signatures et réseaux restent disponibles.",
+      "en": "Pre-computed mode: log2FC and P-value/FDR columns are imported without raw counts. DE analysis is disabled; pathways, signatures, and networks remain available."
+    },
+    {
+      "fr": " → Table pré-calculée (%s) : %d gènes importés (DE désactivée)",
+      "en": " → Pre-computed table (%s): %d genes imported (DE disabled)"
     }
   ]
 }
