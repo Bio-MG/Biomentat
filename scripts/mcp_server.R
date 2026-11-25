@@ -4701,5 +4701,5 @@ if ("--check" %in% .args) {
        save = "no")
 }
 
-.ts_stderr("mcp_server: serving 11 drive tools (5 read-only: status/verdict/state/snapshot/read + import + set_inputs + run + wait + arm/disarm + export) (stdio, NDJSON, native JSON-RPC)")
+.ts_stderr("mcp_server: serving 12 drive tools (6 read-only: status/verdict/state/snapshot/read/datasets + import + set_inputs + run + wait + arm/disarm + export) (stdio, NDJSON, native JSON-RPC)")
 .ts_serve()

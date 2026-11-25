@@ -695,6 +695,18 @@ mod_import_bulk_server <- function(id, global_data) {
       invisible(NULL)
     }
 
+    .publish_bulk_business_state <- function(obj) {
+      if (!exists("ts_drive_feed_business_state", mode = "function")) return(invisible(NULL))
+      global_data$business_state <- ts_drive_feed_business_state(
+        has_data = !is.null(obj),
+        object_class = if (is.null(obj)) NULL else class(obj)[1L],
+        n_elements = tryCatch(ncol(obj$counts), error = function(e) NULL),
+        n_clusters = NULL,
+        deconv_done = FALSE
+      )
+      invisible(NULL)
+    }
+
     # ── LOT 4A (V1.x UX): native jump to the EXISTING Bulk mapping panel ────
     # No UI duplication: select the analysis page (top-level page_navbar via
     # the root session handle) and open the "0. Mapping IDs" accordion panel.
@@ -1182,6 +1194,7 @@ mod_import_bulk_server <- function(id, global_data) {
 
       global_data$bulk_obj <- bulk_obj
       global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
+      .publish_bulk_business_state(global_data$bulk_obj)
       temp_data$is_loaded  <- TRUE
       .register_multi_dataset(global_data$bulk_obj)
       .warn_if_transformed_bulk(global_data$bulk_obj)  # O16 : bannière TPM/FPKM avant analyse
@@ -1917,6 +1930,7 @@ mod_import_bulk_server <- function(id, global_data) {
           
           global_data$bulk_obj <- bulk_obj
           global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
+          .publish_bulk_business_state(global_data$bulk_obj)
           temp_data$is_loaded  <- TRUE
           .warn_if_transformed_bulk(global_data$bulk_obj)  # O16 : bannière TPM/FPKM avant analyse
           .dataset_health_report(global_data$bulk_obj)  # N5 dataset-doctor : rapport unifié (warn, jamais bloquant — AC2.4)
@@ -2076,6 +2090,7 @@ mod_import_bulk_server <- function(id, global_data) {
           import_mode   = "per_sample"
         )
         global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
+        .publish_bulk_business_state(global_data$bulk_obj)
 
         .register_multi_dataset(global_data$bulk_obj)  # MD-1 (label optionnel)
 
