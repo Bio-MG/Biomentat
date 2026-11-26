@@ -3,6 +3,7 @@
 # =============================================================================
 
 source_project_file("tools/pkg_skeleton/R/demo_loader.R")
+suppressPackageStartupMessages(library(Matrix))
 
 test_that("biomentat_demo_manifest lists bulk, sc, and spatial offline demos", {
   mf <- biomentat_demo_manifest()
@@ -16,20 +17,24 @@ test_that("load_biomentat_demo rejects unknown modality", {
   expect_s3_class(err, "demo_loader_error")
 })
 
-test_that("load_biomentat_demo generates deterministic offline fixtures for bulk, sc, and spatial", {
-  b1 <- load_biomentat_demo("bulk", seed = 42L)
-  b2 <- load_biomentat_demo("bulk", seed = 42L)
-  expect_identical(b1, b2)
-  expect_identical(dim(b1$counts), c(200L, 8L))
-  expect_true(all(c("condition", "batch", "sample_id") %in% names(b1$metadata)))
+test_that("load_biomentat_demo loads compact real offline fixtures for bulk, sc, and spatial", {
+  b1 <- load_biomentat_demo("bulk")
+  expect_identical(dim(b1$counts), c(2000L, 6L))
+  expect_false(any(grepl("^Gene_", rownames(b1$counts))))
+  expect_true(all(c("sample_id", "condition") %in% names(b1$metadata)))
+  expect_true(isTRUE(b1$provenance$real_data))
 
-  sc <- load_biomentat_demo("sc", seed = 42L)
-  expect_identical(dim(sc$counts), c(100L, 60L))
+  sc <- load_biomentat_demo("sc")
+  expect_identical(dim(sc$counts), c(1500L, 400L))
   expect_true(inherits(sc$counts, "dgCMatrix"))
-  expect_true(all(c("sample_id", "condition", "cluster") %in% names(sc$metadata)))
+  expect_false(any(grepl("^Gene_", rownames(sc$counts))))
+  expect_true(all(c("sample_id", "condition", "celltype", "cluster") %in% names(sc$metadata)))
+  expect_true(isTRUE(sc$provenance$real_data))
 
-  sp <- load_biomentat_demo("spatial", seed = 42L)
-  expect_identical(dim(sp$counts), c(80L, 50L))
+  sp <- load_biomentat_demo("spatial")
+  expect_identical(dim(sp$counts), c(1500L, 400L))
+  expect_true(inherits(sp$counts, "dgCMatrix"))
   expect_true(all(c("id", "x", "y", "fov") %in% names(sp$coords)))
   expect_identical(sp$coords$id, colnames(sp$counts))
+  expect_true(isTRUE(sp$provenance$real_data))
 })

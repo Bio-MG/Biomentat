@@ -1170,7 +1170,7 @@ mod_import_sc_server <- function(id, global_data) {
           has_data = TRUE,
           object_class = class(obj)[1L],
           n_elements = ncol(obj),
-          n_clusters = length(unique(obj$cluster)),
+          n_clusters = length(unique(obj$cluster %||% obj$celltype)),
           deconv_done = FALSE
         )
       }

@@ -33,7 +33,7 @@ test_that("mod_import_sc_ui and mod_import_spatial_ui render btn_load_demo", {
   expect_true(grepl("import_spatial-btn_load_demo", sp_html, fixed = TRUE))
 })
 
-test_that("clicking btn_load_demo in mod_import_sc_server loads 100x60 SC demo", {
+test_that("clicking btn_load_demo in mod_import_sc_server loads 1500x400 real SC demo", {
   gd <- reactiveValues(
     language = "fr",
     sc_obj = NULL,
@@ -47,15 +47,21 @@ test_that("clicking btn_load_demo in mod_import_sc_server loads 100x60 SC demo",
   testServer(mod_import_sc_server, args = list(global_data = gd), {
     session$setInputs(btn_load_demo = 1L)
     expect_false(is.null(gd$sc_obj))
-    expect_equal(nrow(gd$sc_obj), 100)
-    expect_equal(ncol(gd$sc_obj), 60)
-    expect_equal(length(unique(gd$sc_obj$orig.ident)), 4)
+    expect_equal(nrow(gd$sc_obj), 1500)
+    expect_equal(ncol(gd$sc_obj), 400)
     expect_true(isTRUE(gd$business_state$has_data))
-    expect_equal(gd$business_state$n_elements, 60)
+    expect_equal(gd$business_state$n_elements, 400)
+
+    # Downstream Seurat workflow smoke check
+    so <- Seurat::NormalizeData(gd$sc_obj, verbose = FALSE)
+    so <- Seurat::FindVariableFeatures(so, nfeatures = 300, verbose = FALSE)
+    so <- Seurat::ScaleData(so, verbose = FALSE)
+    so <- Seurat::RunPCA(so, npcs = 10, verbose = FALSE)
+    expect_true("pca" %in% names(so@reductions))
   })
 })
 
-test_that("clicking btn_load_demo in mod_import_spatial_server loads 80x50 Spatial demo", {
+test_that("clicking btn_load_demo in mod_import_spatial_server loads 1500x400 real Spatial demo", {
   gd <- reactiveValues(
     language = "fr",
     spatial_datasets = list(),
@@ -72,10 +78,12 @@ test_that("clicking btn_load_demo in mod_import_spatial_server loads 80x50 Spati
     expect_identical(gd$active_spatial_dataset, "Spatial_Demo")
     pkg <- gd$spatial_datasets[["Spatial_Demo"]]
     expect_false(is.null(pkg))
-    expect_equal(nrow(pkg$sketch), 80)
-    expect_equal(ncol(pkg$sketch), 50)
-    expect_equal(nrow(pkg$coords), 50)
+    expect_equal(nrow(pkg$sketch), 1500)
+    expect_equal(ncol(pkg$sketch), 400)
+    expect_equal(nrow(pkg$coords), 400)
     expect_true(isTRUE(gd$business_state$has_data))
-    expect_equal(gd$business_state$n_elements, 50)
+    expect_equal(gd$business_state$n_elements, 400)
+    data_mat <- SeuratObject::LayerData(pkg$sketch, assay = SeuratObject::DefaultAssay(pkg$sketch), layer = "data")
+    expect_identical(dim(data_mat), c(1500L, 400L))
   })
 })

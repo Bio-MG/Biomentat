@@ -1148,10 +1148,10 @@ mod_import_spatial_server <- function(id, global_data) {
           raw_bpcells_dir = NULL,
           n_raw_total     = NULL,
           coords          = demo$coords,
-          histology       = NULL,
+          histology       = demo$histology %||% NULL,
           technology      = "visium",
           n_total         = ncol(sk),
-          images          = character(0),
+          images          = if (!is.null(demo$histology)) "anterior1" else character(0),
           project         = "Spatial_Demo",
           created_at      = Sys.time()
         )
@@ -1172,7 +1172,7 @@ mod_import_spatial_server <- function(id, global_data) {
           has_data = TRUE,
           object_class = "spatial_pkg",
           n_elements = ncol(spatial_pkg$sketch),
-          n_clusters = length(unique(demo$metadata$niche)),
+          n_clusters = length(unique(demo$metadata$niche %||% demo$metadata$region %||% "Zone_A")),
           deconv_done = FALSE
         )
       }

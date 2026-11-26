@@ -28,7 +28,7 @@ test_that("mod_import_bulk_ui renders btn_load_demo", {
   expect_true(grepl("import_bulk-btn_load_demo", ui_html, fixed = TRUE))
 })
 
-test_that("clicking btn_load_demo loads 200x8 Bulk demo and updates business_state", {
+test_that("clicking btn_load_demo loads 2000x6 real Bulk demo and updates business_state", {
   gd <- reactiveValues(
     language = "fr",
     bulk_obj = NULL,
@@ -41,10 +41,11 @@ test_that("clicking btn_load_demo loads 200x8 Bulk demo and updates business_sta
   testServer(mod_import_bulk_server, args = list(global_data = gd), {
     session$setInputs(min_counts = 10, btn_load_demo = 1L)
     expect_false(is.null(gd$bulk_obj))
-    expect_identical(nrow(gd$bulk_obj$counts), 200L)
-    expect_identical(ncol(gd$bulk_obj$counts), 8L)
+    expect_identical(nrow(gd$bulk_obj$counts), 2000L)
+    expect_identical(ncol(gd$bulk_obj$counts), 6L)
+    expect_true(isTRUE(gd$bulk_obj$de_allowed))
     expect_identical(gd$bulk_obj$project, "Bulk_Demo")
     expect_true(isTRUE(gd$business_state$has_data))
-    expect_equal(gd$business_state$n_elements, 8)
+    expect_equal(gd$business_state$n_elements, 6)
   })
 })
