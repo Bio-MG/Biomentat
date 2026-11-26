@@ -52,6 +52,53 @@ test_that("ts_spatial_dataset_dir_scan : détecte Visium, fichiers .rds/.h5ad et
   expect_identical(res[["empty.rds"]]$status, "invalid")
 })
 
+test_that("ts_spatial_dataset_dir_scan : détecte Visium outs/, Xenium, CosMx, MERSCOPE et Slide-seq", {
+  root <- tempfile("sp_multi_tech_")
+  dir.create(root, recursive = TRUE)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+
+  v_outs <- file.path(root, "visium_outs")
+  dir.create(file.path(v_outs, "outs", "spatial"), recursive = TRUE)
+  writeLines("barcode,in_tissue", file.path(v_outs, "outs", "spatial", "tissue_positions_list.csv"))
+
+  xen <- file.path(root, "xenium_sample")
+  dir.create(xen)
+  writeBin(as.raw(c(1, 2)), file.path(xen, "cell_feature_matrix.h5"))
+  writeLines("cell_id,x,y", file.path(xen, "cells.csv"))
+
+  cos <- file.path(root, "cosmx_sample")
+  dir.create(cos)
+  writeLines("cell,geneA", file.path(cos, "exprMat_file.csv"))
+  writeLines("cell,x,y", file.path(cos, "metadata_file.csv"))
+
+  mer <- file.path(root, "merscope_sample")
+  dir.create(mer)
+  writeLines("cell,geneA", file.path(mer, "cell_by_gene.csv"))
+  writeLines("cell,center_x,center_y", file.path(mer, "cell_metadata.csv"))
+
+  sseq <- file.path(root, "slideseq_sample")
+  dir.create(sseq)
+  writeLines("gene,b1", file.path(sseq, "counts.csv"))
+  writeLines("barcode,xcoord,ycoord", file.path(sseq, "bead_locations.csv"))
+
+  res <- ts_spatial_dataset_dir_scan(root)
+  expect_identical(res[["visium_outs"]]$status, "valid")
+  expect_identical(res[["visium_outs"]]$format, "visium")
+  expect_true(grepl("/outs$", res[["visium_outs"]]$paths$dir))
+
+  expect_identical(res[["xenium_sample"]]$status, "valid")
+  expect_identical(res[["xenium_sample"]]$format, "xenium")
+
+  expect_identical(res[["cosmx_sample"]]$status, "valid")
+  expect_identical(res[["cosmx_sample"]]$format, "cosmx")
+
+  expect_identical(res[["merscope_sample"]]$status, "valid")
+  expect_identical(res[["merscope_sample"]]$format, "merscope")
+
+  expect_identical(res[["slideseq_sample"]]$status, "valid")
+  expect_identical(res[["slideseq_sample"]]$format, "slideseq")
+})
+
 test_that("mod_import_spatial.R expose Datasets découverts et ts_spatial_dataset_dir_scan", {
   src <- paste(readLines(file.path(ts_project_root(),
                                    "modules/import/mod_import_spatial.R"),

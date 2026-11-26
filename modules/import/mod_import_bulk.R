@@ -1377,14 +1377,10 @@ mod_import_bulk_server <- function(id, global_data) {
     }, ignoreInit = TRUE)
 
     observeEvent(input$btn_load_demo, {
-      fn_load <- if (exists("load_biomentat_demo", mode = "function")) {
-        get("load_biomentat_demo", mode = "function")
-      } else {
-        e <- new.env(parent = globalenv())
-        sys.source("tools/pkg_skeleton/R/demo_loader.R", envir = e)
-        e$load_biomentat_demo
-      }
-      demo <- tryCatch(fn_load("bulk"), error = function(e) e)
+      e_demo <- new.env(parent = globalenv())
+      dl_path <- if (exists(".sc_project_root", mode = "function")) file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "demo_loader.R") else "tools/pkg_skeleton/R/demo_loader.R"
+      sys.source(dl_path, envir = e_demo)
+      demo <- tryCatch(e_demo$load_biomentat_demo("bulk"), error = function(e) e)
       if (inherits(demo, "condition")) {
         showNotification(sprintf(.tr("Erreur: %s"), conditionMessage(demo)), type = "error", duration = 8)
         return(invisible(NULL))
@@ -1419,7 +1415,7 @@ mod_import_bulk_server <- function(id, global_data) {
       } else {
         ts_datasets_dir(modality = "bulk")
       }
-      res <- tryCatch(ts_dataset_dir_scan(datasets_dir = bulk_dir), error = function(e) e)
+      res <- tryCatch(ts_dataset_dir_scan(datasets_dir = bulk_dir, allow_loose = TRUE), error = function(e) e)
       if (inherits(res, "condition")) {
         showNotification(sprintf(.tr("Erreur scan du répertoire : %s"),
                                  conditionMessage(res)),

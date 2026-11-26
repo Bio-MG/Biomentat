@@ -14916,6 +14916,14 @@
     {
       "fr": "PCA Loadings : %d voie(s) testée(s) sur les axes principaux (BH globale PK-3).",
       "en": "PCA Loadings: %d pathway(s) tested across principal axes (global BH PK-3)."
+    },
+    {
+      "fr": "✓ Dataset spatial « %s » chargé.",
+      "en": "✓ Spatial dataset \"%s\" loaded."
+    },
+    {
+      "fr": "Fichier .rds non Seurat.",
+      "en": "Non-Seurat .rds file."
     }
   ]
 }

@@ -298,10 +298,34 @@ ts_dataset_dir_scan_states <- function() {
   tryCatch(biomentat_handoff_read_manifest(drop_dir), error = function(e) NULL)
 }
 
+.ts_bulk_detect_loose_pair <- function(drop_dir) {
+  files <- sort(list.files(drop_dir, full.names = TRUE, recursive = FALSE))
+  files <- files[!dir.exists(files)]
+  tab_files <- files[grepl("\\.(tsv|csv|txt|tab)(\\.gz)?$", basename(files), ignore.case = TRUE)]
+  if (length(tab_files) == 0L) return(NULL)
+  bnames <- tolower(basename(tab_files))
+  is_meta <- grepl("(meta|sample|coldata|design|pheno|clin)", bnames)
+  meta_files <- tab_files[is_meta]
+  non_meta <- tab_files[!is_meta]
+  mat_files <- non_meta[grepl("(count|matrix|expr|raw|umi|read|gene)", tolower(basename(non_meta)))]
+  mat_path <- if (length(mat_files) > 0L) {
+    mat_files[1L]
+  } else if (length(non_meta) > 0L && (length(meta_files) > 0L || length(non_meta) == 1L)) {
+    non_meta[1L]
+  } else {
+    NULL
+  }
+  if (is.null(mat_path)) return(NULL)
+  list(
+    matrix = .ts_datasets_path(mat_path),
+    samplesheet = if (length(meta_files) > 0L) .ts_datasets_path(meta_files[1L]) else NA_character_
+  )
+}
+
 # Scan d'UN sous-répertoire (UNE profondeur — fiche §3.2/§5) : résumé du
 # manifeste + chemins résolus, mtime, puis délégation de la validation au
 # moteur v1. Échec d'un drop = entrée invalid isolée, les autres continuent.
-.ts_datasets_scan_one <- function(drop_dir, validate = TRUE) {
+.ts_datasets_scan_one <- function(drop_dir, validate = TRUE, allow_loose = FALSE) {
   dir_norm <- .ts_datasets_path(drop_dir)
   man <- .ts_datasets_read_manifest(drop_dir)
 
@@ -375,6 +399,22 @@ ts_dataset_dir_scan_states <- function() {
     # erreurs est celui du moteur v1 (étapes manifeste -> matrice -> samplesheet)
     first_err <- if (length(res$errors) > 0L) res$errors[[1L]]$code else NULL
     entry$raison <- .ts_datasets_field(first_err)
+    if (isTRUE(allow_loose) && identical(entry$raison, "manifest_missing")) {
+      pair <- .ts_bulk_detect_loose_pair(drop_dir)
+      if (!is.null(pair)) {
+        entry$paths$matrix <- pair$matrix
+        entry$paths$samplesheet <- pair$samplesheet
+        if (!is.na(pair$samplesheet) && nzchar(pair$samplesheet)) {
+          entry$status <- "valid"
+          entry$raison <- NA_character_
+          entry$manifest$matrix_type <- "counts+metadata"
+        } else {
+          entry$status <- "warn"
+          entry$raison <- "metadata_missing"
+          entry$manifest$matrix_type <- "counts_only"
+        }
+      }
+    }
   }
   # dataset_id : la parole est au manifeste VALIDÉ par le moteur v1
   validated_id <- .sc_scalar_text(res$dataset_id)
@@ -419,7 +459,7 @@ ts_dataset_dir_scan_states <- function() {
 #' @param validate Delegate each subdirectory to the v1 engine (default TRUE).
 #' @return Named list of per-dataset entries (see details); empty list for an
 #'   empty or missing root.
-ts_dataset_dir_scan <- function(datasets_dir = ts_datasets_dirs(), validate = TRUE) {
+ts_dataset_dir_scan <- function(datasets_dir = ts_datasets_dirs(), validate = TRUE, allow_loose = FALSE) {
   .ts_scan_multi_roots(datasets_dir, function(one_root) {
     root <- .sc_scalar_text(one_root)
     if (is.null(root) || !dir.exists(root)) {
@@ -431,7 +471,7 @@ ts_dataset_dir_scan <- function(datasets_dir = ts_datasets_dirs(), validate = TR
 
     out <- list()
     for (d in subdirs) {
-      entry <- .ts_datasets_scan_one(d, validate = validate)
+      entry <- .ts_datasets_scan_one(d, validate = validate, allow_loose = allow_loose)
       key <- .sc_scalar_text(entry$manifest$dataset_id)
       if (is.null(key)) key <- basename(d)
       out[[key]] <- entry
@@ -621,14 +661,63 @@ ts_sc_dataset_dir_scan <- function(datasets_dir = ts_datasets_dirs(modality = "s
 .ts_spatial_scan_one_dir <- function(d) {
   d_norm <- .ts_datasets_path(d)
   mt <- file.mtime(d_norm)
+  fnames <- list.files(d, full.names = FALSE)
   has_visium <- dir.exists(file.path(d, "spatial")) ||
     dir.exists(file.path(d, "outs", "spatial")) ||
-    length(list.files(d, pattern = "^(filtered|raw)_feature_bc_matrix", full.names = FALSE)) > 0L
+    dir.exists(file.path(d, "binned_outputs")) ||
+    any(grepl("^(filtered|raw)_feature_bc_matrix", fnames))
   if (has_visium) {
+    vis_dir <- if (dir.exists(file.path(d, "outs", "spatial")) && !dir.exists(file.path(d, "spatial"))) {
+      .ts_datasets_path(d, "outs")
+    } else {
+      d_norm
+    }
     return(list(
       status = "valid",
       raison = NA_character_,
       format = "visium",
+      paths = list(dir = vis_dir, file = NA_character_),
+      mtime = mt
+    ))
+  }
+  if (any(grepl("cell_feature_matrix", fnames)) &&
+      (any(grepl("^cells\\.(parquet|csv(\\.gz)?)$", fnames)) ||
+       dir.exists(file.path(d, "cell_feature_matrix")))) {
+    return(list(
+      status = "valid",
+      raison = NA_character_,
+      format = "xenium",
+      paths = list(dir = d_norm, file = NA_character_),
+      mtime = mt
+    ))
+  }
+  if (any(grepl("exprMat", fnames, ignore.case = TRUE)) &&
+      any(grepl("metadata", fnames, ignore.case = TRUE))) {
+    return(list(
+      status = "valid",
+      raison = NA_character_,
+      format = "cosmx",
+      paths = list(dir = d_norm, file = NA_character_),
+      mtime = mt
+    ))
+  }
+  if (any(grepl("cell_by_gene", fnames, ignore.case = TRUE)) &&
+      any(grepl("cell_metadata", fnames, ignore.case = TRUE))) {
+    return(list(
+      status = "valid",
+      raison = NA_character_,
+      format = "merscope",
+      paths = list(dir = d_norm, file = NA_character_),
+      mtime = mt
+    ))
+  }
+  if (length(fnames) >= 2L &&
+      any(grepl("(bead|coord|location|spatial)", fnames, ignore.case = TRUE)) &&
+      any(grepl("\\.(csv|tsv|txt|h5|rds)(\\.gz)?$", fnames, ignore.case = TRUE))) {
+    return(list(
+      status = "valid",
+      raison = NA_character_,
+      format = "slideseq",
       paths = list(dir = d_norm, file = NA_character_),
       mtime = mt
     ))

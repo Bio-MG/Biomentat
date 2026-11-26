@@ -1127,14 +1127,10 @@ mod_import_spatial_server <- function(id, global_data) {
     }
 
     observeEvent(input$btn_load_demo, {
-      fn_load <- if (exists("load_biomentat_demo", mode = "function")) {
-        get("load_biomentat_demo", mode = "function")
-      } else {
-        e <- new.env(parent = globalenv())
-        sys.source("tools/pkg_skeleton/R/demo_loader.R", envir = e)
-        e$load_biomentat_demo
-      }
-      demo <- tryCatch(fn_load("spatial"), error = function(e) e)
+      e_sp_demo <- new.env(parent = globalenv())
+      p_sp <- if (exists(".sc_project_root", mode = "function")) file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "demo_loader.R") else "tools/pkg_skeleton/R/demo_loader.R"
+      sys.source(p_sp, envir = e_sp_demo)
+      demo <- tryCatch(e_sp_demo$load_biomentat_demo("spatial"), error = function(e) e)
       if (inherits(demo, "condition")) {
         showNotification(sprintf(.tr("Erreur: %s"), conditionMessage(demo)), type = "error", duration = 8)
         return(invisible(NULL))
@@ -1215,15 +1211,44 @@ mod_import_spatial_server <- function(id, global_data) {
             sc_map <- shiny::isolate(ds_scan_rv())
             entry <- if (!is.null(ds_id) && !is.null(sc_map)) sc_map[[ds_id]] else NULL
             if (!is.null(entry) && identical(entry$status, "valid")) {
-              target_path <- entry$paths$dir %||% entry$paths$file
+              has_dir <- !is.null(entry$paths$dir) && !is.na(entry$paths$dir) && nzchar(entry$paths$dir)
+              has_file <- !is.null(entry$paths$file) && !is.na(entry$paths$file) && nzchar(entry$paths$file)
+              target_path <- if (has_dir) entry$paths$dir else if (has_file) entry$paths$file else NA_character_
               if (!is.na(target_path) && nzchar(target_path)) {
                 add_log(paste0(.tr("Chargement dataset spatial : "), ds_id))
-                dir_path(target_path)
+                tech_sel <- switch(as.character(entry$format %||% "visium"),
+                  xenium = "xenium",
+                  cosmx = "cosmx",
+                  merscope = "merscope",
+                  merscope_merfish = "merscope",
+                  slideseq = "slideseq",
+                  "visium"
+                )
                 updateTextInput(session, "sample_name", value = ds_id)
-                tech_sel <- if (identical(entry$format, "merscope_merfish")) "merscope" else "visium"
                 updateRadioButtons(session, "technology", selected = tech_sel)
-                if (requireNamespace("shinyjs", quietly = TRUE)) {
-                  shinyjs::click("btn_import")
+                if (dir.exists(target_path)) {
+                  dir_path(target_path)
+                  run_spatial_import(target_path, ds_id, tech_sel)
+                } else if (grepl("\\.rds$", target_path, ignore.case = TRUE)) {
+                  tryCatch({
+                    rds_obj <- readRDS(target_path)
+                    if (inherits(rds_obj, "Seurat")) {
+                      sp_pkg <- convert_to_bpcells_and_fov(
+                        rds_obj, dataset_id = ds_id, technology = tech_sel,
+                        max_sketch = shiny::isolate(input$max_sketch) %||% 50000,
+                        norm_method = shiny::isolate(input$norm_method) %||% "lognorm"
+                      )
+                      global_data$spatial_datasets[[ds_id]] <- sp_pkg
+                      global_data$active_spatial_dataset <- ds_id
+                      global_data$spatial_reimport_signal <- list(name = ds_id, at = Sys.time())
+                      showNotification(sprintf(.tr("✓ Dataset spatial « %s » chargé."), ds_id),
+                                       type = "message", duration = 5)
+                    } else {
+                      showNotification(.tr("Fichier .rds non Seurat."), type = "warning", duration = 6)
+                    }
+                  }, error = function(e) {
+                    showNotification(sprintf(.tr("Erreur: %s"), conditionMessage(e)), type = "error", duration = 8)
+                  })
                 }
               }
             }

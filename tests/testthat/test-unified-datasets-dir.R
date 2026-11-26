@@ -37,3 +37,33 @@ test_that(".ts_unified_datasets_candidates respects external TRANSCRIPTO_DATASET
   dirs <- ts_datasets_dirs(modality = "spatial")
   expect_true(any(grepl("/data_spatial$", dirs)))
 })
+
+test_that("ts_dataset_dir_scan(allow_loose = TRUE) detects loose Bulk counts+metadata pairs", {
+  source_project_file("tools/pkg_skeleton/R/io_helpers.R")
+  source_project_file("tools/pkg_skeleton/R/error_state.R")
+  source_project_file("tools/pkg_skeleton/R/biomentat_handoff.R")
+
+  root <- tempfile("bulk_loose_")
+  dir.create(root, recursive = TRUE)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+
+  pair_dir <- file.path(root, "cornea_loose")
+  dir.create(pair_dir)
+  writeLines("Gene\tS1\tS2\nTP53\t10\t20", file.path(pair_dir, "counts.tsv"))
+  writeLines("sample_id\tcondition\nS1\tCTL\nS2\tTRT", file.path(pair_dir, "metadata.tsv"))
+
+  only_dir <- file.path(root, "counts_only")
+  dir.create(only_dir)
+  writeLines("Gene\tS1\tS2\nTP53\t10\t20", file.path(only_dir, "raw_matrix.csv"))
+
+  strict_res <- ts_dataset_dir_scan(root, allow_loose = FALSE)
+  expect_identical(strict_res[["cornea_loose"]]$status, "invalid")
+  expect_identical(strict_res[["cornea_loose"]]$raison, "manifest_missing")
+
+  loose_res <- ts_dataset_dir_scan(root, allow_loose = TRUE)
+  expect_identical(loose_res[["cornea_loose"]]$status, "valid")
+  expect_true(grepl("counts\\.tsv$", loose_res[["cornea_loose"]]$paths$matrix))
+  expect_true(grepl("metadata\\.tsv$", loose_res[["cornea_loose"]]$paths$samplesheet))
+  expect_identical(loose_res[["counts_only"]]$status, "warn")
+  expect_identical(loose_res[["counts_only"]]$raison, "metadata_missing")
+})

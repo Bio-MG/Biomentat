@@ -1147,10 +1147,10 @@ mod_import_sc_server <- function(id, global_data) {
     }, ignoreInit = TRUE)
 
     observeEvent(input$btn_load_demo, {
-      if (!exists("load_biomentat_demo", mode = "function")) {
-        sys.source("tools/pkg_skeleton/R/demo_loader.R", envir = globalenv())
-      }
-      demo <- tryCatch(load_biomentat_demo("sc"), error = function(e) e)
+      e_sc_demo <- new.env(parent = globalenv())
+      p_sc <- if (exists(".sc_project_root", mode = "function")) file.path(.sc_project_root(), "tools", "pkg_skeleton", "R", "demo_loader.R") else "tools/pkg_skeleton/R/demo_loader.R"
+      sys.source(p_sc, envir = e_sc_demo)
+      demo <- tryCatch(e_sc_demo$load_biomentat_demo("sc"), error = function(e) e)
       if (inherits(demo, "condition")) {
         .notify_sc(sprintf(.tr("Erreur: %s"), conditionMessage(demo)), type = "error", duration = 8)
         return(invisible(NULL))
