@@ -257,12 +257,74 @@ summarize_dtu_gene <- function(dtu_res, gene_id) {
   sub
 }
 
+#' Detect transcript or gene ID format from a character vector of feature IDs
+#'
+#' @param tx_ids Character vector of non-empty feature IDs.
+#' @return Character scalar: `"enst"`, `"ensmust"`, `"refseq"`, `"ucsc"`,
+#'   `"gene_ensembl"`, `"gene_entrez"`, or `"unknown"`.
+.detect_tx_id_kind <- function(tx_ids) {
+  base_ids <- sub("\\.[0-9]+$", "", tx_ids)
+  n <- length(base_ids)
+  if (n == 0L) return("unknown")
+  frac <- function(pat) mean(grepl(pat, base_ids, perl = TRUE))
+  if (frac("^ENST[0-9]{6,}$") >= 0.2) return("enst")
+  if (frac("^ENSMUST[0-9]{6,}$") >= 0.2) return("ensmust")
+  if (frac("^[NX][MR]_[0-9]+$") >= 0.2) return("refseq")
+  if (frac("^uc[0-9a-z]{6,}$") >= 0.2) return("ucsc")
+  if (frac("^ENS(MUS)?G[0-9]{6,}$") >= 0.2) return("gene_ensembl")
+  if (frac("^[0-9]+$") >= 0.5) return("gene_entrez")
+  "unknown"
+}
+
+#' Query an AnnotationDbi OrgDb package for transcript-to-gene mapping
+#'
+#' @param tx_ids Character vector of transcript IDs (may include `.version`).
+#' @param org_pkg Character scalar OrgDb package name (e.g. `"org.Hs.eg.db"`).
+#' @param keytype Character scalar keytype (`"ENSEMBLTRANS"` or `"REFSEQ"`).
+#' @return `data.frame(transcript_id, gene_id)` preserving original `tx_ids`.
+.map_tx_via_orgdb <- function(tx_ids, org_pkg, keytype) {
+  if (!requireNamespace("AnnotationDbi", quietly = TRUE) ||
+      !requireNamespace(org_pkg, quietly = TRUE)) {
+    return(NULL)
+  }
+  db <- getExportedValue(org_pkg, org_pkg)
+  stripped <- sub("\\.[0-9]+$", "", tx_ids)
+  sel <- tryCatch(
+    suppressMessages(AnnotationDbi::select(
+      db, keys = unique(stripped), keytype = keytype,
+      columns = c(keytype, "SYMBOL", "ENTREZID")
+    )),
+    error = function(e) NULL
+  )
+  if (is.null(sel) || nrow(sel) == 0L) {
+    return(data.frame(transcript_id = character(0L), gene_id = character(0L), stringsAsFactors = FALSE))
+  }
+  sym <- as.character(sel$SYMBOL)
+  ent <- as.character(sel$ENTREZID)
+  gene_val <- ifelse(!is.na(sym) & nzchar(sym), sym, ent)
+  key_col <- as.character(sel[[keytype]])
+
+  # Map stripped keys back to original versioned tx_ids (supports 1:many if duplicate versions)
+  split_orig <- split(tx_ids, stripped)
+  mapped_list <- lapply(seq_len(nrow(sel)), function(i) {
+    orig <- split_orig[[key_col[i]]]
+    if (is.null(orig) || is.na(gene_val[i]) || !nzchar(gene_val[i])) return(NULL)
+    data.frame(transcript_id = orig, gene_id = rep(gene_val[i], length(orig)), stringsAsFactors = FALSE)
+  })
+  mapped_list <- Filter(Negate(is.null), mapped_list)
+  if (length(mapped_list) == 0L) {
+    return(data.frame(transcript_id = character(0L), gene_id = character(0L), stringsAsFactors = FALSE))
+  }
+  do.call(rbind, mapped_list)
+}
+
 #' Build a transcript-to-gene (tx2gene) mapping table in-app
 #'
 #' @param counts Transcript count matrix/data.frame (uses `rownames(counts)`)
 #'   or a character vector of transcript IDs.
-#' @param source Character scalar: `"txdb"` (installed TxDb/AnnotationDbi package)
-#'   or `"gtf"` (uploaded GTF/GFF file).
+#' @param source Character scalar: `"auto"` (detects Ensembl/RefSeq/UCSC offline),
+#'   `"org_hs"` (`org.Hs.eg.db`), `"org_mm"` (`org.Mm.eg.db`), `"txdb"`
+#'   (installed TxDb/AnnotationDbi package), or `"gtf"` (uploaded GTF/GFF file).
 #' @param txdb_pkg Character scalar TxDb package name (default
 #'   `"TxDb.Hsapiens.UCSC.hg19.knownGene"`).
 #' @param gtf_path Optional path to a GTF/GFF file when `source == "gtf"`.
@@ -270,7 +332,7 @@ summarize_dtu_gene <- function(dtu_res, gene_id) {
 #'   `n_input`, `n_mapped`, `n_unmapped`, `unmapped_ids`, and `source`.
 #' @export
 build_tx2gene <- function(counts,
-                          source = c("txdb", "gtf"),
+                          source = c("auto", "txdb", "gtf", "org_hs", "org_mm"),
                           txdb_pkg = "TxDb.Hsapiens.UCSC.hg19.knownGene",
                           gtf_path = NULL) {
   .stop <- function(msg) errorCondition(msg, class = "bulk_dtu_error")
@@ -289,7 +351,51 @@ build_tx2gene <- function(counts,
     stop(.stop("counts must provide non-empty transcript IDs (rownames or character vector)."))
   }
 
-  if (identical(source, "txdb")) {
+  effective_source <- source
+  id_kind <- .detect_tx_id_kind(tx_ids)
+
+  if (identical(source, "auto")) {
+    if (id_kind %in% c("gene_ensembl", "gene_entrez")) {
+      stop(.stop(
+        "Gene-level IDs detected (ENSG/Entrez). DTU requires transcript-level counts (>= 2 isoforms per gene, e.g. ENST, ENSMUST, NM_, or uc IDs)."
+      ))
+    }
+    effective_source <- switch(
+      id_kind,
+      enst    = "org_hs",
+      ensmust = "org_mm",
+      refseq  = "refseq",
+      ucsc    = "txdb",
+      "txdb"
+    )
+  }
+
+  if (effective_source %in% c("org_hs", "org_mm", "refseq")) {
+    if (!requireNamespace("AnnotationDbi", quietly = TRUE)) {
+      stop(.stop("Package 'AnnotationDbi' is required for OrgDb transcript mapping."))
+    }
+    if (identical(effective_source, "refseq")) {
+      tbl <- .map_tx_via_orgdb(tx_ids, "org.Hs.eg.db", "REFSEQ")
+      if (is.null(tbl) || nrow(tbl) == 0L) {
+        tbl_mm <- .map_tx_via_orgdb(tx_ids, "org.Mm.eg.db", "REFSEQ")
+        if (!is.null(tbl_mm) && nrow(tbl_mm) > 0L) tbl <- tbl_mm
+      }
+      if (is.null(tbl)) {
+        stop(.stop("Neither 'org.Hs.eg.db' nor 'org.Mm.eg.db' is installed for RefSeq mapping."))
+      }
+    } else {
+      org_pkg <- if (identical(effective_source, "org_hs")) "org.Hs.eg.db" else "org.Mm.eg.db"
+      if (!requireNamespace(org_pkg, quietly = TRUE)) {
+        stop(.stop(sprintf("Annotation package '%s' is not installed.", org_pkg)))
+      }
+      kt <- if (identical(id_kind, "refseq")) "REFSEQ" else "ENSEMBLTRANS"
+      tbl <- .map_tx_via_orgdb(tx_ids, org_pkg, kt)
+      if ((is.null(tbl) || nrow(tbl) == 0L) && identical(kt, "ENSEMBLTRANS")) {
+        tbl_ref <- .map_tx_via_orgdb(tx_ids, org_pkg, "REFSEQ")
+        if (!is.null(tbl_ref) && nrow(tbl_ref) > 0L) tbl <- tbl_ref
+      }
+    }
+  } else if (identical(effective_source, "txdb")) {
     if (!requireNamespace("AnnotationDbi", quietly = TRUE)) {
       stop(.stop("Package 'AnnotationDbi' is required for source = 'txdb'."))
     }
@@ -348,8 +454,6 @@ build_tx2gene <- function(counts,
     if (is.null(tbl)) {
       lines <- readLines(gtf_path, warn = FALSE)
       lines <- lines[!grepl("^#", lines) & nzchar(trimws(lines))]
-      tx_m <- regmatches(lines, regexpr('transcript_id\\s+"[^"]+"', lines, perl = TRUE))
-      gn_m <- regmatches(lines, regexpr('gene_id\\s+"[^"]+"', lines, perl = TRUE))
       has_both <- grepl('transcript_id\\s+"[^"]+"', lines, perl = TRUE) &
                   grepl('gene_id\\s+"[^"]+"', lines, perl = TRUE)
       if (any(has_both)) {
@@ -377,6 +481,6 @@ build_tx2gene <- function(counts,
     n_mapped = nrow(tbl),
     n_unmapped = length(unmapped),
     unmapped_ids = unmapped,
-    source = source
+    source = effective_source
   )
 }

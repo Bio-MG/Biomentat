@@ -68,4 +68,52 @@ test_that("mod_bulk_de_dtu_ui exposes btn_build_tx2gene and dtu_tx2gene_source",
   expect_true(grepl("dtu_test-btn_build_tx2gene", ui_html, fixed = TRUE))
   expect_true(grepl("dtu_test-dtu_tx2gene_source", ui_html, fixed = TRUE))
   expect_true(grepl("dtu_test-dtu_tx2gene_preview", ui_html, fixed = TRUE))
+  expect_true(grepl('value="auto"', ui_html, fixed = TRUE))
+})
+
+test_that("mod_bulk_de_summary_ui wraps plot and buttons without fillable collapse", {
+  skip_if_not_installed("shiny")
+  skip_if_not_installed("bslib")
+  skip_if_not_installed("DT")
+  suppressPackageStartupMessages({
+    library(shiny)
+    library(bslib)
+    library(DT)
+  })
+  local_i18n <- list(t = function(k) k)
+  assign("i18n", local_i18n, envir = globalenv())
+  on.exit(if (exists("i18n", envir = globalenv())) rm("i18n", envir = globalenv()), add = TRUE)
+
+  source(.tx2g_root("modules/bulk_de/mod_bulk_de_ui.R"), local = globalenv())
+  ui_html <- as.character(mod_bulk_de_summary_ui("sum_test"))
+  expect_true(grepl("sum_test-plot_updown", ui_html, fixed = TRUE))
+  expect_true(grepl("flex-shrink:0;", ui_html, fixed = TRUE))
+  expect_false(grepl('card-body[^"]*html-fill-container', ui_html, perl = TRUE))
+})
+
+test_that("build_tx2gene auto-detects ENST, versioned ENST, RefSeq, and rejects gene-level IDs", {
+  skip_if_not_installed("AnnotationDbi")
+  skip_if_not_installed("org.Hs.eg.db")
+  source(.tx2g_root("tools/pkg_skeleton/R/bulk_dtu.R"), local = globalenv())
+
+  enst_keys <- head(AnnotationDbi::keys(org.Hs.eg.db::org.Hs.eg.db, "ENSEMBLTRANS"), 4L)
+  versioned_keys <- paste0(enst_keys, ".1")
+  res_enst <- build_tx2gene(versioned_keys, source = "auto")
+  expect_equal(res_enst$source, "org_hs")
+  expect_equal(res_enst$n_mapped, length(versioned_keys))
+  expect_true(all(res_enst$table$transcript_id %in% versioned_keys))
+
+  refseq_keys <- head(grep("^NM_", AnnotationDbi::keys(org.Hs.eg.db::org.Hs.eg.db, "REFSEQ"), value = TRUE), 3L)
+  res_ref <- build_tx2gene(refseq_keys, source = "auto")
+  expect_equal(res_ref$source, "refseq")
+  expect_equal(res_ref$n_mapped, length(refseq_keys))
+
+  expect_error(
+    build_tx2gene(c("ENSG00000141510", "ENSG00000012048"), source = "auto"),
+    class = "bulk_dtu_error"
+  )
+  expect_error(
+    build_tx2gene(c("7157", "672", "1956"), source = "auto"),
+    class = "bulk_dtu_error"
+  )
 })

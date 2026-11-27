@@ -94,7 +94,7 @@
                        type = "error", duration = 8)
       return()
     }
-    src <- input$dtu_tx2gene_source %||% "txdb"
+    src <- input$dtu_tx2gene_source %||% "auto"
     gtf_p <- if (!is.null(input$dtu_gtf_file)) input$dtu_gtf_file$datapath else NULL
     res <- tryCatch(
       build_tx2gene(counts = counts, source = src, gtf_path = gtf_p),

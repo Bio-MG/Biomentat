@@ -268,17 +268,19 @@ mod_bulk_de_summary_ui <- function(id) {
   ns <- NS(id)
   card(
     full_screen = TRUE,
-    max_height  = "1100px",
     card_header(i18n$t("R\u00e9sum\u00e9 Up/Down")),
-    div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #18BC9C;",
-        bsicons::bs_icon("info-circle"),
-        " ", i18n$t("Nombre de g\u00e8nes Up / Down par contraste calcul\u00e9, selon les seuils |Log2FC| / p-adj actuels (\u00c9tape 2) \u2014 se met \u00e0 jour en direct si vous changez les seuils, sans recalcul DE.")),
-    plotOutput(ns("plot_updown"), height = "620px"),
-    downloadButton(ns("dl_updown_png"), i18n$t("Export PNG"), class = "btn-sm btn-secondary mt-2"),
-    hr(),
-    h6(i18n$t("Table r\u00e9capitulative"), style = "font-weight:bold;"),
-    DTOutput(ns("table_updown")),
-    downloadButton(ns("dl_updown_csv"), i18n$t("Export CSV"), class = "btn-sm btn-info mt-2")
+    card_body(
+      fillable = FALSE,
+      div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #18BC9C;",
+          bsicons::bs_icon("info-circle"),
+          " ", i18n$t("Nombre de g\u00e8nes Up / Down par contraste calcul\u00e9, selon les seuils |Log2FC| / p-adj actuels (\u00c9tape 2) \u2014 se met \u00e0 jour en direct si vous changez les seuils, sans recalcul DE.")),
+      div(style = "flex-shrink:0;", plotOutput(ns("plot_updown"), height = "620px")),
+      div(class = "mt-2", downloadButton(ns("dl_updown_png"), i18n$t("Export PNG"), class = "btn-sm btn-secondary")),
+      hr(),
+      h6(i18n$t("Table r\u00e9capitulative"), style = "font-weight:bold;"),
+      DTOutput(ns("table_updown")),
+      div(class = "mt-2", downloadButton(ns("dl_updown_csv"), i18n$t("Export CSV"), class = "btn-sm btn-info"))
+    )
   )
 }
 
@@ -388,11 +390,14 @@ mod_bulk_de_dtu_ui <- function(id) {
       column(5, radioButtons(
         ns("dtu_tx2gene_source"), i18n$t("Source tx2gene int\u00e9gr\u00e9e"),
         choices = stats::setNames(
-          c("txdb", "gtf"),
-          c(.tr_plain("Paquet TxDb install\u00e9 (hors-ligne)"),
+          c("auto", "org_hs", "org_mm", "txdb", "gtf"),
+          c(.tr_plain("Auto-d\u00e9tection hors-ligne (ENST / ENSMUST / RefSeq / UCSC)"),
+            .tr_plain("Humain (org.Hs.eg.db)"),
+            .tr_plain("Souris (org.Mm.eg.db)"),
+            .tr_plain("UCSC hg19 (TxDb)"),
             .tr_plain("Fichier GTF/GFF"))
         ),
-        selected = "txdb", inline = TRUE
+        selected = "auto", inline = TRUE
       )),
       column(4, conditionalPanel(
         condition = sprintf("input['%s'] == 'gtf'", ns("dtu_tx2gene_source")),
